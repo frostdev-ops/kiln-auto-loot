@@ -16,5 +16,6 @@ Fixed since the test builds:
 - Archaic Essence crystals are picked up.
 - Boulders and stone mine carts are smashed only while both Stones and Things on the ground are on.
 - One key press that reaches the mod twice counts once (the F8 window no longer opens and closes again at once).
-- Nothing is looted or smashed for a player until their own settings have arrived: the world's defaults no longer
-  apply in the moment after loading in. A hosted game hands the host's settings over until they arrive.
+- Nothing is looted or smashed for a player until their own settings have arrived, so the world's defaults no longer
+  apply in the moment after loading in (a player without the mod gets the defaults after 10 s). A hosted game hands
+  the host's settings over until they arrive.
