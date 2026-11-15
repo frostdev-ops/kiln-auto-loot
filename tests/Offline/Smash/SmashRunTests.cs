@@ -117,13 +117,14 @@ public sealed class SmashRunTests
     [Fact] public void Shared_off_when_buildable_smashing_is_off() =>
         Assert.False(HitOnce(TShared, S(x => x.SmashBuildables = false)));
 
-    [Fact] public void Stones_only_while_collect_stones_is_on()
+    [Theory]
+    [InlineData(true, true, true)]
+    [InlineData(false, true, false)]
+    [InlineData(true, false, false)]
+    [InlineData(false, false, false)]
+    public void Stones_need_both_collect_stones_and_ground_loot(bool stones, bool groundLoot, bool hit)
     {
-        Assert.True(HitOnce(TStone, S()));
-        _world.Hits.Clear(); _world.Entities.Clear();
-        Assert.False(HitOnce(TStone, S(x => x.Stones = false)));
-        _world.Hits.Clear(); _world.Entities.Clear();
-        Assert.False(HitOnce(TStone, S(x => x.GroundLoot = false)));   // stones need "things on the ground", as for pickups
+        Assert.Equal(hit, HitOnce(TStone, S(x => { x.Stones = stones; x.GroundLoot = groundLoot; })));
     }
 
     [Fact] public void Shared_stones_need_both_switches_and_no_build_zone()

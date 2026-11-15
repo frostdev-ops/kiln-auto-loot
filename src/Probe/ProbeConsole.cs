@@ -146,7 +146,11 @@ internal sealed class ProbeConsole
             try
             {
                 var length = new FileInfo(_cmdPath) is { Exists: true } fi ? fi.Length : 0;
-                if (length < offset) offset = 0;   // the file was emptied
+                if (length < offset)
+                {
+                    offset = 0;   // the file was emptied
+                    pending.Clear();
+                }
                 if (length > offset)
                 {
                     using var f = new FileStream(_cmdPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);

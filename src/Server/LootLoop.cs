@@ -638,7 +638,8 @@ internal sealed class LootLoop
         if (sent > 0)
         {
             CountLootKind(offer);
-            p.Visits.Looted(key);
+            // Ground slot moves can leave a remainder or fail: only their loot-all finishes the visit.
+            if (rule.Group != Group.Ground) p.Visits.Looted(key);
         }
     }
 

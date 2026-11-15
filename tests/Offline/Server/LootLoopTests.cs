@@ -505,6 +505,48 @@ public sealed class UnreadableInventoryTests
         Assert.Equal(0, rig.Loop.Counters.Unreadable);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void A_readable_ground_container_retries_a_slot_move_that_did_not_finish(bool noRoom)
+    {
+        var rig = new LoopRig(s => { s.OpenDelay = 0; s.CarryLimits = "=Stone:3"; });
+        var crystal = rig.Game.Add(LoopRig.FogNest, 3, [LootLoop.InventoryComponent]);
+        crystal.Slots = [new ContainerSlot(11, 2, 5)];
+        rig.ScanAfter(100);
+        var move = Assert.Single(rig.Game.Moves);
+        Assert.Equal(3, Assert.Single(rig.Game.MoveCounts));
+        move.Done(noRoom ? MoveOutcome.NoRoom : MoveOutcome.Failed);
+
+        rig.Game.Clear();
+        rig.ScanAfter(100);
+        Assert.Single(rig.Game.Moves);
+        Assert.Equal(3, Assert.Single(rig.Game.MoveCounts));
+        Assert.Empty(rig.Game.Loots);
+    }
+
+    [Fact]
+    public void A_readable_ground_container_can_give_the_rest_after_a_partial_take()
+    {
+        var rig = new LoopRig(s => { s.OpenDelay = 0; s.CarryLimits = "=Stone:3"; });
+        var crystal = rig.Game.Add(LoopRig.FogNest, 3, [LootLoop.InventoryComponent]);
+        crystal.Slots = [new ContainerSlot(11, 2, 5)];
+        rig.ScanAfter(100);
+        var move = Assert.Single(rig.Game.Moves);
+        Assert.Equal(3, Assert.Single(rig.Game.MoveCounts));
+        crystal.Slots = [new ContainerSlot(11, 2, 2)];
+        rig.Game.BagSlots = [new BagSlot(2, 3, true)];
+        move.Done(MoveOutcome.Done);
+        rig.Game.Clear();
+        rig.ScanAfter(100);
+        Assert.Empty(rig.Game.Moves);
+        Assert.Empty(rig.Game.Loots);
+
+        rig.Game.BagSlots = [];   // the player used the stone while still next to the crystal
+        rig.ScanAfter(100);
+        Assert.Single(rig.Game.Loots);
+    }
+
     [Fact]
     public void A_plant_is_still_harvested_without_reading_its_inventory()
     {
