@@ -3,14 +3,18 @@
 // list of settings with their widget kind and range. Pure data, no Kiln calls.
 namespace KilnAutoLoot.Client;
 
-internal enum WidgetKind { Bool, Meters, Seconds, Stack, ItemList }
+/// <summary>Choice: a combo over an enum's values (texts "key.Value"). Count: a whole-number slider. CarryLimits: the
+/// carry-limit rows editor.</summary>
+internal enum WidgetKind { Bool, Meters, Seconds, Stack, ItemList, Choice, Count, CarryLimits }
 
 /// <summary>Where a setting lives: the player's own file, the world's file (ServerSettings), or the world's limits
 /// (ServerSettings.Limits).</summary>
 internal enum SettingOwner { Personal, World, Limit }
 
 /// <param name="Key">The settings key (also the Kiln config path inside its file, camelCase).</param>
-internal sealed record SettingSpec(string Key, WidgetKind Kind, SettingOwner Owner, float Min = 0, float Max = 0)
+/// <param name="ZeroText">a Texts.Get key the slider shows at 0 instead of the number ("no limit"), or null.</param>
+internal sealed record SettingSpec(string Key, WidgetKind Kind, SettingOwner Owner, float Min = 0, float Max = 0,
+    string? ZeroText = null)
 {
     /// <summary>The Kiln config path in the owner's file ("limits.maxRadius" for a limit).</summary>
     public string Path => Owner == SettingOwner.Limit ? "limits." + Key : Key;
@@ -37,13 +41,15 @@ internal static class SettingCatalog
     private static SettingSpec M(string key, float min, float max, SettingOwner owner = SettingOwner.Personal) =>
         new(key, WidgetKind.Meters, owner, min, max);
 
+    private static SettingSpec C(string key) => new(key, WidgetKind.Choice, SettingOwner.Personal);
+
     /// <summary>Settings kept out of the window: they live only in the files.</summary>
     public static readonly IReadOnlyList<string> FileOnly = ["language", "counterLog"];
 
     public static readonly IReadOnlyList<PageSpec> Pages =
     [
         new("looting", [
-            new(null, [B("looting"), M("radius", 1, 50), B("takeInPlace"), B("visibleOnly")]),
+            new(null, [B("looting"), M("radius", 1, 50), B("takeInPlace")]),
             new("pickUp", [B("groundLoot"), B("stones"), B("collectibles"), B("plants"), B("crops"), B("fish")]),
         ]),
         new("containers", [
@@ -55,8 +61,23 @@ internal static class SettingCatalog
         new("smashing", [
             new(null, [B("smash"), B("smashBuildables"), B("fellTrees"), B("smashHives")]),
         ]),
+        // the switch first; then the list that decides, the other one folded away (SettingsWindow draws them in that order)
         new("filters", [
-            new(null, [new("skipList", WidgetKind.ItemList, SettingOwner.Personal), B("skipNotice")]),
+            new(null, [
+                C("itemFilter"), new("skipList", WidgetKind.ItemList, SettingOwner.Personal),
+                new("onlyList", WidgetKind.ItemList, SettingOwner.Personal), B("skipNotice"), C("minGearRarity"),
+            ]),
+        ]),
+        new("where", [
+            new("height", [
+                new("heightAbove", WidgetKind.Meters, SettingOwner.Personal, 0, 50, "noLimit"),
+                new("heightBelow", WidgetKind.Meters, SettingOwner.Personal, 0, 50, "noLimit"),
+            ]),
+            new("sight", [B("visibleOnly")]),
+            new("bag", [
+                B("fillCarriedStacks"), new("keepFreeSlots", WidgetKind.Count, SettingOwner.Personal, 0, 64, "zeroOff"),
+                new("carryLimits", WidgetKind.CarryLimits, SettingOwner.Personal),
+            ]),
         ]),
         new("ranges", [
             new("perGroup", [

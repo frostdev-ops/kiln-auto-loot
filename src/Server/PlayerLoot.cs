@@ -32,11 +32,33 @@ internal sealed class PlayerLoot
     /// <summary>The settings in effect: (Sent ?? ServerSettings.Defaults) clamped to ServerLimits.</summary>
     public PersonalSettings Settings { get; set; } = new();
 
+    /// <summary>The item ids the player's game matched <see cref="Sent"/>'s only list to (as <see cref="SentSkipIds"/>).</summary>
+    public uint[]? SentOnlyIds { get; set; }
+
     public IgnoreList? Ignore { get; set; }
 
-    /// <summary>The latest settings message not applied yet (JSON and skip ids): applied on the tick, at most one per
-    /// <see cref="LootLoop.SettingsGapMs"/>; a newer message replaces it.</summary>
-    public (string Json, uint[] SkipIds)? PendingSettings { get; set; }
+    /// <summary>The only list as an item set (used with itemFilter only).</summary>
+    public IgnoreList? Only { get; set; }
+
+    public CarryLimits Limits { get; set; } = CarryLimits.None;
+
+    /// <summary>Skip list, only list and gather focus as one decision; rebuilt with the settings and the focus.</summary>
+    public ItemFilter Filter { get; set; } = ItemFilter.SkipOnly(new IgnoreList("", ItemTable.Empty()));
+
+    /// <summary>The item the player last took by hand (a single pickup), 0 = none yet.</summary>
+    public uint HandItem { get; set; }
+
+    /// <summary>The gather focus item, 0 = off. Dropped when the player leaves and at the world's stop.</summary>
+    public uint Focus { get; set; }
+
+    /// <summary>The bag as this scan sees it (read at the scan's first need), and the scan it belongs to.</summary>
+    public Bag? Bag { get; set; }
+    public long BagScan { get; set; } = -1;
+    public bool BagUnreadable { get; set; }
+
+    /// <summary>The latest settings message not applied yet (JSON, skip ids, only ids): applied on the tick, at most one
+    /// per <see cref="LootLoop.SettingsGapMs"/>; a newer message replaces it.</summary>
+    public (string Json, uint[] SkipIds, uint[] OnlyIds)? PendingSettings { get; set; }
 
     /// <summary>When a settings message was last applied (null = never).</summary>
     public long? SettingsAppliedAt { get; set; }
@@ -60,6 +82,9 @@ internal sealed class PlayerLoot
 
     /// <summary>Containers with Items.Move still in flight: key -> moves pending.</summary>
     public Dictionary<ulong, int> PendingMoves { get; } = new();
+
+    /// <summary>Items.Move amounts sent and not answered yet, per item (added to the next bag reads).</summary>
+    public Dictionary<uint, int> MovesInFlight { get; } = new();
 
     /// <summary>Containers looted while the player had no free slot: key -> (takeable count then, time).</summary>
     public Dictionary<ulong, (int Takeable, long At)> Stalls { get; } = new();

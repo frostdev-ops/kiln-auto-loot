@@ -24,6 +24,13 @@ internal sealed class LootCounters
     public long GroupOff;             // refused: the player switched the group off
     public long OutOfRange;           // refused: outside the group's radius
     public long YieldSkipped;         // refused: a plant or bed that would give a skipped item
+    public long HeightOut;            // refused: above or below the player's height window
+    public long RarityLow;            // left: gear below minGearRarity (on the ground or in a container slot)
+    public long NotListed;            // left: not on the only list (itemFilter only)
+    public long NotFocus;             // left: gather focus is on another item
+    public long NoRoom;               // left: no room in carried stacks (fillCarriedStacks, keepFreeSlots) or the bag unreadable
+    public long CarryLimited;         // left: the player carries the item's carry limit
+    public long FocusOn;              // gather focus switched on
 
     // the container path
     public long ContainerTries;   // asked the visit table
@@ -61,6 +68,8 @@ internal sealed class LootCounters
         $"enemyNear={EnemyNear} enemyPauses={EnemyPauses} looking={PlayersLooting} " +
         $"| targets: pickups={PickupsSeen} containers={ContainersSeen} unknown={UnknownTemplates} heldBack={ContainersHeldBack} " +
         $"notReleased={NotReleased} groupOff={GroupOff} outOfRange={OutOfRange} yieldSkipped={YieldSkipped} " +
+        $"height={HeightOut} rarity={RarityLow} notListed={NotListed} notFocus={NotFocus} noRoom={NoRoom} carryLimit={CarryLimited} " +
+        $"focusOn={FocusOn} " +
         $"| containers: tries={ContainerTries} waiting={Waiting} harvested={AlreadyHarvested} accepts={Accepts} " +
         $"lootAll={LootAlls}/{LootNoOffer}/{LootOfferOff} questKept={QuestKept} unreadable={Unreadable} skipped={SkippedInContainers}/{SkippedPickups} " +
         $"| pickups: waits={PickupWaits} fixed={FixedPickups} " +

@@ -6,8 +6,8 @@
 // API:
 //   Label(settingKey, german), Help(settingKey, german)  settingKey = a settings key (Core/Settings.cs, camelCase).
 //   SectionOf(settingKey)       the page a setting is shown on (Client/SettingCatalog.cs), "file" = only in the file.
-//   Section(key, german)        page names (looting containers smashing filters ranges world) and the group headings
-//                               inside a page (pickUp perGroup enemies limits).
+//   Section(key, german)        page names (looting containers smashing filters where ranges world) and the group
+//                               headings inside a page (pickUp perGroup enemies limits height sight bag).
 //   Get(key, german), Format(key, german, args)  the window's and the notices' other strings ({0} = argument).
 //   ItemGroups                  the skip-list browser's groups: (Key = ItemRow.MenuGroup, "" = all; English; German).
 // An unknown key returns the key itself.
@@ -80,7 +80,7 @@ public static class Texts
         new("takeInPlace", "looting", "Take where it lies", "Direkt an Ort und Stelle",
             "Things are taken on the spot instead of flying over to you. Off: the game pulls them in, and mushrooms, fireflies and other fixed things are only taken when you stand right next to them.",
             "Dinge landen sofort bei dir, statt erst heranzufliegen. Aus: das Spiel zieht sie heran, und Pilze, Glühwürmchen und andere feste Dinge gibt es nur, wenn du direkt danebenstehst."),
-        new("visibleOnly", "looting", "Only what I can see", "Nur, was ich sehe",
+        new("visibleOnly", "where", "Only what I can see", "Nur, was ich sehe",
             "Leaves out things hidden behind walls, rocks or leaves. Where the server cannot check the view, everything counts as visible.",
             "Lässt aus, was hinter Wänden, Felsen oder Laub versteckt ist. Kann der Server die Sicht nicht prüfen, gilt alles als sichtbar."),
         new("groundLoot", "looting", "Things on the ground", "Dinge am Boden",
@@ -137,9 +137,35 @@ public static class Texts
         new("skipList", "filters", "Skip these items", "Diese Gegenstände auslassen",
             "Items on this list stay where they are: on the ground, in chests and in corpses. Plants and beds that would give one are not harvested. You can still take them yourself with E. Search by name, or pick a whole group.",
             "Was auf dieser Liste steht, bleibt, wo es ist: am Boden, in Truhen und in Leichen. Pflanzen und Beete, die so etwas liefern, werden nicht geerntet. Mit E kannst du es trotzdem selbst nehmen. Such nach dem Namen oder nimm gleich eine ganze Gruppe."),
+        new("itemFilter", "filters", "Which list decides", "Welche Liste entscheidet",
+            "Skip: everything is taken except what is on the skip list. Only: nothing is taken except what is on the only list. Both lists stay saved, so you can switch back and forth.",
+            "Auslassen: alles kommt mit, außer was auf der Auslassliste steht. Nur: nichts kommt mit, außer was auf der Nur-Liste steht. Beide Listen bleiben gespeichert, du kannst also hin und her wechseln."),
+        new("onlyList", "filters", "Take only these items", "Nur diese Gegenstände nehmen",
+            "With Only chosen above, these are the only items the mod takes: from the ground, plants, chests and corpses. Everything else stays for you to take with E. Search by name, or pick a whole group.",
+            "Ist oben „Nur“ gewählt, nimmt die Mod ausschließlich diese Gegenstände: vom Boden, von Pflanzen, aus Truhen und Leichen. Alles andere bleibt liegen, das kannst du mit E nehmen. Such nach dem Namen oder nimm gleich eine ganze Gruppe."),
+        new("minGearRarity", "filters", "Gear from this rarity on", "Ausrüstung ab dieser Seltenheit",
+            "Weapons, armor, rings and shields below this rarity stay where they are, so your bag does not fill up with common gear. Common = all gear is taken. Other items are not affected.",
+            "Waffen, Rüstung, Ringe und Schilde unter dieser Seltenheit bleiben liegen, damit sich dein Rucksack nicht mit gewöhnlichem Zeug füllt. Gewöhnlich = alles kommt mit. Andere Gegenstände betrifft das nicht."),
         new("skipNotice", "filters", "Note when something is skipped", "Hinweis beim Auslassen",
             "Shows a short note when something from your list is left behind (up to three notes per item each session). Off: no note, the list still works.",
             "Zeigt kurz an, wenn etwas von deiner Liste liegen bleibt, höchstens dreimal pro Gegenstand und Sitzung. Aus: kein Hinweis, die Liste gilt weiter."),
+
+        // Where and the bag
+        new("heightAbove", "where", "Height above me", "Höhe über mir",
+            "Only takes things at most this many meters above your feet, so loot on the floor above you stays there. 0 = no limit.",
+            "Nimmt nur, was höchstens so viele Meter über deinen Füßen liegt; Beute im Stockwerk über dir bleibt also dort. 0 = keine Grenze."),
+        new("heightBelow", "where", "Depth below me", "Tiefe unter mir",
+            "Only takes things at most this many meters below your feet, so a cave under you keeps its loot until you go down. 0 = no limit.",
+            "Nimmt nur, was höchstens so viele Meter unter deinen Füßen liegt; eine Höhle unter dir behält ihre Beute also, bis du hinuntergehst. 0 = keine Grenze."),
+        new("fillCarriedStacks", "where", "Only fill stacks I carry", "Nur getragene Stapel auffüllen",
+            "Only takes items you already have in your bag, and only until that stack is full. Nothing new starts a stack. Handy with a few sticks in the bag: you gather sticks until the stack is full, and nothing else.",
+            "Nimmt nur Gegenstände, die du schon im Rucksack hast, und nur, bis der Stapel voll ist. Nichts Neues fängt einen Stapel an. Praktisch mit ein paar Stöcken im Rucksack: du sammelst Stöcke, bis der Stapel voll ist, und sonst nichts."),
+        new("keepFreeSlots", "where", "Keep bag slots free", "Rucksackplätze frei halten",
+            "Once only this many bag slots are empty, the mod only tops up stacks you already carry and leaves the free slots for you. 0 = off.",
+            "Sind nur noch so viele Rucksackplätze leer, füllt die Mod nur noch Stapel auf, die du schon trägst, und lässt dir die freien Plätze. 0 = aus."),
+        new("carryLimits", "where", "Carry at most", "Höchstens tragen",
+            "Stops taking an item once you carry this many of it; a group limit counts every item of the group together. The window writes the game's internal names (=Material_T1_Twigs:500, #Materials:2000). English or German names typed into the file by hand only work where the server knows those names.",
+            "Hört auf, einen Gegenstand zu nehmen, sobald du so viele davon trägst; eine Gruppengrenze zählt alle Gegenstände der Gruppe zusammen. Das Fenster schreibt die internen Namen des Spiels (=Material_T1_Twigs:500, #Materials:2000). Englische oder deutsche Namen, die du selbst in die Datei schreibst, wirken nur, wo der Server diese Namen kennt."),
 
         // Ranges
         new("groundRadius", "ranges", "Things on the ground", "Dinge am Boden",
@@ -208,6 +234,7 @@ public static class Texts
         ["containers"] = ("Containers", "Behälter"),
         ["smashing"] = ("Smashing", "Zertrümmern"),
         ["filters"] = ("Filters", "Filter"),
+        ["where"] = ("Where & bag", "Ort & Rucksack"),
         ["ranges"] = ("Ranges", "Reichweiten"),
         ["world"] = ("World", "Welt"),
         // headings inside a page
@@ -215,6 +242,9 @@ public static class Texts
         ["perGroup"] = ("Range per group", "Reichweite je Gruppe"),
         ["enemies"] = ("Enemies nearby", "Gegner in der Nähe"),
         ["limits"] = ("Limits for players", "Grenzen für Spieler"),
+        ["height"] = ("How high and how deep", "Wie hoch und wie tief"),
+        ["sight"] = ("What you can see", "Was du siehst"),
+        ["bag"] = ("Your bag", "Dein Rucksack"),
     };
 
     private static readonly Dictionary<string, (string En, string De)> Strings = new(StringComparer.Ordinal)
@@ -257,6 +287,75 @@ public static class Texts
         ["fullLine2"] = ("Corpses and chests keep their loot until you make room.", "Leichen und Truhen behalten ihre Beute, bis du Platz schaffst."),
         ["leftBehindLine1"] = ("Skipped: {0}", "Ausgelassen: {0}"),
         ["leftBehindLine2"] = ("On your skip list, {0} to change it", "Steht auf deiner Filterliste, {0} zum Ändern"),
+        // the only list (the same editor as the skip list)
+        ["onlyAddGroup"] = ("Take this group", "Diese Gruppe nehmen"),
+        ["onlyRemoveGroup"] = ("Remove this group", "Gruppe entfernen"),
+        ["onlyEmpty"] = ("The only list is empty: with Only chosen, nothing is taken.", "Die Nur-Liste ist leer: mit „Nur“ kommt nichts mit."),
+        ["onlyCount"] = ("{0} on the only list", "{0} auf der Nur-Liste"),
+        ["gatherOnlyThis"] = ("Only this", "Nur das"),
+        ["gatherOnlyThisHelp"] = ("Switch to Only and take nothing but this item.", "Auf „Nur“ wechseln und nichts außer diesem Gegenstand nehmen."),
+        ["listUnused"] = ("{0} (not used while the other list decides)", "{0} (gilt gerade nicht, die andere Liste entscheidet)"),
+        // the filter switch and the rarity choice
+        ["itemFilter.Skip"] = ("Skip: take everything but the skip list", "Auslassen: alles außer der Auslassliste"),
+        ["itemFilter.Only"] = ("Only: take just the only list", "Nur: ausschließlich die Nur-Liste"),
+        ["minGearRarity.Common"] = ("Common (all gear)", "Gewöhnlich (alle Ausrüstung)"),
+        ["minGearRarity.Uncommon"] = ("Uncommon", "Ungewöhnlich"),
+        ["minGearRarity.Rare"] = ("Rare", "Selten"),
+        ["minGearRarity.Epic"] = ("Epic", "Episch"),
+        ["minGearRarity.Legendary"] = ("Legendary", "Legendär"),
+        // where and the bag
+        ["noLimit"] = ("no limit", "keine Grenze"),
+        ["zeroOff"] = ("off", "aus"),
+        ["lineOfSightMissing"] = ("This game or server can't check what you see yet, so this has no effect for now.",
+            "Dieses Spiel oder dieser Server kann noch nicht prüfen, was du siehst; das wirkt also vorerst nicht."),
+        // the carry-limits editor
+        ["carrySearchHint"] = ("Add an item (3+ letters)", "Gegenstand hinzufügen (ab 3 Zeichen)"),
+        ["carryAddGroup"] = ("Add a limit for this group", "Grenze für diese Gruppe"),
+        ["carryEmpty"] = ("No limits: the mod takes as much as fits.", "Keine Grenzen: die Mod nimmt, so viel reinpasst."),
+        ["carryAmountHelp"] = ("Carry at most this many (0 to {0}; 0 = take none of it; empty = remove the limit).",
+            "Höchstens so viele tragen (0 bis {0}; 0 = nichts davon nehmen; leer = Grenze entfernen)."),
+        ["carryBad"] = ("(not understood, write =Name:500)", "(unverständlich, schreib =Name:500)"),
+        ["carryCount"] = ("{0} limits", "{0} Grenzen"),
+        // the profile bar
+        ["profile"] = ("Profile", "Profil"),
+        ["profileNew"] = ("New", "Neu"),
+        ["profileNewHelp"] = ("A new profile with the settings you have now.", "Ein neues Profil mit deinen jetzigen Einstellungen."),
+        ["profileRename"] = ("Rename", "Umbenennen"),
+        ["profileRenameHelp"] = ("Change this profile's name and its own key.", "Namen und eigene Taste dieses Profils ändern."),
+        ["profileDelete"] = ("Delete", "Löschen"),
+        ["profileDeleteSure"] = ("Really delete?", "Wirklich löschen?"),
+        ["profileDeleteHelp"] = ("Deletes this profile. The last one cannot be deleted.", "Löscht dieses Profil. Das letzte bleibt immer."),
+        ["profileReset"] = ("Reset", "Zurücksetzen"),
+        ["profileResetHelp"] = ("Puts this built-in profile back as it came.", "Setzt dieses mitgelieferte Profil auf den Anfang zurück."),
+        ["profileName"] = ("Name", "Name"),
+        ["profileKey"] = ("Key", "Taste"),
+        ["profileKeyHelp"] = ("A key that switches straight to this profile, such as Ctrl+1. Empty = none. You can change it later in Kiln's Keys page too.",
+            "Eine Taste, die gleich zu diesem Profil wechselt, etwa Ctrl+1. Leer = keine. Ändern kannst du sie auch später auf Kilns Tastenseite."),
+        ["profileKeyBad"] = ("Kiln does not know this key.", "Diese Taste kennt Kiln nicht."),
+        ["profileKeyTaken"] = ("This key already belongs to {0}.", "Diese Taste gehört schon zu {0}."),
+        ["profileSave"] = ("Save", "Speichern"),
+        ["profileCancel"] = ("Cancel", "Abbrechen"),
+        ["profileNextKey"] = ("{0} switches to the next profile", "{0} wechselt zum nächsten Profil"),
+        ["profileNewName"] = ("Profile {0}", "Profil {0}"),
+        ["profileMine"] = ("My settings", "Meine Einstellungen"),
+        ["profileSwitched"] = ("Profile: {0}", "Profil: {0}"),
+        ["profileSaveError"] = ("The profiles could not be saved: {0}", "Die Profile konnten nicht gespeichert werden: {0}"),
+        // the built-in profiles
+        ["profile.everything"] = ("Everything", "Alles"),
+        ["profile.wood"] = ("Wood & sticks", "Holz & Stöcke"),
+        ["profile.stone"] = ("Stone & ore", "Stein & Erz"),
+        ["profile.plants"] = ("Plants & crops", "Pflanzen & Ernte"),
+        ["profile.plunder"] = ("Plunder", "Plündern"),
+        ["profile.treasure"] = ("Treasure hunter", "Schatzsuche"),
+        // gather focus
+        ["focusOn"] = ("Gathering only: {0}", "Sammle nur: {0}"),
+        ["focusOff"] = ("Gathering everything again", "Sammle wieder alles"),
+        ["focusHint"] = ("Nothing to focus on yet: take one item by hand first, then press {0}.",
+            "Noch nichts zum Festlegen: nimm erst einen Gegenstand selbst auf, dann {0} drücken."),
+        ["focusNoServer"] = ("The server does not run Kiln Auto Loot, so there is nothing to focus.", "Auf dem Server läuft Kiln Auto Loot nicht, es gibt nichts festzulegen."),
+        ["focusStatus"] = ("Gathering only: {0} ({1} for everything again)", "Sammle nur: {0} ({1} für wieder alles)"),
+        ["focusKey"] = ("{0} gathers only the item you last took by hand", "{0} sammelt nur, was du zuletzt selbst genommen hast"),
+        ["focusStop"] = ("Gather everything", "Alles sammeln"),
         // the server's answer, shown in the window
         ["serverApplies"] = ("the server uses {0}", "der Server nimmt {0}"),
     };

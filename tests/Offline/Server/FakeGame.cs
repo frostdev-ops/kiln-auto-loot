@@ -19,6 +19,8 @@ internal sealed class FakeEntity
     public bool Dead { get; set; }
     public List<ContainerSlot>? Slots { get; set; }
     public Sight Sight { get; set; } = Sight.Visible;
+    public int PickupAmount { get; set; } = 1;
+    public int Rarity { get; set; } = -1;
 }
 
 internal sealed class FakeGame : IGame
@@ -28,6 +30,13 @@ internal sealed class FakeGame : IGame
     public readonly List<(EntityId Guest, EntityId Host, uint Offer)> Interacts = [];
     public readonly List<(EntityId Guest, EntityId Host)> Loots = [];
     public readonly List<(EntityId From, ulong Slot, EntityId To, Action<MoveOutcome> Done)> Moves = [];
+    /// <summary>The count of each move (0 = the whole slot), in the order of <see cref="Moves"/>.</summary>
+    public readonly List<int> MoveCounts = [];
+    /// <summary>The players' inventories (null = cannot be read); the free slots are <see cref="FreeSlotCount"/>.</summary>
+    public List<BagSlot>? BagSlots = [];
+    public int BagReads;
+    public int StackWish;
+    public bool SightOn = true;
     public readonly Dictionary<string, int> FindCalls = new();
     public int FreeSlotCount = 10;
     private uint _next = 100;
@@ -39,9 +48,9 @@ internal sealed class FakeGame : IGame
         return id;
     }
 
-    public FakeEntity Add(Guid template, double x, string[] components, uint? pickupItem = null)
+    public FakeEntity Add(Guid template, double x, string[] components, uint? pickupItem = null, double y = 0)
     {
-        var e = new FakeEntity { Id = new EntityId(_next++), Position = new WorldPosition(x, 0, 0), Template = template, PickupItem = pickupItem };
+        var e = new FakeEntity { Id = new EntityId(_next++), Position = new WorldPosition(x, y, 0), Template = template, PickupItem = pickupItem };
         foreach (var c in components) e.Components.Add(c);
         if (pickupItem is not null) e.Components.Add(LootLoop.PickupComponent);
         Entities[e.Id] = e;
@@ -55,6 +64,7 @@ internal sealed class FakeGame : IGame
         Interacts.Clear();
         Loots.Clear();
         Moves.Clear();
+        MoveCounts.Clear();
     }
 
     public IReadOnlyList<GamePlayer> Players() => PlayerList;
@@ -82,6 +92,19 @@ internal sealed class FakeGame : IGame
         return itemId != 0;
     }
 
+    public GroundItem? PickupDetails(EntityId entity) =>
+        Entities.TryGetValue(entity, out var e) && e.PickupItem is not null ? new GroundItem(e.PickupAmount, e.Rarity) : null;
+
+    public BagRead? Bag(EntityId player)
+    {
+        BagReads++;
+        return BagSlots is null ? null : new BagRead(BagSlots.ToList(), FreeSlotCount);
+    }
+
+    public int StackSizeWish => StackWish;
+
+    public bool SightAvailable => SightOn;
+
     public bool HasInventory(EntityId entity) =>
         Entities.TryGetValue(entity, out var e) && e.Components.Contains(LootLoop.InventoryComponent);
 
@@ -101,7 +124,11 @@ internal sealed class FakeGame : IGame
 
     public void Loot(EntityId guest, EntityId host) => Loots.Add((guest, host));
 
-    public void Move(EntityId from, ulong slot, EntityId to, Action<MoveOutcome> done) => Moves.Add((from, slot, to, done));
+    public void Move(EntityId from, ulong slot, EntityId to, int count, Action<MoveOutcome> done)
+    {
+        Moves.Add((from, slot, to, done));
+        MoveCounts.Add(count);
+    }
 }
 
 /// <summary>A loop over a fake world with a small template table.</summary>
@@ -142,7 +169,7 @@ internal sealed class LoopRig
     /// <param name="hasMod">false: the player never sends settings, so the server's Defaults apply.</param>
     /// <param name="skipIds">the skip ids the player's game sends with its settings.</param>
     public LoopRig(Action<PersonalSettings>? settings = null, uint[]? quest = null, ServerSettings? server = null,
-        ItemTable? items = null, bool hasMod = true, uint[]? skipIds = null)
+        ItemTable? items = null, bool hasMod = true, uint[]? skipIds = null, uint[]? onlyIds = null)
     {
         Data = new Data(TemplateTable.Parse(new StringReader(TemplatesText)), items ?? Fixtures.Items(), Fixtures.Quest(quest ?? []));
         Loop = new LootLoop(Game, Clock, Data, (p, m) => Notices.Add((p, m)), KeyLines.Add);
@@ -150,7 +177,7 @@ internal sealed class LoopRig
         Player = Game.AddPlayer();
         var s = new PersonalSettings();
         settings?.Invoke(s);
-        if (hasMod) Loop.SetPersonal(Player, s, skipIds);
+        if (hasMod) Loop.SetPersonal(Player, s, skipIds, onlyIds);
         else Loop.Join(Player);
     }
 

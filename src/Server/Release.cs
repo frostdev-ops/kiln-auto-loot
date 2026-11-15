@@ -30,6 +30,9 @@ internal static class Release
     public static bool IsContainerTarget(TemplateRule rule, bool hasPickupItem) =>
         !hasPickupItem || (rule.Flags & TemplateFlags.Swarm) != 0;
 
+    /// <summary>A target with a pickup that is taken as a pickup (not a swarm).</summary>
+    public static bool IsPickupPath(TemplateRule rule) => !IsContainerTarget(rule, hasPickupItem: true);
+
     /// <summary>Released, for a container-path target.</summary>
     public static bool ContainerReleased(TemplateRule rule, bool dead) => rule.Group switch
     {

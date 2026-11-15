@@ -79,22 +79,24 @@ internal sealed class LootLoop
         return p;
     }
 
+    /// <summary>The player left: every state of theirs goes, the gather focus with it.</summary>
     public void Leave(EntityId player) => _players.Remove(player);
 
     /// <summary>A player's own settings (PersonalMsg, or the host's window). Null = keep the previous ones (bad JSON).
     /// <paramref name="skipIds"/>: the item ids the player's game matched the skip list to (PersonalMsg.SkipIds), added
     /// to what the server matches itself. Returns the settings in effect after the server's limits.</summary>
-    public PersonalSettings SetPersonal(EntityId player, PersonalSettings? sent, uint[]? skipIds = null)
+    public PersonalSettings SetPersonal(EntityId player, PersonalSettings? sent, uint[]? skipIds = null, uint[]? onlyIds = null)
     {
         var p = Join(player);
-        if (sent is not null && !SkipListBounds.Within(sent.SkipList))
+        if (sent is not null && !SettingsRules.ListsWithin(sent))
         {
             // over the bounds: the previous settings stay, whole
             if (!p.OverBoundsLogged)
             {
                 p.OverBoundsLogged = true;
                 _keyLine($"player {player} sent a skip list over {SkipListBounds.MaxEntries} entries or " +
-                         $"{SkipListBounds.MaxEntryLength} characters per entry; keeping the previous settings");
+                         $"{SkipListBounds.MaxEntryLength} characters per entry (or an only list or carry limits over those " +
+                         "bounds); keeping the previous settings");
             }
             sent = null;
         }
@@ -102,6 +104,7 @@ internal sealed class LootLoop
         {
             p.Sent = sent;
             p.SentSkipIds = skipIds;
+            p.SentOnlyIds = onlyIds;
         }
         p.ReportsWindow = true;
         Recompute(p);
@@ -110,8 +113,8 @@ internal sealed class LootLoop
 
     /// <summary>A settings message from a player's game: kept as the player's latest, applied by
     /// <see cref="ApplyQueuedSettings"/> (a newer one before that replaces it).</summary>
-    public void QueuePersonal(EntityId player, string json, uint[]? skipIds) =>
-        Join(player).PendingSettings = (json ?? "", skipIds ?? []);
+    public void QueuePersonal(EntityId player, string json, uint[]? skipIds, uint[]? onlyIds = null) =>
+        Join(player).PendingSettings = (json ?? "", skipIds ?? [], onlyIds ?? []);
 
     /// <summary>On the tick: applies each player's latest settings message when the last one was applied at least
     /// <see cref="SettingsGapMs"/> ago, so a game that sends many costs one application per gap, and at most
@@ -129,7 +132,7 @@ internal sealed class LootLoop
             p.PendingSettings = null;
             p.SettingsAppliedAt = now;
             var sent = SettingsJson.Read(pending.Json);
-            SetPersonal(p.Entity, sent, pending.SkipIds);
+            SetPersonal(p.Entity, sent, pending.SkipIds, pending.OnlyIds);
             applied.Add((p.Entity, sent is not null));
         }
         return applied;
@@ -143,6 +146,47 @@ internal sealed class LootLoop
     }
 
     public PersonalSettings SettingsOf(EntityId player) => _players.TryGetValue(player, out var p) ? p.Settings : _defaults;
+
+    /// <summary>The player's gather focus item, 0 = off (or not a player here).</summary>
+    public uint FocusOf(EntityId player) => _players.TryGetValue(player, out var p) ? p.Focus : 0;
+
+    /// <summary>The server can check line of sight (visibleOnly does something).</summary>
+    public bool SightAvailable => _game.SightAvailable;
+
+    /// <summary>A gather focus command. ToggleFocus: focus on the item the player last took by hand, or off when focus is
+    /// on; with no item taken by hand yet it stays off. ClearFocus: off. Returns the focus item after it (0 = off).</summary>
+    public uint Command(EntityId player, CommandKind kind)
+    {
+        var p = Join(player);
+        var focus = kind switch
+        {
+            CommandKind.ToggleFocus => p.Focus != 0 ? 0u : p.HandItem,
+            _ => 0u,
+        };
+        if (focus != p.Focus)
+        {
+            p.Focus = focus;
+            RebuildFilter(p);
+            if (focus != 0) Counters.FocusOn++;
+        }
+        return p.Focus;
+    }
+
+    /// <summary>The item of a ground pickup the player is about to take by hand (read before the game acts); null when
+    /// the target is no pickup or goes down the container path (a swarm).</summary>
+    public uint? HandPickupItem(EntityId host)
+    {
+        if (!_game.TryPickupItem(host, out var item)) return null;
+        if (Classify(host) is { Rule: { } rule } && !Release.IsPickupPath(rule)) return null;
+        return item;
+    }
+
+    /// <summary>The player took a single pickup of <paramref name="item"/> by hand (their own LootEvent, not
+    /// canceled): the item a gather focus would be on.</summary>
+    public void TookByHand(EntityId player, uint item)
+    {
+        if (item != 0 && _players.TryGetValue(player, out var p)) p.HandItem = item;
+    }
 
     /// <summary>At the world's stop: every per-world and per-player state goes.</summary>
     public void Reset()
@@ -159,6 +203,29 @@ internal sealed class LootLoop
         var fromGame = p.Sent is not null ? p.SentSkipIds : null;
         var list = IgnoreOf(p.Settings.SkipList, report: fromGame is null);
         p.Ignore = fromGame is { Length: > 0 } ids ? list.WithIds(ids) : list;
+        var onlyFromGame = p.Sent is not null ? p.SentOnlyIds : null;
+        var only = IgnoreOf(p.Settings.OnlyList, report: false);
+        p.Only = onlyFromGame is { Length: > 0 } oids ? only.WithIds(oids) : only;
+        p.Limits = string.IsNullOrWhiteSpace(p.Settings.CarryLimits) ? CarryLimits.None : LimitsOf(p.Settings.CarryLimits);
+        RebuildFilter(p);
+    }
+
+    private static void RebuildFilter(PlayerLoot p) =>
+        p.Filter = new ItemFilter(p.Settings.ItemFilter, p.Ignore!, p.Only, p.Focus);
+
+    private readonly Dictionary<string, CarryLimits> _limitsCache = new(StringComparer.Ordinal);
+    private int _limitsVersion = -1;
+
+    /// <summary>CarryLimits per distinct raw value, rebuilt when the item table is filled again.</summary>
+    private CarryLimits LimitsOf(string raw)
+    {
+        if (_limitsVersion != _data.Items.Version || _limitsCache.Count > 64)
+        {
+            _limitsCache.Clear();
+            _limitsVersion = _data.Items.Version;
+        }
+        if (!_limitsCache.TryGetValue(raw, out var limits)) _limitsCache[raw] = limits = new CarryLimits(raw, _data.Items);
+        return limits;
     }
 
     /// <summary>IgnoreList per distinct raw value (players with the server's defaults share one), matched on the names
@@ -290,6 +357,11 @@ internal sealed class LootLoop
     private void Target(PlayerLoot p, GamePlayer gp, EntityId e)
     {
         if (_game.PositionOf(e) is not { } at) return;
+        if (!HeightWindow.Allows(at.Y - gp.Position.Y, p.Settings))
+        {
+            Counters.HeightOut++;   // above or below the player's height window: as if out of range
+            return;
+        }
         var d2 = DistanceSquared(gp.Position, at);
         if (Classify(e) is not { Rule: { } rule, Key: var key })
         {
@@ -316,12 +388,13 @@ internal sealed class LootLoop
             Counters.ContainersHeldBack++;   // gate step 4
             return;
         }
-        var verdict = LootRules.Decide(rule, released: true, d2, s, p.Ignore!, out var noticeItem);
+        var verdict = LootRules.Decide(rule, released: true, d2, s, p.Filter, out var noticeItem);
         if (verdict != Verdict.Allowed)
         {
             CountRefusal(p, verdict, noticeItem);
             return;
         }
+        if (Release.IsHarvest(rule) && CountBag(BagRules.Harvest(rule.Yield, s, BagOf(p, gp), p.Limits))) return;
         if (!InSight(p, gp, e, key)) return;
         if (_budget <= 0)
         {
@@ -360,8 +433,9 @@ internal sealed class LootLoop
         var s = p.Settings;
         if (Release.IsHarvest(rule))
         {
-            // plants and crops: the loot-all is a harvest; their yield was checked against the skip list before
-            SendLoot(p, gp, e, key, offer);
+            // plants and crops: the loot-all is a harvest; their yield was checked against the item filter and the bag
+            // before
+            if (SendLoot(p, gp, e, key, offer)) BagRules.Harvested(rule.Yield, p.Bag);
             return;
         }
         // a loot-all takes everything, so it goes out only after a read showed nothing has to stay; an inventory that
@@ -373,11 +447,14 @@ internal sealed class LootLoop
             return;
         }
 
-        var take = new List<ContainerSlot>();
+        // what each slot gives: the whole slot (count 0), part of it (the bag's allowance), or nothing
+        var take = new List<(ContainerSlot Slot, int Count)>();
         var kept = false;
         var takeable = 0;
+        var bag = BagRules.NeedsBag(s, p.Limits) ? BagOf(p, gp) : null;
+        var planned = new Dictionary<uint, int>();   // what this container's slots already claim of the allowance
         foreach (var slot in slots)
-            switch (LootRules.Slot(slot.Item, s, _data.Quest, p.Ignore!))   // order: quest, ignored, take
+            switch (LootRules.Slot(slot.Item, slot.Rarity, s, _data.Quest, p.Filter, _data.Items))   // quest, filter, rarity, take
             {
                 case SlotRule.KeepQuest:
                     Counters.QuestKept++;
@@ -388,9 +465,33 @@ internal sealed class LootLoop
                     kept = true;
                     LeftBehind(p, slot.Item);
                     break;
+                case SlotRule.KeepNotListed:
+                    Counters.NotListed++;
+                    kept = true;
+                    break;
+                case SlotRule.KeepNotFocus:
+                    Counters.NotFocus++;
+                    kept = true;
+                    break;
+                case SlotRule.KeepRarity:
+                    Counters.RarityLow++;
+                    kept = true;
+                    break;
                 default:
-                    take.Add(slot);
-                    takeable += slot.Count;
+                    var allowed = BagRules.Allowance(slot.Item, s, bag, p.Limits, out var why);
+                    if (allowed != int.MaxValue) allowed = Math.Max(0, allowed - planned.GetValueOrDefault(slot.Item));
+                    if (allowed <= 0)
+                    {
+                        CountBag(why == BagRefusal.None ? BagRefusal.NoRoom : why);
+                        kept = true;
+                        break;
+                    }
+                    var count = allowed >= slot.Count ? 0 : allowed;   // 0 = the whole slot
+                    if (count > 0) kept = true;                         // part of the slot stays
+                    var moving = count == 0 ? slot.Count : count;
+                    if (allowed != int.MaxValue) planned[slot.Item] = planned.GetValueOrDefault(slot.Item) + moving;
+                    take.Add((slot, count));
+                    takeable += moving;
                     break;
             }
 
@@ -402,7 +503,7 @@ internal sealed class LootLoop
         }
 
         // containers: every item let through counts for the 100-in-5-s rule.
-        foreach (var slot in take)
+        foreach (var (slot, _) in take)
             if (p.Full.ContainerAttempt(slot.Item)) InventoryFull(p);
         // Also: a container whose takeable contents did not change since the last try while the player has no free slot
         // is "full" now (a 10 Hz scan never reaches 100 repeats), and is retried once per second until there is room.
@@ -418,13 +519,17 @@ internal sealed class LootLoop
 
         if (!kept)
         {
-            foreach (var slot in take) Counters.CountLooted(slot.Item, slot.Count);
-            SendLoot(p, gp, e, key, offer);
+            if (!SendLoot(p, gp, e, key, offer)) return;
+            foreach (var (slot, _) in take)
+            {
+                Counters.CountLooted(slot.Item, slot.Count);
+                p.Bag?.Took(slot.Item, slot.Count);
+            }
             return;
         }
 
         var sent = 0;
-        foreach (var slot in take)
+        foreach (var (slot, count) in take)
         {
             if (_budget <= 0)
             {
@@ -434,9 +539,13 @@ internal sealed class LootLoop
             _budget--;
             sent++;
             Counters.Moves++;
-            Counters.CountLooted(slot.Item, slot.Count);
+            var moving = count == 0 ? slot.Count : count;
+            Counters.CountLooted(slot.Item, moving);
+            p.Bag?.Took(slot.Item, moving);
             p.PendingMoves[key] = p.PendingMoves.GetValueOrDefault(key) + 1;
-            _game.Move(e, slot.Id, gp.Entity, outcome => MoveAnswered(p, key, outcome));
+            var item = slot.Item;
+            p.MovesInFlight[item] = p.MovesInFlight.GetValueOrDefault(item) + moving;
+            _game.Move(e, slot.Id, gp.Entity, count, outcome => MoveAnswered(p, key, outcome, item, moving));
         }
         if (sent > 0)
         {
@@ -445,8 +554,13 @@ internal sealed class LootLoop
         }
     }
 
-    private void MoveAnswered(PlayerLoot p, ulong key, MoveOutcome outcome)
+    private void MoveAnswered(PlayerLoot p, ulong key, MoveOutcome outcome, uint item, int count)
     {
+        if (p.MovesInFlight.TryGetValue(item, out var flying))
+        {
+            if (flying <= count) p.MovesInFlight.Remove(item);
+            else p.MovesInFlight[item] = flying - count;
+        }
         if (p.PendingMoves.TryGetValue(key, out var n))
         {
             if (n <= 1) p.PendingMoves.Remove(key);
@@ -455,18 +569,20 @@ internal sealed class LootLoop
         if (outcome == MoveOutcome.NoRoom && p.Full.MayNotify()) InventoryFull(p);
     }
 
-    private void SendLoot(PlayerLoot p, GamePlayer gp, EntityId e, ulong key, Offer offer)
+    /// <summary>Returns whether the loot-all went out (false: the per-scan cap is reached).</summary>
+    private bool SendLoot(PlayerLoot p, GamePlayer gp, EntityId e, ulong key, Offer offer)
     {
         if (_budget <= 0)
         {
             Counters.CapReached++;
-            return;
+            return false;
         }
         _budget--;
         Counters.Injects++;
         CountLootKind(offer);
         _game.Loot(gp.Entity, e);
         p.Visits.Looted(key);
+        return true;
     }
 
     private void CountLootKind(Offer offer)
@@ -481,15 +597,37 @@ internal sealed class LootLoop
     private void PickupTarget(PlayerLoot p, GamePlayer gp, EntityId e, ulong key, TemplateRule rule, float d2, uint item)
     {
         var s = p.Settings;
-        var verdict = LootRules.Decide(rule, released: false, d2, s, p.Ignore!, out var noticeItem);
+        var verdict = LootRules.Decide(rule, released: false, d2, s, p.Filter, out var noticeItem);
         var wanted = verdict == Verdict.Allowed;
         if (!wanted) CountRefusal(p, verdict, noticeItem);
-        if (wanted && p.Ignore!.Contains(item))   // the pickup's own item
-        {
-            wanted = false;
-            Counters.SkippedPickups++;
-            LeftBehind(p, item);
-        }
+        var details = _game.PickupDetails(e) ?? new GroundItem(1, GearRules.UnknownRarity);
+        if (wanted)   // the pickup's own item: the item filter, then the rarity rule
+            switch (p.Filter.Check(item))
+            {
+                case ItemRefusal.Skipped:
+                    wanted = false;
+                    Counters.SkippedPickups++;
+                    LeftBehind(p, item);
+                    break;
+                case ItemRefusal.NotListed:
+                    wanted = false;
+                    Counters.NotListed++;
+                    break;
+                case ItemRefusal.NotFocus:
+                    wanted = false;
+                    Counters.NotFocus++;
+                    break;
+                default:
+                    if (GearRules.BelowMin(item, details.Rarity, s.MinGearRarity, _data.Items))
+                    {
+                        wanted = false;
+                        Counters.RarityLow++;
+                    }
+                    break;
+            }
+        // the bag: a pickup is taken whole, so its whole amount has to fit
+        if (wanted && BagRules.NeedsBag(s, p.Limits) &&
+            CountBag(BagRules.Pickup(item, details.Amount, s, BagOf(p, gp), p.Limits))) wanted = false;
         var withInventory = _game.HasInventory(e);
         // takeInPlace off: static pickups (with an inventory) cannot be pulled: only within 0.75 m.
         if (wanted && withInventory && !s.TakeInPlace && d2 > StaticPickupNearSquared) wanted = false;
@@ -524,7 +662,8 @@ internal sealed class LootLoop
         }
         _budget--;
         Counters.Injects++;
-        Counters.CountLooted(item, 1);
+        Counters.CountLooted(item, details.Amount);
+        p.Bag?.Took(item, details.Amount);
         _game.Loot(gp.Entity, e);
         p.Pickups.Taken(key);
     }
@@ -532,8 +671,10 @@ internal sealed class LootLoop
     // ---------------------------------------------------------------- hold-E guard
 
     /// <summary>The player's own LootEvent (not injected, by a player): true = cancel it, because its target's group is
-    /// off, it is out of its group radius, or it is a pickup whose item is ignored. Groups that are never automatic (boss,
-    /// a living enemy, unknown templates) are left to the game: a single E press may arrive the same way.</summary>
+    /// off, it is out of its group radius, or it is a pickup whose item is on the skip list. Nothing else the player
+    /// chose (only list, gather focus, gear rarity, height window, bag rules) ever cancels the player's own take: a
+    /// player who presses E on something wants it. Groups that are never automatic (boss, a living enemy, unknown
+    /// templates) are left to the game: a single E press may arrive the same way.</summary>
     public bool ShouldCancelHoldE(EntityId guest, EntityId host, WorldPosition? hostPosition)
     {
         if (!_players.TryGetValue(guest, out var p)) return false;
@@ -567,6 +708,39 @@ internal sealed class LootLoop
                 Counters.YieldSkipped++;
                 if (noticeItem != 0) LeftBehind(p, noticeItem);
                 break;
+            case Verdict.NotListed: Counters.NotListed++; break;
+            case Verdict.NotFocus: Counters.NotFocus++; break;
+        }
+    }
+
+    /// <summary>The player's bag for this scan: read once at the scan's first need (Items.Read of the player), then
+    /// kept up to date with what the scan takes. Null when it cannot be read.</summary>
+    private Bag? BagOf(PlayerLoot p, GamePlayer gp)
+    {
+        if (p.BagScan == _scanNumber) return p.Bag;
+        p.BagScan = _scanNumber;
+        var read = _game.Bag(gp.Entity);
+        p.Bag = read is null ? null : new Bag(read.Slots, read.FreeSlots, MaxStackOf);
+        // moves sent in an earlier scan that the game has not answered yet are not in the read
+        if (p.Bag is not null) foreach (var (item, n) in p.MovesInFlight) p.Bag.Took(item, n);
+        return p.Bag;
+    }
+
+    /// <summary>The max stack the world uses now for an item: the game's own (the item table's original) raised the
+    /// way the server's maxStack setting raised it in this world. 0 = not known (an item missing from the table).</summary>
+    private int MaxStackOf(uint item) =>
+        _data.Items.TryGet(item, out var row) && row.OriginalMaxStack > 0
+            ? WorldDataRules.StackTarget(row.OriginalMaxStack, _game.StackSizeWish)
+            : 0;
+
+    /// <summary>Counts a bag refusal; true = refused.</summary>
+    private bool CountBag(BagRefusal why)
+    {
+        switch (why)
+        {
+            case BagRefusal.NoRoom: Counters.NoRoom++; return true;
+            case BagRefusal.CarryLimit: Counters.CarryLimited++; return true;
+            default: return false;
         }
     }
 

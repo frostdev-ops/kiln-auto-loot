@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: MIT
-// The skip-list editor: search box and group combo on one line, the whole-group button, the
-// suggestion box (bullet for chosen items, a click toggles, Enter takes the first), the chosen list with x per entry,
-// "Clear the list" and the count. The rules (matching, chosen, unknown, classify, the new raw value) are Core.IgnoreList's;
+// The item-list editor (the skip list, and the only list with its own texts): search box and group combo on one line,
+// the whole-group button, the suggestion box (bullet for chosen items, a click toggles, Enter takes the first, "Only
+// this" asks the window to gather nothing but that item), the chosen list with x per entry, "Clear the list" and the
+// count. Both lists keep to the same bounds (SkipListBounds). The rules (matching, chosen, unknown, classify, the new raw value) are Core.IgnoreList's;
 // this class only draws and keeps the editor's own state. Render thread.
 using Kiln;
 using KilnAutoLoot.Core;
@@ -9,8 +10,20 @@ using Texts = KilnAutoLoot.Core.Texts;
 
 namespace KilnAutoLoot.Client;
 
-internal sealed class IgnoreEditor(ItemTable items)
+/// <summary>The Texts keys an editor shows for its list.</summary>
+internal sealed record ListTexts(string AddGroup, string RemoveGroup, string Empty, string Count)
 {
+    public static readonly ListTexts Skip = new("ignoreGroup", "pickGroup", "emptyList", "ignoredCount");
+    public static readonly ListTexts Only = new("onlyAddGroup", "onlyRemoveGroup", "onlyEmpty", "onlyCount");
+}
+
+internal sealed class IgnoreEditor(ItemTable items, ListTexts? texts = null)
+{
+    private readonly ListTexts _texts = texts ?? ListTexts.Skip;
+
+    /// <summary>The item whose "Only this" was pressed in the last draw, or null; the window takes it (and clears it).</summary>
+    public ItemRow? GatherOnly { get; set; }
+
     private static readonly Color UnknownRed = new(230, 115, 89);
     private static readonly Color HintGrey = new(150, 150, 150);
 
@@ -117,7 +130,7 @@ internal sealed class IgnoreEditor(ItemTable items)
         if (category.Length > 0)
         {
             ui.SameLine();
-            if (ui.SmallButton(list.IsGroupChosen(category) ? T("pickGroup") : T("ignoreGroup")))
+            if (ui.SmallButton(list.IsGroupChosen(category) ? T(_texts.RemoveGroup) : T(_texts.AddGroup)))
                 result = list.ToggledGroup(category);
         }
 
@@ -139,6 +152,9 @@ internal sealed class IgnoreEditor(ItemTable items)
                         var chosen = list.IsChosen(row);
                         // U+2022 bullet (in the font range)
                         if (ui.Selectable((chosen ? "• " : "   ") + ItemTable.DisplayOf(row, german), chosen, fs * 11f)) pick = i;
+                        ui.SameLine();
+                        if (ui.SmallButton(T("gatherOnlyThis"))) GatherOnly = row;
+                        ui.Tooltip(T("gatherOnlyThisHelp"));
                         ui.SameLine();
                         ui.TextDisabled(row.Internal);
                     }
@@ -165,7 +181,7 @@ internal sealed class IgnoreEditor(ItemTable items)
         var entries = current.Entries;
         if (entries.Count == 0)
         {
-            ui.TextDisabled(T("emptyList"));
+            ui.TextDisabled(T(_texts.Empty));
             return Bounded(raw, result);
         }
         var shown = Math.Min(entries.Count, 8);
@@ -186,7 +202,7 @@ internal sealed class IgnoreEditor(ItemTable items)
         if (remove >= 0) result = current.WithoutAt(remove);
         if (ui.SmallButton(T("removeAll"))) result = "";
         ui.SameLine();
-        ui.TextDisabled(string.Format(T("ignoredCount"), entries.Count));
+        ui.TextDisabled(string.Format(T(_texts.Count), entries.Count));
         if (!SkipListBounds.Within(raw))
             ui.TextWrapped(string.Format(T("listTooLong"), SkipListBounds.MaxEntries, SkipListBounds.MaxEntryLength,
                 SkipListBounds.MaxNameParts));

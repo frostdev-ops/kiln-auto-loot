@@ -7,11 +7,11 @@ namespace KilnAutoLoot.Offline;
 
 public class TextsTests
 {
-    /// <summary>Every settings key: the scalar properties of the three settings classes, camelCase.</summary>
+    /// <summary>Every settings key: the scalar and enum properties of the three settings classes, camelCase.</summary>
     internal static IReadOnlyList<string> AllSettingKeys() =>
         new[] { typeof(PersonalSettings), typeof(ServerSettings), typeof(ServerLimits) }
             .SelectMany(t => t.GetProperties(BindingFlags.Public | BindingFlags.Instance))
-            .Where(p => p.PropertyType.IsPrimitive || p.PropertyType == typeof(string))
+            .Where(p => p.PropertyType.IsPrimitive || p.PropertyType == typeof(string) || p.PropertyType.IsEnum)
             .Select(p => char.ToLowerInvariant(p.Name[0]) + p.Name[1..])
             .ToList();
 
@@ -25,7 +25,7 @@ public class TextsTests
     public void Every_setting_has_a_label_and_help_in_both_languages()
     {
         var keys = AllSettingKeys();
-        Assert.Equal(38, keys.Count);
+        Assert.Equal(46, keys.Count);
         foreach (var k in keys)
             foreach (var g in new[] { false, true })
             {
@@ -101,17 +101,50 @@ public class TextsTests
                      "statusCapped", "statusWaiting", "statusLoading", "hostNote", "defaultsNote", "readOnlyServer",
                      "searchHint", "ignoreGroup", "pickGroup", "matches", "emptyList", "groupEntry", "unknownEntry", "namePart",
                      "removeAll", "ignoredCount", "toggleOn", "toggleOff", "fullLine1", "fullLine2", "leftBehindLine1",
-                     "leftBehindLine2", "serverApplies" })
+                     "leftBehindLine2", "serverApplies",
+                     "onlyAddGroup", "onlyRemoveGroup", "onlyEmpty", "onlyCount", "gatherOnlyThis", "gatherOnlyThisHelp", "listUnused",
+                     "noLimit", "zeroOff", "lineOfSightMissing", "carrySearchHint", "carryAddGroup", "carryEmpty", "carryAmountHelp",
+                     "carryBad", "carryCount", "profile", "profileNew", "profileNewHelp", "profileRename", "profileRenameHelp",
+                     "profileDelete", "profileDeleteSure", "profileDeleteHelp", "profileReset", "profileResetHelp", "profileName",
+                     "profileKey", "profileKeyHelp", "profileKeyBad", "profileKeyTaken", "profileSave", "profileCancel",
+                     "profileNextKey", "profileNewName", "profileMine", "profileSwitched", "profileSaveError",
+                     "focusOn", "focusOff", "focusHint", "focusNoServer", "focusStatus", "focusKey", "focusStop" })
         {
             Assert.NotEqual(k, Texts.Get(k, false));
             Assert.NotEqual(k, Texts.Get(k, true));
             Assert.False(string.IsNullOrWhiteSpace(Texts.Get(k, true)), k);
         }
-        foreach (var k in new[] { "looting", "containers", "smashing", "filters", "ranges", "world", "pickUp", "perGroup", "enemies", "limits" })
+        foreach (var k in new[] { "looting", "containers", "smashing", "filters", "where", "ranges", "world", "pickUp", "perGroup",
+                     "enemies", "limits", "height", "sight", "bag" })
         {
             Assert.NotEqual(k, Texts.Section(k, false));
             Assert.NotEqual(k, Texts.Section(k, true));
         }
+    }
+
+    [Fact]
+    public void Choices_profiles_and_focus_have_texts_in_both_languages()
+    {
+        var keys = Enum.GetNames<FilterMode>().Select(v => "itemFilter." + v)
+            .Concat(Enum.GetNames<GearRarity>().Select(v => "minGearRarity." + v))
+            .Concat(KilnAutoLoot.Client.BuiltInProfiles.Ids.Select(id => "profile." + id));
+        foreach (var k in keys)
+        {
+            Assert.NotEqual(k, Texts.Get(k, false));
+            Assert.NotEqual(k, Texts.Get(k, true));
+            Assert.NotEqual(Texts.Get(k, false), Texts.Get(k, true));
+        }
+        Assert.Equal("Gathering only: Twigs", Texts.Format("focusOn", false, "Twigs"));
+        Assert.Equal("Sammle nur: Äste", Texts.Format("focusOn", true, "Äste"));
+        Assert.Contains("by hand", Texts.Format("focusHint", false, "F11"));
+        Assert.Contains("F11", Texts.Format("focusHint", true, "F11"));
+        Assert.Contains("can't check what you see", Texts.Get("lineOfSightMissing", false));
+        Assert.Contains("0 = no limit", Texts.Help("heightAbove", false));
+        Assert.Contains("0 = keine Grenze", Texts.Help("heightBelow", true));
+        // the carry-limits help says the window writes internal names, and typed names need a server that knows them
+        Assert.Contains("internal names", Texts.Help("carryLimits", false));
+        Assert.Contains("server knows", Texts.Help("carryLimits", false));
+        Assert.Contains("Server diese Namen kennt", Texts.Help("carryLimits", true));
     }
 
     [Fact]

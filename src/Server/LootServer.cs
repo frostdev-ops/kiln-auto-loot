@@ -71,6 +71,7 @@ internal sealed class LootServer(Data data)
         _subscriptions.Add(Events.On<LootEvent>(OnLoot));
         AutoLootMod.Hub.PersonalReceived += OnPersonal;
         AutoLootMod.Hub.ClientStateReceived += OnClientState;
+        AutoLootMod.Hub.CommandReceived += OnCommand;
         if (_context is not null) _context.Tick.Pre += OnTick;
         if (IsServerWorld && Lifecycle.IsServerRunning) StartWorld("loaded while the server runs");
     }
@@ -83,6 +84,7 @@ internal sealed class LootServer(Data data)
         _subscriptions.Clear();
         AutoLootMod.Hub.PersonalReceived -= OnPersonal;
         AutoLootMod.Hub.ClientStateReceived -= OnClientState;
+        AutoLootMod.Hub.CommandReceived -= OnCommand;
         if (_context is not null) _context.Tick.Pre -= OnTick;
         _diag?.Dispose();
         _diag = null;
@@ -100,11 +102,11 @@ internal sealed class LootServer(Data data)
         SendInfo(player);
     }
 
-    /// <summary>The local player's window state, from the client part in a hosted game. Tick thread.</summary>
     /// <summary>The host's own command (the gather focus key), from the client part in the same process. Tick thread.
-    /// Filled in by the rules wave; answers with LocalServerInfo.</summary>
-    public void SetLocalCommand(EntityId player, Net.CommandKind kind) { }
+    /// Answers with LocalServerInfo.</summary>
+    public void SetLocalCommand(EntityId player, Net.CommandKind kind) => RunCommand(player, kind);
 
+    /// <summary>The local player's window state, from the client part in a hosted game. Tick thread.</summary>
     public void SetLocalWindowOpen(EntityId player, bool open)
     {
         _hostWindow = (player, open);
@@ -227,7 +229,19 @@ internal sealed class LootServer(Data data)
     {
         if (!_running || _loop is null) return;
         // the ids come from the player's own item names (English and German); this server may know internal names only
-        _loop.QueuePersonal(player, m.Json, m.SkipIds);
+        _loop.QueuePersonal(player, m.Json, m.SkipIds, m.OnlyIds);
+    }
+
+    /// <summary>A player's command (the gather focus key). Tick thread.</summary>
+    private void OnCommand(CommandMsg m, EntityId player) => RunCommand(player, m.Kind);
+
+    /// <summary>Every command is answered with the player's ServerInfoMsg (FocusItem = the focus after it), also when
+    /// nothing changed, so the window always shows the server's state.</summary>
+    private void RunCommand(EntityId player, CommandKind kind)
+    {
+        if (!_running || _loop is null) return;
+        if (_enabled && _looting) _loop.Command(player, kind);
+        SendInfo(player);
     }
 
     private void ApplySettings()
@@ -256,7 +270,8 @@ internal sealed class LootServer(Data data)
         if (_loop is null || _config is null) return;
         var s = _config.Value;
         var msg = new ServerInfoMsg(SettingsJson.Write(_loop.SettingsOf(player)), SettingsJson.WriteLimits(s.Limits),
-            s.MaxStack, s.BackpackCheat, Kiln.Client.IsHosting, _enabled, LineOfSight: false, FocusItem: 0);   // wired by the rules wave
+            s.MaxStack, s.BackpackCheat, Kiln.Client.IsHosting, _enabled, LineOfSight: _loop.SightAvailable,
+            FocusItem: _loop.FocusOf(player));
         if (IsHostPlayer(player)) LocalServerInfo?.Invoke(msg);
         else if (ChannelHub.HasMod(player)) AutoLootMod.Hub.SendTo(player, msg);
     }
@@ -306,6 +321,8 @@ internal sealed class LootServer(Data data)
                 if (_config?.Value.CounterLog == true && _loop.Counters.HoldECanceled <= 60)
                     _diag?.Write($"hold-E stopped: player {e.Guest}, target {e.Host}");
             }
+            else if (!e.LootAll && _loop.HandPickupItem(e.Host) is { } item)
+                _loop.TookByHand(e.Guest, item);   // a single pickup by hand: what a gather focus would be on
         }
         catch (Exception ex)
         {

@@ -69,7 +69,8 @@ internal sealed class Smash
         _tries.Clear();
     }
 
-    /// <summary>Once per second per player, tick thread. Does nothing when s.Smash is off or the limits forbid it.</summary>
+    /// <summary>Once per second per player, tick thread. Does nothing when s.Smash is off or the limits forbid it. Only
+    /// targets inside the player's height window (heightAbove / heightBelow) are hit.</summary>
     public void Run(EntityId player, WorldPosition position, PersonalSettings s, ServerLimits limits)
     {
         var sw = SmashSwitches.Of(s, limits);
@@ -93,6 +94,7 @@ internal sealed class Smash
         foreach (var e in _world.Within(_candidates, position, sw.Radius))
         {
             if (_world.Inspect(e) is not { } target || !table.TryGet(target.Template, out var kind)) continue;
+            if (!HeightWindow.Allows(target.Position.Y - position.Y, s)) continue;   // the player's height window
             if (!SmashRules.Wants(kind, sw, NearBuildZone) || !MayHit(target, now)) continue;
             var dist = target.Position.DistanceTo(position);
             if (dist <= sw.Radius) wanted.Add((dist, target, kind));

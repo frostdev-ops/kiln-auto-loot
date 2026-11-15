@@ -28,7 +28,14 @@ public sealed record ItemRow(uint Id, string Internal, string English, string Ge
     string MenuGroup, Guid Guid, int OriginalMaxStack);
 
 /// <summary>Why a target was refused or allowed: the diagnostics counter it lands in.</summary>
-public enum Verdict { Allowed, UnknownTemplate, GroupOff, RadiusOut, YieldIgnored, NotReleased }
+public enum Verdict
+{
+    Allowed, UnknownTemplate, GroupOff, RadiusOut, YieldIgnored, NotReleased,
+    /// <summary>Only mode: none of the target's yield is on the only list.</summary>
+    NotListed,
+    /// <summary>Gather focus: the target does not give the focus item.</summary>
+    NotFocus,
+}
 
 /// <summary>The visit table's answer for a container target.</summary>
 public enum TargetStep { Wait, Accept, Loot, AlreadyHarvested }
@@ -48,4 +55,10 @@ public enum SlotRule
     KeepQuest,
     /// <summary>On the ignore list: stays, "left behind" notice (<see cref="NoticeBook.ShouldNotify"/>).</summary>
     KeepIgnored,
+    /// <summary>Only mode: not on the only list; stays, no notice.</summary>
+    KeepNotListed,
+    /// <summary>Gather focus is on another item; stays, no notice.</summary>
+    KeepNotFocus,
+    /// <summary>Gear below minGearRarity; stays, no notice.</summary>
+    KeepRarity,
 }

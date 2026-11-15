@@ -37,7 +37,27 @@ internal static class SettingValues
     public static void Set(object settings, string key, object? value)
     {
         var p = Prop(settings.GetType(), key) ?? throw new ArgumentException($"no setting '{key}'", nameof(key));
-        p.SetValue(settings, Convert.ChangeType(value, p.PropertyType, CultureInfo.InvariantCulture));
+        p.SetValue(settings, To(value, p.PropertyType));
+    }
+
+    /// <summary>The value as the property's type; an enum from its value, a number or its name.</summary>
+    private static object? To(object? value, Type type)
+    {
+        if (!type.IsEnum) return Convert.ChangeType(value, type, CultureInfo.InvariantCulture);
+        if (value is string name) return Enum.Parse(type, name, ignoreCase: true);
+        return Enum.ToObject(type, Convert.ToInt32(value, CultureInfo.InvariantCulture));
+    }
+
+    /// <summary>An enum setting's values in order, as their names (the Choice combo).</summary>
+    public static IReadOnlyList<string> ChoiceNames(Type owner, string key) =>
+        Prop(owner, key) is { PropertyType.IsEnum: true } p ? Enum.GetNames(p.PropertyType) : [];
+
+    /// <summary>The index of an enum setting's value among <see cref="ChoiceNames"/>, 0 when unknown.</summary>
+    public static int ChoiceIndex(object settings, string key)
+    {
+        var v = Get(settings, key);
+        if (v is null || !v.GetType().IsEnum) return 0;
+        return Math.Max(0, Array.IndexOf(Enum.GetNames(v.GetType()), v.ToString()));
     }
 
     /// <summary>The camelCase keys (Kiln config paths) whose values differ, with the new value.</summary>
@@ -76,12 +96,19 @@ internal static class SettingValues
     public static string Describe(SettingSpec spec, object settings, bool german) => spec.Kind switch
     {
         WidgetKind.Bool => GetBool(settings, spec.Key) ? (german ? "an" : "on") : (german ? "aus" : "off"),
+        WidgetKind.Meters or WidgetKind.Seconds when spec.ZeroText is { } zero && GetFloat(settings, spec.Key) == 0 =>
+            Texts.Get(zero, german),
         WidgetKind.Meters or WidgetKind.Seconds => Format(spec.Kind, GetFloat(settings, spec.Key)),
+        WidgetKind.Count when spec.ZeroText is { } zero && GetFloat(settings, spec.Key) == 0 => Texts.Get(zero, german),
+        WidgetKind.Choice => Texts.Get(spec.Key + "." + Get(settings, spec.Key), german),
         _ => Convert.ToString(Get(settings, spec.Key), CultureInfo.InvariantCulture) ?? "",
     };
 
     /// <summary>The personal settings whose value the server applies differently (after its limits).</summary>
     public static IEnumerable<SettingSpec> Differing(PersonalSettings mine, PersonalSettings effective) =>
-        SettingCatalog.All.Where(s => s.Owner == SettingOwner.Personal && s.Kind != WidgetKind.ItemList
+        SettingCatalog.All.Where(s => s.Owner == SettingOwner.Personal && !IsList(s.Kind)
                                       && !Equals(Get(mine, s.Key), Get(effective, s.Key)));
+
+    /// <summary>The list widgets (skip, only, carry limits): the server's copy of those is not shown as a cap.</summary>
+    public static bool IsList(WidgetKind kind) => kind is WidgetKind.ItemList or WidgetKind.CarryLimits;
 }

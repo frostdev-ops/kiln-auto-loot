@@ -16,8 +16,19 @@ public static class LootRules
     /// <remarks>A living enemy or the boss group is <see cref="Verdict.GroupOff"/> (it is counted there); the caller
     /// checks "not released" for containers itself (<see cref="Verdict.NotReleased"/>) and the enemy-near rule.</remarks>
     public static Verdict Decide(TemplateRule? rule, bool released, float distanceSquared, PersonalSettings s, IgnoreList ignore,
+        out uint noticeItem) =>
+        Decide(rule, released, distanceSquared, s, ItemFilter.SkipOnly(ignore), out noticeItem);
+
+    /// <summary>As above, with the player's whole item filter. Skip mode judges the yield against the skip list as
+    /// always. A picking filter (only mode, gather focus) judges a container-path target by its yield: a harvest
+    /// (plant, crop, heap) needs at least one yield item the filter takes (the whole yield comes along, so the rest of
+    /// it is taken too) and is refused without a known yield; a corpse or chest with a known yield needs one too, one
+    /// without a yield is judged slot by slot. Pickups (<paramref name="released"/> false) are judged by their own
+    /// item, not here.</summary>
+    public static Verdict Decide(TemplateRule? rule, bool released, float distanceSquared, PersonalSettings s, ItemFilter filter,
         out uint noticeItem)
     {
+        var ignore = filter.Skip;
         noticeItem = 0;
         if (rule is null) return Verdict.UnknownTemplate;   // unknown = never
         var group = EffectiveGroup(rule, released);
@@ -39,6 +50,14 @@ public static class LootRules
         {
             float r = GroupRadius(group, s);
             if (distanceSquared > r * r) return Verdict.RadiusOut;
+        }
+        if (filter.Picks)
+        {
+            if (!released) return Verdict.Allowed;
+            bool harvest = group is Group.Plant or Group.Farm or Group.Ground;
+            if (rule.Yield.Count == 0 && !harvest) return Verdict.Allowed;
+            foreach (var id in rule.Yield) if (filter.Allows(id)) return Verdict.Allowed;
+            return filter.Focus != 0 ? Verdict.NotFocus : Verdict.NotListed;
         }
         if (rule.Yield.Count > 0)   // the yield against the ignore list
         {
@@ -84,6 +103,22 @@ public static class LootRules
     /// <summary>The slot filter: true = this item stays in the container.</summary>
     public static bool KeepInContainer(uint itemId, PersonalSettings s, QuestItems quest, IgnoreList ignore) =>
         Slot(itemId, s, quest, ignore) != SlotRule.Take;
+
+    /// <summary>The slot filter with the player's whole item filter and the rarity rule, in this order: quest item, the
+    /// item filter (skip list, only list or gather focus), gear below minGearRarity, take.</summary>
+    /// <param name="rarity">the slot's rarity (<see cref="GearRules.UnknownRarity"/> when not known).</param>
+    public static SlotRule Slot(uint itemId, int rarity, PersonalSettings s, QuestItems quest, ItemFilter filter, ItemTable items)
+    {
+        if (s.LeaveQuestItems && quest.Contains(itemId)) return SlotRule.KeepQuest;
+        switch (filter.Check(itemId))
+        {
+            case ItemRefusal.Skipped: return SlotRule.KeepIgnored;
+            case ItemRefusal.NotListed: return SlotRule.KeepNotListed;
+            case ItemRefusal.NotFocus: return SlotRule.KeepNotFocus;
+        }
+        if (GearRules.BelowMin(itemId, rarity, s.MinGearRarity, items)) return SlotRule.KeepRarity;
+        return SlotRule.Take;
+    }
 
     /// <summary>The slot filter with its reason, in this order: quest item first, then ignored.</summary>
     public static SlotRule Slot(uint itemId, PersonalSettings s, QuestItems quest, IgnoreList ignore)

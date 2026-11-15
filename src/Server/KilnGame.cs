@@ -50,6 +50,15 @@ internal sealed class KilnGame(Action<string> logOnce) : IGame
         return false;
     }
 
+    public GroundItem? PickupDetails(EntityId entity)
+    {
+        if (!Ecs.TryGet<Ecs.PickupItem>(entity, out var pi)) return null;
+        int rarity;
+        try { rarity = Convert.ToInt32(pi.rarity); }
+        catch (Exception e) when (e is InvalidCastException or OverflowException) { rarity = -1; }
+        return new GroundItem(Math.Max(1, (int)pi.pickupAmount), rarity);
+    }
+
     public bool HasInventory(EntityId entity) => Ecs.Has<Ecs.Inventory>(entity);
 
     public Offer OfferOf(EntityId entity) =>
@@ -65,11 +74,26 @@ internal sealed class KilnGame(Action<string> logOnce) : IGame
         if (!_items || Items.Read(container) is not { } inv) return null;
         var list = new List<ContainerSlot>();
         foreach (var s in inv.Slots)
-            if (!s.IsEmpty && s.Count > 0) list.Add(new ContainerSlot(s.Slot.Value, s.Item.Value, s.Count));
+            if (!s.IsEmpty && s.Count > 0)
+                list.Add(new ContainerSlot(s.Slot.Value, s.Item.Value, s.Count, s.Rarity is { } r ? (int)r : -1));
         return list;
     }
 
     public int FreeSlots(EntityId player) => _items && Items.Read(player) is { } inv ? inv.FreeSlots(InventoryCategory.Generic) : -1;
+
+    public BagRead? Bag(EntityId player)
+    {
+        if (!_items || Items.Read(player) is not { } inv) return null;
+        var list = new List<KilnAutoLoot.Core.BagSlot>(inv.Slots.Count);
+        foreach (var s in inv.Slots)
+            if (!s.IsEmpty && s.Count > 0)
+                list.Add(new KilnAutoLoot.Core.BagSlot(s.Item.Value, s.Count, s.Category == InventoryCategory.Generic));
+        return new BagRead(list, inv.FreeSlots(InventoryCategory.Generic));
+    }
+
+    public int StackSizeWish => WorldData.AppliedStackSize;
+
+    public bool SightAvailable => _sight;
 
     public Sight LineOfSight(EntityId player, EntityId target)
     {
@@ -89,7 +113,7 @@ internal sealed class KilnGame(Action<string> logOnce) : IGame
     public void Loot(EntityId guest, EntityId host) =>
         Gameplay.Inject.Loot(guest, host, 0, lootAll: true, bypassInteraction: true);
 
-    public void Move(EntityId from, ulong slot, EntityId to, Action<MoveOutcome> done)
+    public void Move(EntityId from, ulong slot, EntityId to, int count, Action<MoveOutcome> done)
     {
         var scheduler = AutoLootMod.Scheduler;
         if (!_moves)
@@ -97,7 +121,7 @@ internal sealed class KilnGame(Action<string> logOnce) : IGame
             done(MoveOutcome.Failed);
             return;
         }
-        var task = Items.Move(from, new SlotId(slot), to);
+        var task = Items.Move(from, new SlotId(slot), to, Math.Max(0, count));
         task.ContinueWith(t =>
         {
             var outcome = t.IsCompletedSuccessfully

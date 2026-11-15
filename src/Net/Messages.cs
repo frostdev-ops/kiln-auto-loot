@@ -14,33 +14,53 @@ internal static class Channels
     public const string Version = "1";
     /// <summary>The whole PersonalSettings as JSON: the ignore list can be long, so allow 64 KiB.</summary>
     public const int MaxJson = 64 * 1024;
-    /// <summary>At most this many skip-list item ids in one PersonalMsg (the game has a few thousand items).</summary>
+    /// <summary>At most this many item ids per list (skip list, only list) in one PersonalMsg (the game has a few
+    /// thousand items).</summary>
     public const int MaxSkipIds = 8192;
-    /// <summary>The largest message: a PersonalMsg with the longest JSON and every id, plus room for the lengths.</summary>
-    public const int MaxMessageBytes = MaxJson + MaxSkipIds * 4 + 1024;
+    /// <summary>The largest message: a PersonalMsg with the longest JSON and every id of both lists, plus room for the
+    /// lengths.</summary>
+    public const int MaxMessageBytes = MaxJson + 2 * MaxSkipIds * 4 + 1024;
 }
 
 /// <summary>Player's game to server: the player's settings, whole (sent on join, after every change and when the
-/// game's item table fills). SkipIds: the item ids the player's game matched its skip list to with its own item names
-/// (English and German); a dedicated server knows internal names only, so it takes these ids for the player.</summary>
-public sealed record PersonalMsg(string Json, uint[] SkipIds) : INetMessage<PersonalMsg>
+/// game's item table fills). SkipIds / OnlyIds: the item ids the player's game matched its skip list / only list to with
+/// its own item names (English and German); a dedicated server knows internal names only, so it takes these ids for the
+/// player.</summary>
+public sealed record PersonalMsg(string Json, uint[] SkipIds, uint[] OnlyIds) : INetMessage<PersonalMsg>
 {
+    /// <summary>Settings without only-list ids.</summary>
+    public PersonalMsg(string Json, uint[] SkipIds) : this(Json, SkipIds, []) { }
+
     public void Encode(NetWriter w)
     {
-        var ids = SkipIds ?? [];
-        if (ids.Length > Channels.MaxSkipIds) ids = ids[..Channels.MaxSkipIds];
-        w.String(Json).Int32(ids.Length);
-        foreach (var id in ids) w.UInt32(id);
+        w.String(Json);
+        Ids(w, SkipIds);
+        Ids(w, OnlyIds);
     }
 
     public static PersonalMsg Decode(ref NetReader r)
     {
         var json = r.String(Channels.MaxJson);
+        var skip = Ids(ref r);
+        var only = Ids(ref r);
+        return new(json, skip, only);
+    }
+
+    private static void Ids(NetWriter w, uint[]? ids)
+    {
+        ids ??= [];
+        if (ids.Length > Channels.MaxSkipIds) ids = ids[..Channels.MaxSkipIds];
+        w.Int32(ids.Length);
+        foreach (var id in ids) w.UInt32(id);
+    }
+
+    private static uint[] Ids(ref NetReader r)
+    {
         var count = r.Int32();
-        if (count < 0 || count > Channels.MaxSkipIds) throw new NetFormatException("Too many skip-list ids.");
+        if (count < 0 || count > Channels.MaxSkipIds) throw new NetFormatException("Too many item ids.");
         var ids = new uint[count];
         for (var i = 0; i < count; i++) ids[i] = r.UInt32();
-        return new(json, ids);
+        return ids;
     }
 }
 

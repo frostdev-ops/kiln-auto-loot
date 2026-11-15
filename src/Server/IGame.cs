@@ -22,8 +22,15 @@ internal readonly record struct Offer(bool Present, bool Disabled, uint OfferId)
     public static readonly Offer None = new(false, false, 0);
 }
 
-/// <summary>One non-empty inventory slot of a container. <see cref="Id"/> is Kiln's SlotId value.</summary>
-internal readonly record struct ContainerSlot(ulong Id, uint Item, int Count);
+/// <summary>One non-empty inventory slot of a container. <see cref="Id"/> is Kiln's SlotId value. <see cref="Rarity"/>:
+/// the slot's ItemRarity (0 common .. 4 legendary), -1 when the read gives none.</summary>
+internal readonly record struct ContainerSlot(ulong Id, uint Item, int Count, int Rarity = -1);
+
+/// <summary>A ground pickup's amount and rarity (Ecs.PickupItem pickupAmount, rarity; rarity -1 = not known).</summary>
+internal readonly record struct GroundItem(int Amount, int Rarity);
+
+/// <summary>A player's inventories as one read: every non-empty slot, and the free backpack slots (-1 = not known).</summary>
+internal sealed record BagRead(IReadOnlyList<KilnAutoLoot.Core.BagSlot> Slots, int FreeSlots);
 
 /// <summary>The line-of-sight answer.</summary>
 internal enum Sight
@@ -58,6 +65,9 @@ internal interface IGame
     /// <summary>Ecs.PickupItem: the item id of a ground pickup.</summary>
     bool TryPickupItem(EntityId entity, out uint itemId);
 
+    /// <summary>Ecs.PickupItem's amount and rarity; null when the entity has no pickup.</summary>
+    GroundItem? PickupDetails(EntityId entity);
+
     /// <summary>The entity has an Inventory (mushrooms, stone piles: pickups taken with a loot-all).</summary>
     bool HasInventory(EntityId entity);
 
@@ -74,6 +84,17 @@ internal interface IGame
     /// <summary>Items.Read(player).FreeSlots(Generic); -1 when unknown.</summary>
     int FreeSlots(EntityId player);
 
+    /// <summary>Items.Read of the player: every non-empty slot of the player's inventories (Generic = backpack) and the
+    /// free backpack slots; null when it cannot be read.</summary>
+    BagRead? Bag(EntityId player);
+
+    /// <summary>The stack size the server's maxStack setting has applied in this world (0 = the game's own sizes,
+    /// also when kiln.content could not apply it).</summary>
+    int StackSizeWish { get; }
+
+    /// <summary>The server can check line of sight (capability queries.line_of_sight, and no call said otherwise).</summary>
+    bool SightAvailable { get; }
+
     /// <summary>Queries.VoxelLineOfSight from the player to the target.</summary>
     Sight LineOfSight(EntityId player, EntityId target);
 
@@ -83,7 +104,7 @@ internal interface IGame
     /// <summary>Gameplay.Inject.Loot with lootAll and bypassInteraction ("loot-all").</summary>
     void Loot(EntityId guest, EntityId host);
 
-    /// <summary>Items.Move of one whole slot into the player's inventory; <paramref name="done"/> runs on the tick thread
-    /// when the game answered.</summary>
-    void Move(EntityId from, ulong slot, EntityId to, Action<MoveOutcome> done);
+    /// <summary>Items.Move of a slot into the player's inventory, <paramref name="count"/> of it (0 = the whole slot);
+    /// <paramref name="done"/> runs on the tick thread when the game answered.</summary>
+    void Move(EntityId from, ulong slot, EntityId to, int count, Action<MoveOutcome> done);
 }

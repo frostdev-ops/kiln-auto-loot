@@ -15,6 +15,10 @@ internal static class WorldData
     private static Wanted? _wanted, _applied;
     private static bool _hooked;
 
+    /// <summary>The stack size this mod's content layer applies now (0 = none: the game's own sizes, also while
+    /// kiln.content is not there or has not applied it yet). Tick thread.</summary>
+    public static int AppliedStackSize { get; private set; }
+
     /// <summary>Tick thread, server side. Idempotent: LootServer calls it at ServerStartedEvent and after every change
     /// of the server settings.</summary>
     public static void Apply(ServerSettings s)
@@ -40,6 +44,7 @@ internal static class WorldData
     public static void Reset()
     {
         _wanted = null;
+        AppliedStackSize = 0;
         if (_applied is not null && Content.Available) Content.Revert();
         _applied = null;
     }
@@ -48,17 +53,20 @@ internal static class WorldData
     {
         if (_wanted is not { } w || _applied == w) return;
         Content.Revert();                                         // this mod's layer only: back to the game's values
+        AppliedStackSize = 0;
         _applied = w;
         int raised, recipes;
         try
         {
             raised = ApplyStacks(w.StackSize);
             recipes = w.BestBackpack ? ApplyBackpack() : 0;
+            AppliedStackSize = w.StackSize;
         }
         catch (Exception e)
         {
             KilnLog.Warn($"kiln-auto-loot: stack size / backpack recipes not applied: {e.Message}");
             Content.Revert();
+            AppliedStackSize = 0;
             return;
         }
         KilnLog.Info($"kiln-auto-loot: stack size {(w.StackSize == 0 ? "the game's own" : w.StackSize.ToString())}: " +

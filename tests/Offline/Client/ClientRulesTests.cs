@@ -234,13 +234,14 @@ public class CatalogTests
     [Fact]
     public void Pages_in_order_with_their_settings()
     {
-        Assert.Equal(["looting", "containers", "smashing", "filters", "ranges", "world"], SettingCatalog.Pages.Select(p => p.Key));
+        Assert.Equal(["looting", "containers", "smashing", "filters", "where", "ranges", "world"], SettingCatalog.Pages.Select(p => p.Key));
         string[] On(string page) => SettingCatalog.Pages.Single(p => p.Key == page).Settings.Select(s => s.Key).ToArray();
-        Assert.Equal(["looting", "radius", "takeInPlace", "visibleOnly", "groundLoot", "stones", "collectibles", "plants",
+        Assert.Equal(["looting", "radius", "takeInPlace", "groundLoot", "stones", "collectibles", "plants",
                       "crops", "fish"], On("looting"));
         Assert.Equal(["corpses", "bosses", "chests", "openDelay", "leaveQuestItems"], On("containers"));
         Assert.Equal(["smash", "smashBuildables", "fellTrees", "smashHives"], On("smashing"));
-        Assert.Equal(["skipList", "skipNotice"], On("filters"));
+        Assert.Equal(["itemFilter", "skipList", "onlyList", "skipNotice", "minGearRarity"], On("filters"));
+        Assert.Equal(["heightAbove", "heightBelow", "visibleOnly", "fillCarriedStacks", "keepFreeSlots", "carryLimits"], On("where"));
         Assert.Equal(["groundRadius", "collectiblesRadius", "plantsRadius", "cropsRadius", "corpsesRadius", "chestsRadius",
                       "enemyPause", "enemyDistance"], On("ranges"));
         Assert.Equal(["maxStack", "backpackCheat", "enabled", "maxRadius", "allowSmash", "allowFelling", "allowHives"], On("world"));

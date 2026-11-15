@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
-// The player's game: the F8 window, the F9 key, the notices, and telling the server when a game window is open.
+// The player's game: the F8 window, the F9 key, the profile keys (F10 next, one per profile when set), the gather focus
+// key (F11), the notices, and telling the server when a game window is open.
 // The parts: SettingsLink (the settings file and the handoff to the server part),
 // SettingsWindow + IgnoreEditor (drawing), and the pure rules in KeyActions, WindowSignal, StackField, Notices.
 using Kiln;
@@ -19,7 +20,9 @@ internal sealed class ClientPart(Data data, Server.LootServer server)
     private readonly WindowSignalSender _signal = new();
     private readonly ToastBook _toasts = new(new WallClock());
     private SettingsWindow? _window;
-    private KeyBinding? _menuKey, _toggleKey;
+    private KeyBinding? _menuKey, _toggleKey, _nextProfileKey, _focusKey;
+    private readonly Dictionary<string, (KeyBinding Binding, string Key)> _profileKeys = new();   // tick thread
+    private readonly FocusNotes _focus = new();
     private (ClientState State, uint ClientSession, uint ServerSession) _session;
     private uint _handedSession = uint.MaxValue;
     private int _itemsVersion;   // the item table version the skip ids last followed
@@ -28,26 +31,39 @@ internal sealed class ClientPart(Data data, Server.LootServer server)
     private bool German => Texts.German(_link.Personal.Language, GameLanguage.Current);
     private string MenuKeyName => _menuKey?.Key.ToString() ?? KeyNames.DefaultMenuKey;
     private string ToggleKeyName => _toggleKey?.Key.ToString() ?? KeyNames.DefaultAutoLootKey;
+    private string NextProfileKeyName => _nextProfileKey?.Key.ToString() ?? ProfileKeys.DefaultNextProfileKey;
+    private string FocusKeyName => _focusKey?.Key.ToString() ?? ProfileKeys.DefaultFocusKey;
+
+    /// <summary>The mod's own keys as bound now (a profile's key may not be one of them).</summary>
+    private IEnumerable<string> FixedKeyNames => [MenuKeyName, ToggleKeyName, NextProfileKeyName, FocusKeyName];
 
     /// <summary>From OnLoad (tick thread).</summary>
     public void Start()
     {
         if (_started) return;
         _started = true;
-        _link.Start();
-        _window = new SettingsWindow(data, _link, () => MenuKeyName, () => ToggleKeyName);
+        _link.Start(AutoLootMod.ModContext?.DataDirectory ?? ".", () => Texts.Get("profileMine", German));
+        _window = new SettingsWindow(data, _link, new WindowKeys(() => MenuKeyName, () => ToggleKeyName,
+            () => NextProfileKeyName, () => FocusKeyName, () => FixedKeyNames), _focus, SendCommand);
         _link.PersonalChanged += _window.Reload;
+        _link.ProfilesChanged += SyncProfileKeys;
+        _link.ProfileSwitched += ToastProfile;
 
         // F8 and F9 by default, rebindable in Kiln's Keys page; both also act while the window has the input
         _menuKey = KeyBindings.Register(MenuKeyId, KeyNames.DefaultMenuKey, OnMenuKey, "Settings window", Category);
         _menuKey.WhileCapturing = true;
         _toggleKey = KeyBindings.Register(ToggleKeyId, KeyNames.DefaultAutoLootKey, OnToggleKey, "Auto loot on or off", Category);
         _toggleKey.WhileCapturing = true;
+        _nextProfileKey = KeyBindings.Register(ProfileKeys.NextProfileId, ProfileKeys.DefaultNextProfileKey, OnNextProfileKey,
+            "Next profile", Category);
+        _focusKey = KeyBindings.Register(ProfileKeys.FocusId, ProfileKeys.DefaultFocusKey, OnFocusKey,
+            "Gather only the item last taken by hand (again: everything)", Category);
+        SyncProfileKeys();
 
         AutoLootMod.Hub.NoticeReceived += OnNotice;
-        AutoLootMod.Hub.ServerInfoReceived += _link.SetInfo;
+        AutoLootMod.Hub.ServerInfoReceived += OnServerInfo;
         server.LocalNotice += OnLocalNotice;
-        server.LocalServerInfo += _link.SetInfo;
+        server.LocalServerInfo += OnServerInfo;
         Network.ServerReady += OnServerReady;
         Network.Disconnected += OnDisconnected;
         KClient.Tick += OnClientTick;
@@ -61,12 +77,18 @@ internal sealed class ClientPart(Data data, Server.LootServer server)
         Network.ServerReady -= OnServerReady;
         Network.Disconnected -= OnDisconnected;
         server.LocalNotice -= OnLocalNotice;
-        server.LocalServerInfo -= _link.SetInfo;
+        server.LocalServerInfo -= OnServerInfo;
         AutoLootMod.Hub.NoticeReceived -= OnNotice;
-        AutoLootMod.Hub.ServerInfoReceived -= _link.SetInfo;
+        AutoLootMod.Hub.ServerInfoReceived -= OnServerInfo;
         _menuKey?.Dispose();
         _toggleKey?.Dispose();
-        _menuKey = _toggleKey = null;
+        _nextProfileKey?.Dispose();
+        _focusKey?.Dispose();
+        _menuKey = _toggleKey = _nextProfileKey = _focusKey = null;
+        foreach (var (binding, _) in _profileKeys.Values) binding.Dispose();
+        _profileKeys.Clear();
+        _link.ProfilesChanged -= SyncProfileKeys;
+        _link.ProfileSwitched -= ToastProfile;
         if (_window is not null) _link.PersonalChanged -= _window.Reload;
         _window?.Dispose();
         _window = null;
@@ -98,6 +120,111 @@ internal sealed class ClientPart(Data data, Server.LootServer server)
             Toast(NoticeText.Compose(Texts.Get(saved.Looting ? "toggleOn" : "toggleOff", german)), ToastKind.Info, dedupe: false);
         });
     }
+
+    // ---------------------------------------------------------------- profiles
+
+    private void OnNextProfileKey()
+    {
+        if (KeyActions.ToggleActs(Ui.MenuOpen)) _link.NextProfile();
+    }
+
+    private void ToastProfile(ProfileView profile)
+    {
+        var german = Texts.German(_link.Personal.Language, GameLanguage.Current);
+        Toast(NoticeText.Compose(Texts.Format("profileSwitched", german, profile.Display(german))), ToastKind.Info, dedupe: false);
+    }
+
+    /// <summary>Tick thread: one Kiln binding per profile with a key. A new key is registered (a rebind on Kiln's Keys
+    /// page then wins over the profile's own key); a key changed in the window rebinds; a key removed or a profile
+    /// deleted drops the binding.</summary>
+    private void SyncProfileKeys()
+    {
+        if (!_started || _link.Profiles is not { } book) return;
+        var wanted = book.Snapshot.Profiles.Where(p => p.Key is not null).ToDictionary(p => p.Id);
+        foreach (var id in _profileKeys.Keys.Where(id => !wanted.ContainsKey(id)).ToList())
+        {
+            _profileKeys[id].Binding.Dispose();
+            _profileKeys.Remove(id);
+        }
+        foreach (var (id, profile) in wanted)
+        {
+            var key = profile.Key!;
+            var bindingId = ProfileKeys.BindingId(id);
+            try
+            {
+                if (_profileKeys.TryGetValue(id, out var had))
+                {
+                    if (had.Key == key) continue;
+                    KeyBindings.Rebind(bindingId, key);
+                    _profileKeys[id] = (had.Binding, key);
+                    continue;
+                }
+                var target = id;
+                var binding = KeyBindings.Register(bindingId, key, () =>
+                {
+                    if (KeyActions.ToggleActs(Ui.MenuOpen)) _link.SwitchProfile(target);
+                }, "Profile: " + profile.Display(false), Category);
+                _profileKeys[id] = (binding, key);
+            }
+            catch (Exception e) when (e is FormatException or ArgumentException or InvalidOperationException)
+            {
+                AutoLootMod.ModContext?.Log.Warn($"profile key '{key}' for {id}: {e.Message}");
+            }
+        }
+    }
+
+    // ---------------------------------------------------------------- gather focus
+
+    private void OnFocusKey()
+    {
+        if (KeyActions.ToggleActs(Ui.MenuOpen)) SendCommand(CommandKind.ToggleFocus);
+    }
+
+    /// <summary>Asks the server part for a gather-focus change (main or render thread). Hosted: in-process on the tick
+    /// thread, checked against the world session like the settings; joined: a CommandMsg.</summary>
+    private void SendCommand(CommandKind kind)
+    {
+        if (KClient.IsHosting)
+        {
+            var player = KClient.LocalPlayer;
+            var session = KClient.ServerWorldSession;
+            if (player.IsNone || server.ServerConfig is null) return;
+            if (kind == CommandKind.ToggleFocus) _focus.Asked();
+            _link.Post(() =>
+            {
+                if (KClient.IsHosting && player == KClient.LocalPlayer && session == KClient.ServerWorldSession)
+                    server.SetLocalCommand(player, kind);
+            });
+            return;
+        }
+        if (!KClient.IsRemote) return;
+        if (Network.Server is not { } peer || !peer.HasChannel(Channels.Name))
+        {
+            Toast(NoticeText.Compose(Texts.Get("focusNoServer", German)), ToastKind.Info);
+            return;
+        }
+        if (kind == CommandKind.ToggleFocus) _focus.Asked();
+        AutoLootMod.Hub.SendToServer(new CommandMsg(kind));
+    }
+
+    /// <summary>The server's answer (any thread): kept for the window, and the focus note.</summary>
+    private void OnServerInfo(ServerInfoMsg m)
+    {
+        _link.SetInfo(m);
+        var note = _focus.OnAnswer(m.FocusItem);
+        if (note.Kind == FocusNoteKind.None) return;
+        var german = German;
+        var text = note.Kind switch
+        {
+            FocusNoteKind.On => Texts.Format("focusOn", german, ItemName(note.Item, german)),
+            FocusNoteKind.Off => Texts.Get("focusOff", german),
+            _ => Texts.Format("focusHint", german, FocusKeyName),
+        };
+        Toast(NoticeText.Compose(text), ToastKind.Info, dedupe: false);
+    }
+
+    private string ItemName(uint id, bool german) =>
+        data.Items.TryGet(id, out var row) ? ItemTable.DisplayOf(row, german) : "#" + id;
 
     // ---------------------------------------------------------------- notices
 
@@ -132,6 +259,7 @@ internal sealed class ClientPart(Data data, Server.LootServer server)
     private void OnDisconnected(NetPeer _)
     {
         _signal.Reset();
+        _focus.Forget();
         _link.Forget();
     }
 
@@ -145,6 +273,7 @@ internal sealed class ClientPart(Data data, Server.LootServer server)
             _signal.Reset();
             // joined: the handshake (ServerReady) may come before the client world's first step, so keep the server's
             // answer and send again; hosted: the handoff below sends to the new world
+            _focus.Forget();
             if (KClient.IsRemote) _link.Resend();
             else _link.Forget();
         }
