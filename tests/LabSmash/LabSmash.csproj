@@ -1,0 +1,35 @@
+<Project Sdk="Kiln.Sdk/0.2.0-dev.28">
+  <!-- Lab probe of Kiln Auto Loot's smashing and world data (stack size, backpack recipes), player-free, on a lab dedicated
+       server. Not part of the mod: it compiles the mod's own smash and world-data files and ships its own copy of the
+       smash program (deploy it without the mod: both would register program 86bdce19).
+         dotnet build tests/LabSmash -t:KilnDeploy -p:KilnServer=<lab server folder>
+         kiln test kiln-auto-loot-labsmash -\-server <lab server folder> -->
+  <PropertyGroup>
+    <KilnModId>kiln-auto-loot-labsmash</KilnModId>
+    <KilnModName>Kiln Auto Loot smash lab probe</KilnModName>
+    <Version>0.1.0</Version>
+    <AssemblyName>KilnAutoLootLabSmash</AssemblyName>
+    <RootNamespace>KilnAutoLoot.LabSmash</RootNamespace>
+    <KilnSide>server</KilnSide>
+    <KilnServices>Players;World;Spawn;Gameplay;Combat;Abilities;Content;Assets;Queries;Items;Testing</KilnServices>
+    <KilnGameIds>None</KilnGameIds>
+    <Nullable>enable</Nullable>
+    <KilnIncludeModFolders>false</KilnIncludeModFolders>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../../src/Core/*.cs" LinkBase="Mod/Core" />
+    <Compile Include="../../src/Server/GameData/BlobView.cs" Link="Mod/BlobView.cs" />
+    <Compile Include="../../src/Server/GameData/GameDataReader.cs" Link="Mod/GameDataReader.cs" />
+    <Compile Include="../../src/Server/GameData/GameTexts.cs" Link="Mod/GameTexts.cs" />
+    <Compile Include="../../src/Server/GameData/ItemNames.cs" Link="Mod/ItemNames.cs" />
+    <Compile Include="../../src/Server/GameData/Yields.cs" Link="Mod/Yields.cs" />
+    <Compile Include="../../src/Server/SmashTable.cs" Link="Mod/SmashTable.cs" />
+    <Compile Include="../../src/Server/SmashRules.cs" Link="Mod/SmashRules.cs" />
+    <Compile Include="../../src/Server/SmashWorld.cs" Link="Mod/SmashWorld.cs" />
+    <Compile Include="../../src/Server/SmashHit.cs" Link="Mod/SmashHit.cs" />
+    <Compile Include="../../src/Server/WorldData.cs" Link="Mod/WorldData.cs" />
+    <Compile Include="../../src/Server/WorldDataRules.cs" Link="Mod/WorldDataRules.cs" />
+    <None Include="../../assets/assets.json" Link="assets/assets.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../../assets/impact/smash_one.bin" Link="assets/impact/smash_one.bin" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

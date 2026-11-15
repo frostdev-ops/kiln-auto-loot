@@ -1,0 +1,637 @@
+// SPDX-License-Identifier: MIT
+// Kiln Auto Loot's loot loop on the server, per player. Every game call goes through IGame (tests/Offline/Server fakes
+// it). Tick thread only.
+//
+// One scan = every player once, every 100 ms by wall clock. Each scan evaluates every target in range
+// afresh (at least every 2 s, so a corpse that was empty when it died is looked at again): nothing is ever "done" except through the
+// visit table. At most 64 injects (accept, loot-all, Items.Move) per scan for the whole mod; the rest waits.
+using Kiln;
+using KilnAutoLoot.Core;
+using KilnAutoLoot.Net;
+
+namespace KilnAutoLoot.Server;
+
+internal sealed class LootLoop
+{
+    public const long ScanEveryMs = 100;           // each player every 100 ms
+    public const int MaxInjectsPerScan = 64;       // for the whole mod
+    public const long BlinkMs = 2000;              // the 2 s re-evaluation (counted only)
+    public const long SightCacheMs = 1000;         // about 1 s per target
+    public const long StallRetryMs = 1000;         // a container the full player cannot take from
+    public const float StaticPickupNearSquared = 0.5625f;   // the game's own 0.75 m, squared
+    public const long SettingsGapMs = 500;         // one settings application per player per 500 ms
+    public const int SettingsPerTick = 2;          // and at most two per tick for all players; the rest wait a tick
+
+    // Candidate components, one World.Find each per scan, shared by all players.
+    public const string PickupComponent = "PickupItem";
+    public const string OfferComponent = "InteractionOfferRuntime";
+    public const string InventoryComponent = "Inventory";
+    public const string LootMarkerComponent = "DisableColliderModeChanges";
+    public const string EnemyComponent = "EnemySettings";
+
+    private readonly IGame _game;
+    private readonly IClock _clock;
+    private readonly Data _data;
+    private readonly Action<EntityId, NoticeMsg> _notice;
+    private readonly Action<string> _keyLine;
+    private readonly Dictionary<EntityId, PlayerLoot> _players = new();
+    private readonly Dictionary<EntityId, (ulong Serial, TemplateRule? Rule, long Scan)> _templates = new();
+    private readonly HashSet<EntityId> _playerIds = [];
+    private readonly Dictionary<string, IgnoreList> _ignoreCache = new(StringComparer.Ordinal);
+    private readonly HashSet<string> _ignoreReported = new(StringComparer.Ordinal);
+    private int _ignoreVersion = -1;
+    private ServerSettings _server = new();
+    private PersonalSettings _defaults = new();
+    private long _lastScan = long.MinValue, _lastBlink, _scanNumber;
+    private int _budget, _rotate;
+
+    public LootCounters Counters { get; } = new();
+
+    /// <param name="notice">sends a notice to a player's game (or hands it to the hosting game's client part).</param>
+    /// <param name="keyLine">key log lines: unknown ignore entries.</param>
+    public LootLoop(IGame game, IClock clock, Data data, Action<EntityId, NoticeMsg> notice, Action<string> keyLine)
+    {
+        _game = game;
+        _clock = clock;
+        _data = data;
+        _notice = notice;
+        _keyLine = keyLine;
+    }
+
+    public IReadOnlyDictionary<EntityId, PlayerLoot> Players => _players;
+
+    // ---------------------------------------------------------------- settings and players
+
+    /// <summary>The server settings (at start and on every change): re-clamps every player.</summary>
+    public void Configure(ServerSettings server)
+    {
+        _server = server;
+        _defaults = SettingsRules.Clamp(server.Defaults, server.Limits);
+        foreach (var p in _players.Values) Recompute(p);
+    }
+
+    public PlayerLoot Join(EntityId player)
+    {
+        if (_players.TryGetValue(player, out var p)) return p;
+        p = new PlayerLoot(player, _clock);
+        _players[player] = p;
+        Recompute(p);
+        return p;
+    }
+
+    public void Leave(EntityId player) => _players.Remove(player);
+
+    /// <summary>A player's own settings (PersonalMsg, or the host's window). Null = keep the previous ones (bad JSON).
+    /// <paramref name="skipIds"/>: the item ids the player's game matched the skip list to (PersonalMsg.SkipIds), added
+    /// to what the server matches itself. Returns the settings in effect after the server's limits.</summary>
+    public PersonalSettings SetPersonal(EntityId player, PersonalSettings? sent, uint[]? skipIds = null)
+    {
+        var p = Join(player);
+        if (sent is not null && !SkipListBounds.Within(sent.SkipList))
+        {
+            // over the bounds: the previous settings stay, whole
+            if (!p.OverBoundsLogged)
+            {
+                p.OverBoundsLogged = true;
+                _keyLine($"player {player} sent a skip list over {SkipListBounds.MaxEntries} entries or " +
+                         $"{SkipListBounds.MaxEntryLength} characters per entry; keeping the previous settings");
+            }
+            sent = null;
+        }
+        if (sent is not null)
+        {
+            p.Sent = sent;
+            p.SentSkipIds = skipIds;
+        }
+        p.ReportsWindow = true;
+        Recompute(p);
+        return p.Settings;
+    }
+
+    /// <summary>A settings message from a player's game: kept as the player's latest, applied by
+    /// <see cref="ApplyQueuedSettings"/> (a newer one before that replaces it).</summary>
+    public void QueuePersonal(EntityId player, string json, uint[]? skipIds) =>
+        Join(player).PendingSettings = (json ?? "", skipIds ?? []);
+
+    /// <summary>On the tick: applies each player's latest settings message when the last one was applied at least
+    /// <see cref="SettingsGapMs"/> ago, so a game that sends many costs one application per gap, and at most
+    /// <see cref="SettingsPerTick"/> per tick. Returns the players
+    /// applied, with whether their JSON read (false = the previous settings stay).</summary>
+    public List<(EntityId Player, bool Read)> ApplyQueuedSettings()
+    {
+        var applied = new List<(EntityId, bool)>();
+        var now = _clock.NowMs;
+        foreach (var p in _players.Values)
+        {
+            if (applied.Count >= SettingsPerTick) break;
+            if (p.PendingSettings is not { } pending) continue;
+            if (p.SettingsAppliedAt is { } at && now - at < SettingsGapMs) continue;
+            p.PendingSettings = null;
+            p.SettingsAppliedAt = now;
+            var sent = SettingsJson.Read(pending.Json);
+            SetPersonal(p.Entity, sent, pending.SkipIds);
+            applied.Add((p.Entity, sent is not null));
+        }
+        return applied;
+    }
+
+    public void SetWindowOpen(EntityId player, bool open)
+    {
+        var p = Join(player);
+        p.ReportsWindow = true;
+        p.WindowOpen = open;
+    }
+
+    public PersonalSettings SettingsOf(EntityId player) => _players.TryGetValue(player, out var p) ? p.Settings : _defaults;
+
+    /// <summary>At the world's stop: every per-world and per-player state goes.</summary>
+    public void Reset()
+    {
+        _players.Clear();
+        _templates.Clear();
+        _lastScan = long.MinValue;
+    }
+
+    private void Recompute(PlayerLoot p)
+    {
+        p.Settings = p.Sent is null ? _defaults : SettingsRules.Clamp(p.Sent, _server.Limits);
+        // a player's game that sent ids reports its own unknown entries: the server's names are not the player's
+        var fromGame = p.Sent is not null ? p.SentSkipIds : null;
+        var list = IgnoreOf(p.Settings.SkipList, report: fromGame is null);
+        p.Ignore = fromGame is { Length: > 0 } ids ? list.WithIds(ids) : list;
+    }
+
+    /// <summary>IgnoreList per distinct raw value (players with the server's defaults share one), matched on the names
+    /// this process has (on a dedicated server internal names, and English where Kiln's catalog gives it); rebuilt when
+    /// the setting changes or the item table is filled again. <paramref name="report"/>: log the entries that match no
+    /// item (once per raw value and table).</summary>
+    private IgnoreList IgnoreOf(string raw, bool report)
+    {
+        raw ??= "";
+        if (_ignoreVersion != _data.Items.Version)
+        {
+            _ignoreCache.Clear();
+            _ignoreReported.Clear();
+            _ignoreVersion = _data.Items.Version;
+        }
+        if (!_ignoreCache.TryGetValue(raw, out var list))
+        {
+            list = new IgnoreList(raw, _data.Items);
+            if (_ignoreCache.Count > 64)
+            {
+                _ignoreCache.Clear();
+                _ignoreReported.Clear();
+            }
+            _ignoreCache[raw] = list;
+        }
+        if (report && list.UnknownEntries.Count > 0 && _ignoreReported.Add(raw))
+        {
+            var text = string.Join(", ", list.UnknownEntries);
+            if (text.Length > 240) text = text[..240] + "...";
+            _keyLine($"skip list: {list.UnknownEntries.Count} entries match no known item: {text}");
+        }
+        return list;
+    }
+
+    // ---------------------------------------------------------------- the scan
+
+    /// <summary>Every server step: scans when 100 ms passed since the last scan.</summary>
+    public void Step()
+    {
+        var now = _clock.NowMs;
+        if (_lastScan != long.MinValue && now - _lastScan < ScanEveryMs) return;
+        _lastScan = now;
+        Scan();
+    }
+
+    /// <summary>One scan of every player.</summary>
+    public void Scan()
+    {
+        var started = System.Diagnostics.Stopwatch.GetTimestamp();
+        var now = _clock.NowMs;
+        _scanNumber++;
+        _budget = MaxInjectsPerScan;
+        if (_ignoreVersion != _data.Items.Version)   // the item table was filled again: match every skip list anew
+            foreach (var player in _players.Values) Recompute(player);
+        Counters.Scans++;
+        if (now - _lastBlink >= BlinkMs)
+        {
+            _lastBlink = now;
+            Counters.Rechecks++;
+        }
+
+        var players = _game.Players();
+        var lists = new Candidates(_game);
+        _playerIds.Clear();
+        foreach (var gp in players) _playerIds.Add(gp.Entity);
+        for (var i = 0; i < players.Count; i++)
+        {
+            // fairness under the cap: a different player goes first each scan
+            var gp = players[(i + _rotate) % players.Count];
+            ScanPlayer(Join(gp.Entity), gp, lists);
+        }
+        if (players.Count > 0) _rotate = (_rotate + 1) % players.Count;
+        ForgetUnseenTemplates();
+
+        var micros = System.Diagnostics.Stopwatch.GetElapsedTime(started).Ticks / 10;
+        Counters.ScanMicros += micros;
+        Counters.ScanCount++;
+        if (micros > Counters.ScanMaxMicros) Counters.ScanMaxMicros = micros;
+    }
+
+    /// <summary>The shared World.Find lists of one scan, each fetched on first need.</summary>
+    private sealed class Candidates(IGame game)
+    {
+        private IReadOnlyList<EntityId>? _pickups, _offers, _inventories, _markers, _enemies;
+        public IReadOnlyList<EntityId> Pickups => _pickups ??= game.Find(PickupComponent);
+        public IReadOnlyList<EntityId> Offers => _offers ??= game.Find(OfferComponent);
+        public IReadOnlyList<EntityId> Inventories => _inventories ??= game.Find(InventoryComponent);
+        public IReadOnlyList<EntityId> Markers => _markers ??= game.Find(LootMarkerComponent);
+        public IReadOnlyList<EntityId> Enemies => _enemies ??= game.Find(EnemyComponent);
+    }
+
+    private void ScanPlayer(PlayerLoot p, GamePlayer gp, Candidates lists)
+    {
+        var s = p.Settings;
+        Counters.PlayerScans++;
+        // a game window or the F8 window is open: no accept, no loot-all for this player.
+        var window = p.ReportsWindow ? p.WindowOpen : gp.UiOpen;
+        if (window)
+        {
+            Counters.WindowPauses++;
+            return;
+        }
+        if (!s.Looting) return;   // the game's own hold-E only (the guard still applies)
+
+        // the mod's own search, exactly enemyDistance, not capped by the loot radius.
+        if (s.EnemyPause)
+            foreach (var e in _game.Within(lists.Enemies, gp.Position, s.EnemyDistance))
+                if (Classify(e) is { Rule: { } er } && Release.IsPausingEnemy(er, _game.IsDead(e)))
+                {
+                    p.Enemy.EnemySeen();
+                    Counters.EnemyNear++;
+                    break;
+                }
+        if (p.Enemy.Paused(s.EnemyPause))
+        {
+            Counters.EnemyPauses++;
+            return;
+        }
+        Counters.PlayersLooting++;
+
+        var radius = LootRules.SearchRadius(s);   // the largest of the general and the group radii
+        var seen = new HashSet<EntityId>();
+        foreach (var list in new Func<IReadOnlyList<EntityId>>[] { () => lists.Pickups, () => lists.Offers, () => lists.Inventories, () => lists.Markers })
+            foreach (var e in _game.Within(list(), gp.Position, radius))
+                if (!_playerIds.Contains(e) && seen.Add(e))
+                    Target(p, gp, e);
+    }
+
+    private void Target(PlayerLoot p, GamePlayer gp, EntityId e)
+    {
+        if (_game.PositionOf(e) is not { } at) return;
+        var d2 = DistanceSquared(gp.Position, at);
+        if (Classify(e) is not { Rule: { } rule, Key: var key })
+        {
+            Counters.UnknownTemplates++;   // a template not in templates.txt: never
+            return;
+        }
+        var hasPickup = _game.TryPickupItem(e, out var item);
+        var container = Release.IsContainerTarget(rule, hasPickup);
+        if (container) Counters.ContainersSeen++;
+        else Counters.PickupsSeen++;
+        if (container) ContainerTarget(p, gp, e, key, rule, d2);
+        else PickupTarget(p, gp, e, key, rule, d2, item);
+    }
+
+    // ---------------------------------------------------------------- container path
+
+    private void ContainerTarget(PlayerLoot p, GamePlayer gp, EntityId e, ulong key, TemplateRule rule, float d2)
+    {
+        var s = p.Settings;
+        var dead = rule.Group == Group.Enemy && _game.IsDead(e);
+        if (rule.Group == Group.Enemy && !dead) return;   // a living enemy: never looted (gate step 3)
+        if (!Release.ContainerReleased(rule, dead))
+        {
+            Counters.ContainersHeldBack++;   // gate step 4
+            return;
+        }
+        var verdict = LootRules.Decide(rule, released: true, d2, s, p.Ignore!, out var noticeItem);
+        if (verdict != Verdict.Allowed)
+        {
+            CountRefusal(p, verdict, noticeItem);
+            return;
+        }
+        if (!InSight(p, gp, e, key)) return;
+        if (_budget <= 0)
+        {
+            Counters.CapReached++;   // the visit table is not asked: its answer would be spent without a send
+            return;
+        }
+        Counters.ContainerTries++;
+        var offer = _game.OfferOf(e);
+        var step = p.Visits.Next(key, offer.Usable, offer.OfferId, s.OpenDelay, Release.HarvestOnce(rule));
+        switch (step)
+        {
+            case TargetStep.Wait:
+                Counters.Waiting++;
+                break;
+            case TargetStep.AlreadyHarvested:
+                Counters.AlreadyHarvested++;
+                break;
+            case TargetStep.Accept:
+                // step 5: the accept alone; the loot-all follows in a later scan
+                _budget--;
+                Counters.Injects++;
+                Counters.Accepts++;
+                _game.Interact(gp.Entity, e, offer.OfferId);
+                p.Visits.Accepted(key, offer.OfferId);
+                break;
+            case TargetStep.Loot:
+                TakeFromContainer(p, gp, e, key, rule, offer);
+                break;
+        }
+    }
+
+    /// <summary>Step 6: loot-all, or Items.Move per slot when the slot filter keeps something.</summary>
+    private void TakeFromContainer(PlayerLoot p, GamePlayer gp, EntityId e, ulong key, TemplateRule rule, Offer offer)
+    {
+        if (p.PendingMoves.ContainsKey(key)) return;   // the last moves have not answered yet
+        var s = p.Settings;
+        if (Release.IsHarvest(rule))
+        {
+            // plants and crops: the loot-all is a harvest; their yield was checked against the skip list before
+            SendLoot(p, gp, e, key, offer);
+            return;
+        }
+        // a loot-all takes everything, so it goes out only after a read showed nothing has to stay; an inventory that
+        // cannot be read (kiln.items off, a failed read) is left and tried again in the next scan
+        var slots = _game.Slots(e);
+        if (slots is null)
+        {
+            Counters.Unreadable++;
+            return;
+        }
+
+        var take = new List<ContainerSlot>();
+        var kept = false;
+        var takeable = 0;
+        foreach (var slot in slots)
+            switch (LootRules.Slot(slot.Item, s, _data.Quest, p.Ignore!))   // order: quest, ignored, take
+            {
+                case SlotRule.KeepQuest:
+                    Counters.QuestKept++;
+                    kept = true;
+                    break;
+                case SlotRule.KeepIgnored:
+                    Counters.SkippedInContainers++;
+                    kept = true;
+                    LeftBehind(p, slot.Item);
+                    break;
+                default:
+                    take.Add(slot);
+                    takeable += slot.Count;
+                    break;
+            }
+
+        if (take.Count == 0)
+        {
+            // nothing to take: corpses and chests stay as they are; others still get the loot-all (harvest-like)
+            if (!kept && !Release.SkipWhenEmpty(rule)) SendLoot(p, gp, e, key, offer);
+            return;
+        }
+
+        // containers: every item let through counts for the 100-in-5-s rule.
+        foreach (var slot in take)
+            if (p.Full.ContainerAttempt(slot.Item)) InventoryFull(p);
+        // Also: a container whose takeable contents did not change since the last try while the player has no free slot
+        // is "full" now (a 10 Hz scan never reaches 100 repeats), and is retried once per second until there is room.
+        var now = _clock.NowMs;
+        var free = _game.FreeSlots(gp.Entity);
+        if (free == 0 && p.Stalls.TryGetValue(key, out var stall) && stall.Takeable == takeable)
+        {
+            if (p.Full.MayNotify()) InventoryFull(p);
+            if (now - stall.At < StallRetryMs) return;
+        }
+        if (free == 0) p.Stalls[key] = (takeable, now);
+        else p.Stalls.Remove(key);
+
+        if (!kept)
+        {
+            foreach (var slot in take) Counters.CountLooted(slot.Item, slot.Count);
+            SendLoot(p, gp, e, key, offer);
+            return;
+        }
+
+        var sent = 0;
+        foreach (var slot in take)
+        {
+            if (_budget <= 0)
+            {
+                Counters.CapReached++;
+                break;
+            }
+            _budget--;
+            sent++;
+            Counters.Moves++;
+            Counters.CountLooted(slot.Item, slot.Count);
+            p.PendingMoves[key] = p.PendingMoves.GetValueOrDefault(key) + 1;
+            _game.Move(e, slot.Id, gp.Entity, outcome => MoveAnswered(p, key, outcome));
+        }
+        if (sent > 0)
+        {
+            CountLootKind(offer);
+            p.Visits.Looted(key);
+        }
+    }
+
+    private void MoveAnswered(PlayerLoot p, ulong key, MoveOutcome outcome)
+    {
+        if (p.PendingMoves.TryGetValue(key, out var n))
+        {
+            if (n <= 1) p.PendingMoves.Remove(key);
+            else p.PendingMoves[key] = n - 1;
+        }
+        if (outcome == MoveOutcome.NoRoom && p.Full.MayNotify()) InventoryFull(p);
+    }
+
+    private void SendLoot(PlayerLoot p, GamePlayer gp, EntityId e, ulong key, Offer offer)
+    {
+        if (_budget <= 0)
+        {
+            Counters.CapReached++;
+            return;
+        }
+        _budget--;
+        Counters.Injects++;
+        CountLootKind(offer);
+        _game.Loot(gp.Entity, e);
+        p.Visits.Looted(key);
+    }
+
+    private void CountLootKind(Offer offer)
+    {
+        if (!offer.Present) Counters.LootNoOffer++;
+        else if (offer.Disabled) Counters.LootOfferOff++;
+        else Counters.LootAlls++;
+    }
+
+    // ---------------------------------------------------------------- pickup path
+
+    private void PickupTarget(PlayerLoot p, GamePlayer gp, EntityId e, ulong key, TemplateRule rule, float d2, uint item)
+    {
+        var s = p.Settings;
+        var verdict = LootRules.Decide(rule, released: false, d2, s, p.Ignore!, out var noticeItem);
+        var wanted = verdict == Verdict.Allowed;
+        if (!wanted) CountRefusal(p, verdict, noticeItem);
+        if (wanted && p.Ignore!.Contains(item))   // the pickup's own item
+        {
+            wanted = false;
+            Counters.SkippedPickups++;
+            LeftBehind(p, item);
+        }
+        var withInventory = _game.HasInventory(e);
+        // takeInPlace off: static pickups (with an inventory) cannot be pulled: only within 0.75 m.
+        if (wanted && withInventory && !s.TakeInPlace && d2 > StaticPickupNearSquared) wanted = false;
+        if (wanted && !InSight(p, gp, e, key)) wanted = false;
+        if (_budget <= 0)
+        {
+            if (wanted) Counters.CapReached++;
+            return;   // the tracker is not asked: no episode time passes without a try
+        }
+        var may = p.Pickups.MayTake(key, wanted, out var raiseFull);
+        if (raiseFull) InventoryFull(p);
+        if (!may)
+        {
+            if (wanted) Counters.PickupWaits++;
+            return;
+        }
+
+        if (withInventory)
+        {
+            // step 6: mushrooms, stone piles: the first sighting of a visit sends one accept, then the loot-all in the
+            // same scan (no openDelay on this path).
+            Counters.FixedPickups++;
+            var offer = _game.OfferOf(e);
+            if (Release.PickupReleased(rule) && offer.Usable && _budget >= 2 && p.Visits.FirstAcceptDue(key))
+            {
+                _budget--;
+                Counters.Injects++;
+                Counters.Accepts++;
+                _game.Interact(gp.Entity, e, offer.OfferId);
+                p.Visits.Accepted(key, offer.OfferId);
+            }
+        }
+        _budget--;
+        Counters.Injects++;
+        Counters.CountLooted(item, 1);
+        _game.Loot(gp.Entity, e);
+        p.Pickups.Taken(key);
+    }
+
+    // ---------------------------------------------------------------- hold-E guard
+
+    /// <summary>The player's own LootEvent (not injected, by a player): true = cancel it, because its target's group is
+    /// off, it is out of its group radius, or it is a pickup whose item is ignored. Groups that are never automatic (boss,
+    /// a living enemy, unknown templates) are left to the game: a single E press may arrive the same way.</summary>
+    public bool ShouldCancelHoldE(EntityId guest, EntityId host, WorldPosition? hostPosition)
+    {
+        if (!_players.TryGetValue(guest, out var p)) return false;
+        if (_game.PositionOf(guest) is not { } from) return false;
+        if ((hostPosition ?? _game.PositionOf(host)) is not { } at) return false;
+        if (Classify(host) is not { Rule: { } rule }) return false;
+        if (rule.Group == Group.Boss) return false;
+        var hasPickup = _game.TryPickupItem(host, out var item);
+        var container = Release.IsContainerTarget(rule, hasPickup);
+        var dead = rule.Group == Group.Enemy && _game.IsDead(host);
+        if (rule.Group == Group.Enemy && !dead) return false;
+        var released = container && Release.ContainerReleased(rule, dead);
+        if (container && !released) return false;
+        var verdict = LootRules.Decide(rule, released, DistanceSquared(from, at), p.Settings, p.Ignore!, out _);
+        var cancel = verdict is Verdict.GroupOff or Verdict.RadiusOut || (!container && p.Ignore!.Contains(item));
+        if (cancel) Counters.HoldECanceled++;
+        return cancel;
+    }
+
+    // ---------------------------------------------------------------- helpers
+
+    private void CountRefusal(PlayerLoot p, Verdict verdict, uint noticeItem)
+    {
+        switch (verdict)
+        {
+            case Verdict.GroupOff: Counters.GroupOff++; break;
+            case Verdict.RadiusOut: Counters.OutOfRange++; break;
+            case Verdict.UnknownTemplate: Counters.UnknownTemplates++; break;
+            case Verdict.NotReleased: Counters.NotReleased++; break;
+            case Verdict.YieldIgnored:
+                Counters.YieldSkipped++;
+                if (noticeItem != 0) LeftBehind(p, noticeItem);
+                break;
+        }
+    }
+
+    /// <summary>Line of sight: only with visibleOnly; cached about 1 s per target; "not known" = visible.</summary>
+    private bool InSight(PlayerLoot p, GamePlayer gp, EntityId e, ulong key)
+    {
+        if (!p.Settings.VisibleOnly) return true;
+        var now = _clock.NowMs;
+        if (p.Sight.TryGetValue(key, out var c) && c.Until > now) return c.Visible;
+        switch (_game.LineOfSight(gp.Entity, e))
+        {
+            case Sight.Later: return false;
+            case Sight.Hidden:
+                Counters.SightBlocked++;
+                Remember(false);
+                return false;
+            default:
+                Remember(true);
+                return true;
+        }
+
+        void Remember(bool visible)
+        {
+            if (p.Sight.Count > 2048) p.Sight.Clear();
+            p.Sight[key] = (now + SightCacheMs, visible);
+        }
+    }
+
+    private void LeftBehind(PlayerLoot p, uint item)
+    {
+        if (!p.Notices.ShouldNotify(item, p.Settings.SkipNotice)) return;   // at most 3 per item, 10 s apart
+        _notice(p.Entity, new NoticeMsg(NoticeKind.LeftBehind, item));
+    }
+
+    private void InventoryFull(PlayerLoot p) => _notice(p.Entity, new NoticeMsg(NoticeKind.InventoryFull, 0));
+
+    /// <summary>Template of an entity, cached by entity and its spawn serial. The key combines both, so a reused entity id
+    /// never continues the old entity's visit or pickup episode.</summary>
+    private (ulong Key, TemplateRule? Rule)? Classify(EntityId e)
+    {
+        if (_templates.TryGetValue(e, out var c))
+        {
+            _templates[e] = (c.Serial, c.Rule, _scanNumber);
+            return (KeyOf(e, c.Serial), c.Rule);
+        }
+        if (_game.Inspect(e) is not { } info) return null;
+        TemplateRule? rule = info.Template is { } g && _data.Templates.TryGet(g, out var r) ? r : null;
+        _templates[e] = (info.Serial, rule, _scanNumber);
+        return (KeyOf(e, info.Serial), rule);
+    }
+
+    /// <summary>Entities no player saw in this scan are inspected again when they come back (their id may be reused).</summary>
+    private void ForgetUnseenTemplates()
+    {
+        List<EntityId>? gone = null;
+        foreach (var (e, c) in _templates)
+            if (c.Scan != _scanNumber) (gone ??= []).Add(e);
+        if (gone is not null) foreach (var e in gone) _templates.Remove(e);
+    }
+
+    internal static ulong KeyOf(EntityId e, ulong serial) => e.Value | ((serial & 0xffffffffUL) << 32);
+
+    private static float DistanceSquared(WorldPosition a, WorldPosition b)
+    {
+        double dx = a.X - b.X, dy = a.Y - b.Y, dz = a.Z - b.Z;
+        return (float)(dx * dx + dy * dy + dz * dz);
+    }
+}

@@ -1,0 +1,43 @@
+; SPDX-License-Identifier: MIT
+; Kiln Auto Loot: one smash hit on one target. C# picks the targets near the player (src/Server/Smash.cs) and runs
+; this program once per target with Abilities.RunProgram at the target, Root = the player, configs { "Target::value" = the target }.
+; The hit: the vanilla ApplyDamage from the player with its damageSetup, weapon category, hit reaction, push-back,
+; direction and normal, and every other argument unconnected, so the game's own drop path runs
+; (destructible break, RandomLootOnDestroy, mining-node drops, the falling tree).
+; Written from scratch (no vanilla code): `python3 tools/impact/impact.py asm impact/smash_one.kimp -o assets/impact/smash_one.bin`
+; (tools/smash/build_program.sh does it and checks the lint).
+.kimp 1
+program 86bdce19-c6fe-4a6e-80d0-70db585360c8
+stack 256
+streams none
+
+var $Target::value          ecs.EntityId                         ; set by RunProgram's configs
+var $Root::entityId         ecs.EntityId                         ; the player (getRoot: RunProgram's Root)
+var $Target::position       float3
+var $HitNormal::value       float3 = (0, 1, 0)
+var $HitDirection::value    impact.MajorDirection = BackToFront
+var $WeaponCategory::value  WeaponCategoryReference = 3832918e-d03e-43c8-9230-eb35bc366107
+var $HitReaction::value     impact.HitReactionType = None
+var $Pushback::value        impact.PushBackForce = None
+var $Smash::damageSetup     impact.DamageSetup = {physicalBluntDamage: 100000, woodDamage: 100000, stoneDamage: 100000, metalDamage: 100000, explosionDamage: 100000}
+var $Linger::value          Time = 1s                            ; the entity stays until the hit has concluded
+
+code:
+        ecall getRoot($Root::entityId)
+        pop
+        ecall getTransform(_, $Target::position, $Target::value)
+        pop
+        ecall applyDamage(_, $Root::entityId, $Target::value, $Target::position, $HitNormal::value, $HitDirection::value, _, _, _, _, _, _, $Pushback::value, $HitReaction::value, $Smash::damageSetup, _, $WeaponCategory::value, _, _, _, _, _, _, _, _)
+        pop
+        gload $Linger::value     ; end = now + linger, kept on the stack
+        ltime
+        iadd
+wait:   dup
+        ltime
+        ileq
+        brt done
+        rvm
+        br wait
+done:   pop
+        dself
+        halt

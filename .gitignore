@@ -1,0 +1,10 @@
+bin/
+obj/
+kiln-sdk
+dist/
+*.user
+reference/
+.nuget-packages/
+.vs/
+TestResults/
+*.kiln-tmp

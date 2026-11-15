@@ -1,0 +1,36 @@
+<Project Sdk="Kiln.Sdk/0.2.0-dev.28">
+  <!-- Kiln Auto Loot: automatic looting around each player, done on the server.
+         dotnet build -m:2 -nodeReuse:false                                          (build)
+         dotnet build -t:KilnDeploy -p:KilnServer=<server folder>                     (copy into a server)
+         dotnet build -c Release -t:KilnPack -p:KilnPackageOutputPath=dist/           (the zip the launcher imports)
+       The server world (a dedicated server, or the game while it hosts) does the looting; the F8 window, the F9
+       toggle and the notices run in the player's game. KilnClients is left unset on purpose: players without the
+       mod may join and get the server's default settings. -->
+  <PropertyGroup>
+    <KilnModId>kiln-auto-loot</KilnModId>
+    <KilnModName>Kiln Auto Loot</KilnModName>
+    <Version>0.1.0</Version>
+    <Description>Automatic looting around you: items, resources, collectibles, plants, crops, enemy corpses and chests, with quest items left in place. Smashes barrels, crates and urns in ruins, bigger stacks, F8 settings.</Description>
+    <Authors>Frostdev</Authors>
+    <AssemblyName>KilnAutoLoot</AssemblyName>
+    <RootNamespace>KilnAutoLoot</RootNamespace>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <KilnSide>both</KilnSide>
+    <KilnServices>Players;World;Spawn;Gameplay;Items;Combat;Creatures;Queries;Abilities;Content;Assets;Ui;Network;Client;Saves;Game</KilnServices>
+    <KilnGameIds>None</KilnGameIds>
+    <!-- update checks (the launcher, `kiln updates check`): releases on GitHub tagged v<version> with this zip -->
+    <KilnUpdatesRepository>frostdev-ops/kiln-auto-loot</KilnUpdatesRepository>
+    <KilnUpdatesAsset>kiln-auto-loot-{version}.zip</KilnUpdatesAsset>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Remove="tests/**" />
+    <None Remove="tests/**" />
+    <None Remove="dist/**" />
+    <None Remove="docs/**" />
+    <None Include="LICENSE" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="KilnAutoLoot.Offline" />
+  </ItemGroup>
+</Project>

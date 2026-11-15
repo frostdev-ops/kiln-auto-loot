@@ -1,0 +1,79 @@
+{
+  "tool": "Codex built-in image_gen",
+  "use": "New original artwork",
+  "artworks": [
+    {
+      "name": "hero_wide",
+      "file": "hero_wide.png",
+      "target_size": [
+        3072,
+        1024
+      ],
+      "prompt": "Use case: ads-marketing.\nAsset type: original source illustration for Kiln Auto Loot, with absolutely NO TEXT.\nCreate an extremely wide 3:1 panoramic painting, target 3072x1024. A mossy ruined stone courtyard at blue-hour dusk, on the edge of a misty blue-teal forest; low violet fog glows softly in the distant archways. Across the middle-right courtyard, show broken wooden barrels and crates with a few flying splinters, an opened low stone chest, pottery shards, glowing mushrooms, a berry bush, cut logs, ore stones, and a few small faceted gems. From each resource cluster, a soft warm ember-gold light trail curls toward ONE bright warm glowing elliptical ring on the path at centre-right, x about 70 percent. Loose resources gently float along these curving trails, a quiet whirl of collected treasure. The ring marks the place of an unseen traveller; there is NO person or creature. The ring is light on ordinary mossy paving, no altar or pedestal. Keep the objects individually recognizable, with restrained luminous trails rather than an explosion.\nComposition: wide cinematic eye-level panorama, quiet dark teal negative space over the entire LEFT THIRD for a title that will be added later. Place the courtyard action and resource clusters across x=40 to 92 percent. Keep ALL important objects, the chest, the broken barrels, and the complete glowing ring inside the MIDDLE 60 PERCENT of the image HEIGHT, y=20 to 80 percent, so they all survive a centred 4:1 banner crop. Bottom and top margins are atmospheric moss and forest with no essential details. Keep the glowing ring modest in height, well inside that safe band. Balanced and appealing even without text.\nStyle: newly invented stylized painterly fantasy concept art, expressive visible brush shapes, soft volumetric light, atmospheric depth, handcrafted materials, warm ember gold against cool teal and violet, gentle magical motion and a welcoming survival-crafting mood. All artwork must be NEW ORIGINAL ART, no copied game art or reference pixels.\nAbsolutely no text, letters, numbers, runes, logos, UI, watermarks, brands, trademarks, people, creatures, faces, silhouettes of characters, or photorealism.",
+      "generated_size": [
+        2172,
+        724
+      ],
+      "saved_size": [
+        3072,
+        1024
+      ],
+      "preparation": "Resampled to target pixel size with Pillow Lanczos; no content changes."
+    },
+    {
+      "name": "hero_square",
+      "file": "hero_square.png",
+      "target_size": [
+        1024,
+        1024
+      ],
+      "prompt": "Use case: ads-marketing.\nAsset type: original square source illustration for Kiln Auto Loot, with absolutely NO TEXT, 1024x1024.\nA close-up of a worn chestnut leather traveller's satchel resting on a mossy stone in an old forest ruin at blue-hour dusk. Its flap is open. A few recognizable resources, small cut logs, ore stones, ripe red berries, soft glowing mushrooms and one little violet gem, are being drawn gently into the open satchel along curling warm ember-gold trails. Show a modest beautiful swirl, with resources clearly separate and the satchel opening visible. Misty blue-teal forest and weathered stone arch in the background, a low bank of violet fog; a little broken wooden crate and pottery in the soft background tie the scene to a ruined courtyard. No person is carrying the satchel; the scene is entirely uninhabited.\nComposition: big bold satchel centered around x=57 percent, whole satchel, open flap and trails safely inside the frame with 12 percent breathing room, no cut-off subject. Mossy stone supports it in the lower-middle. Background stays soft and atmospheric, focal silhouette stays clearly readable at thumbnail size.\nStyle: newly invented stylized painterly fantasy concept art, expressive brush shapes, handcrafted textures, soft volumetric light and beautiful atmospheric depth. Warm ember-gold against cool teal and violet; cozy magical resource gathering, rich restrained color. All artwork must be NEW ORIGINAL ART, no copied game art.\nAbsolutely no text, letters, numbers, runes, logos, UI, watermarks, brands, trademarks, people, creatures, faces, character silhouettes, or photorealism.",
+      "generated_size": [
+        1254,
+        1254
+      ],
+      "saved_size": [
+        1024,
+        1024
+      ],
+      "preparation": "Resampled to target pixel size with Pillow Lanczos; no content changes."
+    },
+    {
+      "name": "icon",
+      "file": "icon.png",
+      "target_size": [
+        1024,
+        1024
+      ],
+      "prompt": "Use case: ads-marketing.\nAsset type: original square mod emblem for Kiln Auto Loot, NO TEXT, 1024x1024, must read instantly at 64 pixels.\nA simple bold emblem of a worn warm chestnut leather satchel with its flap open, ONE curling luminous ember-gold trail entering its opening and ONE bright small spark above the curl. Give the satchel a strong wide simple silhouette and a single broad strap/buckle shape with no markings. Center it on a DARK TEAL ROUND FIELD, against deeper teal corners. The round field is a simple quiet disc, not an ornate frame. Satchel and one warm curl occupy about 75 percent of the canvas with generous safe margins; everything completely inside frame.\nStyle: polished stylized painterly fantasy item icon, expressive broad brush shapes, softly modeled leather, crisp readable silhouette, warm ember gold against cool deep teal with a very subtle violet undertone. Low detail and bold value separation; no scenery or scattered resources. NEW ORIGINAL ART, no copied game art.\nAbsolutely no text, letters, numbers, runes, symbols on the bag, logos, UI, watermarks, brands, trademarks, people, creatures, faces, character silhouettes, or photorealism.",
+      "generated_size": [
+        1254,
+        1254
+      ],
+      "saved_size": [
+        1024,
+        1024
+      ],
+      "preparation": "Resampled to target pixel size with Pillow Lanczos; no content changes."
+    },
+    {
+      "name": "hero_landscape",
+      "file": "hero_landscape.png",
+      "target_size": [
+        1920,
+        1080
+      ],
+      "input": "hero_wide.png",
+      "prompt": "Use case: ads-marketing.\nAsset type: NO-TEXT 16:9 landscape source painting for Kiln Auto Loot, target 1920x1080.\nInput image: the supplied original panoramic painting is the EDIT TARGET. Expand it VERTICALLY into a complete 16:9 landscape painting. Preserve the complete width, every existing object, the centre-right ember-gold ring, warm light trails, colors, painterly brushwork and dark quiet LEFT THIRD. The original panoramic scene should occupy the middle 60 percent of the new canvas height, with the complete chest, smashed barrels and crates, ore, logs, berries and glowing mushrooms all visible. Add natural newly PAINTED environment above and below: above, extend the weathered stone arch ruins into a layered atmospheric blue-teal twilight forest canopy, with soft violet fog and tree silhouettes; below, continue the mossy irregular courtyard paving, roots and small ferns naturally into the foreground. Keep the left third dark, calm and low-detail for typography that will be added separately. Full-bleed continuous painting across the entire frame, no panels, no blurred strips, no vignette bars, no blank bands, no seams, no duplicated objects. The new areas must have the SAME expressive painterly detail as the original, a real continuation of the scene, not a blurry extension. The original important resource action remains the focal point. No new subject or large bright lights.\nStyle: soft volumetric light, expressive brush shapes, atmospheric depth, warm ember gold against cool teal and violet, stylized fantasy concept art. Entirely original invented art.\nAbsolutely NO TEXT, letters, numbers, runes, logos, UI, watermarks, brands, trademarks, people, creatures, faces, character silhouettes, or photorealism.",
+      "generated_size": [
+        1672,
+        941
+      ],
+      "saved_size": [
+        1920,
+        1080
+      ],
+      "preparation": "Resampled to target pixel size with Pillow Lanczos; no content changes."
+    }
+  ]
+}

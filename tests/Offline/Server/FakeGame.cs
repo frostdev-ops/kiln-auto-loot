@@ -1,0 +1,168 @@
+// SPDX-License-Identifier: MIT
+// A fake world for the loot loop (src/Server/IGame.cs): entities with a template, components, an offer, slots; players;
+// and a record of every accept, loot-all and Items.Move the loop sent.
+using Kiln;
+using KilnAutoLoot.Core;
+using KilnAutoLoot.Server;
+
+namespace KilnAutoLoot.Offline.LootServerTests;
+
+internal sealed class FakeEntity
+{
+    public required EntityId Id { get; init; }
+    public WorldPosition Position { get; set; }
+    public Guid Template { get; set; }
+    public ulong Serial { get; set; } = 1;
+    public HashSet<string> Components { get; } = [];
+    public uint? PickupItem { get; set; }
+    public Offer Offer { get; set; } = Offer.None;
+    public bool Dead { get; set; }
+    public List<ContainerSlot>? Slots { get; set; }
+    public Sight Sight { get; set; } = Sight.Visible;
+}
+
+internal sealed class FakeGame : IGame
+{
+    public readonly Dictionary<EntityId, FakeEntity> Entities = new();
+    public readonly List<GamePlayer> PlayerList = [];
+    public readonly List<(EntityId Guest, EntityId Host, uint Offer)> Interacts = [];
+    public readonly List<(EntityId Guest, EntityId Host)> Loots = [];
+    public readonly List<(EntityId From, ulong Slot, EntityId To, Action<MoveOutcome> Done)> Moves = [];
+    public readonly Dictionary<string, int> FindCalls = new();
+    public int FreeSlotCount = 10;
+    private uint _next = 100;
+
+    public EntityId AddPlayer(double x = 0, double y = 0, double z = 0, bool uiOpen = false)
+    {
+        var id = new EntityId((uint)(PlayerList.Count + 1));
+        PlayerList.Add(new GamePlayer(id, new WorldPosition(x, y, z), uiOpen));
+        return id;
+    }
+
+    public FakeEntity Add(Guid template, double x, string[] components, uint? pickupItem = null)
+    {
+        var e = new FakeEntity { Id = new EntityId(_next++), Position = new WorldPosition(x, 0, 0), Template = template, PickupItem = pickupItem };
+        foreach (var c in components) e.Components.Add(c);
+        if (pickupItem is not null) e.Components.Add(LootLoop.PickupComponent);
+        Entities[e.Id] = e;
+        return e;
+    }
+
+    public void Remove(FakeEntity e) => Entities.Remove(e.Id);
+
+    public void Clear()
+    {
+        Interacts.Clear();
+        Loots.Clear();
+        Moves.Clear();
+    }
+
+    public IReadOnlyList<GamePlayer> Players() => PlayerList;
+
+    public IReadOnlyList<EntityId> Find(string component)
+    {
+        FindCalls[component] = FindCalls.GetValueOrDefault(component) + 1;
+        return Entities.Values.Where(e => e.Components.Contains(component)).Select(e => e.Id).ToList();
+    }
+
+    public IReadOnlyList<EntityId> Within(IReadOnlyList<EntityId> candidates, WorldPosition at, double radius) =>
+        candidates.Where(c => PositionOf(c) is { } p && p.DistanceTo(at) <= radius)
+            .OrderBy(c => PositionOf(c)!.Value.DistanceTo(at)).ToList();
+
+    public WorldPosition? PositionOf(EntityId entity) =>
+        Entities.TryGetValue(entity, out var e) ? e.Position
+        : PlayerList.FirstOrDefault(p => p.Entity == entity) is { Entity.IsNone: false } gp ? gp.Position : null;
+
+    public Inspected? Inspect(EntityId entity) =>
+        Entities.TryGetValue(entity, out var e) ? new Inspected(e.Template, e.Serial) : null;
+
+    public bool TryPickupItem(EntityId entity, out uint itemId)
+    {
+        itemId = Entities.TryGetValue(entity, out var e) && e.PickupItem is { } i ? i : 0;
+        return itemId != 0;
+    }
+
+    public bool HasInventory(EntityId entity) =>
+        Entities.TryGetValue(entity, out var e) && e.Components.Contains(LootLoop.InventoryComponent);
+
+    public Offer OfferOf(EntityId entity) => Entities.TryGetValue(entity, out var e) ? e.Offer : Offer.None;
+
+    public bool IsDead(EntityId entity) => Entities.TryGetValue(entity, out var e) && e.Dead;
+
+    public IReadOnlyList<ContainerSlot>? Slots(EntityId container) =>
+        Entities.TryGetValue(container, out var e) ? e.Slots : null;
+
+    public int FreeSlots(EntityId player) => FreeSlotCount;
+
+    public Sight LineOfSight(EntityId player, EntityId target) =>
+        Entities.TryGetValue(target, out var e) ? e.Sight : Sight.Visible;
+
+    public void Interact(EntityId guest, EntityId host, uint offerId) => Interacts.Add((guest, host, offerId));
+
+    public void Loot(EntityId guest, EntityId host) => Loots.Add((guest, host));
+
+    public void Move(EntityId from, ulong slot, EntityId to, Action<MoveOutcome> done) => Moves.Add((from, slot, to, done));
+}
+
+/// <summary>A loop over a fake world with a small template table.</summary>
+internal sealed class LoopRig
+{
+    public static readonly Guid Corpse = new("11111111-0000-0000-0000-000000000001");
+    public static readonly Guid Chest = new("11111111-0000-0000-0000-000000000002");
+    public static readonly Guid Bush = new("11111111-0000-0000-0000-000000000003");
+    public static readonly Guid Twig = new("11111111-0000-0000-0000-000000000004");   // ground pickup, item 1
+    public static readonly Guid Enemy = new("11111111-0000-0000-0000-000000000005");
+    public static readonly Guid Mushroom = new("11111111-0000-0000-0000-000000000006"); // ground pickup with inventory
+    public static readonly Guid Boss = new("11111111-0000-0000-0000-000000000007");
+    public static readonly Guid Wolf = new("11111111-0000-0000-0000-000000000008");    // enemy, animal
+    public static readonly Guid Unknown = new("11111111-0000-0000-0000-0000000000ff");
+
+    public const string TemplatesText =
+        "# guid\tgroup\tflags\tname\tyield\n" +
+        "11111111-0000-0000-0000-000000000001\tcorpse\t\tLootContainer_Enemy_Test\t\n" +
+        "11111111-0000-0000-0000-000000000002\tchest\t\tLootChest_Random_Test\t\n" +
+        "11111111-0000-0000-0000-000000000003\tplant\t\tScatter_Loot_PlantFibre_Test\t3\n" +
+        "11111111-0000-0000-0000-000000000004\tground\t\tLootPickup_Twigs_Test\t1\n" +
+        "11111111-0000-0000-0000-000000000005\tenemy\t\tEnemy_Test\t\n" +
+        "11111111-0000-0000-0000-000000000006\tground\t\tScatter_Loot_Mushroom_Test\t6\n" +
+        "11111111-0000-0000-0000-000000000007\tboss\t\tLootPickup_Enemy_Boss_Test\t7\n" +
+        "11111111-0000-0000-0000-000000000008\tenemy\tanimal\tEnemy_Wolf_Test\t\n";
+
+    public static readonly string[] OfferInv = [LootLoop.OfferComponent, LootLoop.InventoryComponent];
+
+    public FakeClock Clock { get; } = new() { NowMs = 1_000_000 };
+    public FakeGame Game { get; } = new();
+    public List<(EntityId Player, Net.NoticeMsg Msg)> Notices { get; } = [];
+    public List<string> KeyLines { get; } = [];
+    public LootLoop Loop { get; }
+    public EntityId Player { get; }
+    public Data Data { get; }
+
+    /// <param name="items">the server's item table (default: the fixture with every name, as in a player's game).</param>
+    /// <param name="hasMod">false: the player never sends settings, so the server's Defaults apply.</param>
+    /// <param name="skipIds">the skip ids the player's game sends with its settings.</param>
+    public LoopRig(Action<PersonalSettings>? settings = null, uint[]? quest = null, ServerSettings? server = null,
+        ItemTable? items = null, bool hasMod = true, uint[]? skipIds = null)
+    {
+        Data = new Data(TemplateTable.Parse(new StringReader(TemplatesText)), items ?? Fixtures.Items(), Fixtures.Quest(quest ?? []));
+        Loop = new LootLoop(Game, Clock, Data, (p, m) => Notices.Add((p, m)), KeyLines.Add);
+        Loop.Configure(server ?? new ServerSettings());
+        Player = Game.AddPlayer();
+        var s = new PersonalSettings();
+        settings?.Invoke(s);
+        if (hasMod) Loop.SetPersonal(Player, s, skipIds);
+        else Loop.Join(Player);
+    }
+
+    /// <summary>Advance the clock and run one scan.</summary>
+    public void ScanAfter(long ms)
+    {
+        Clock.NowMs += ms;
+        Loop.Scan();
+    }
+
+    public void ScanFor(long ms, long step = LootLoop.ScanEveryMs)
+    {
+        for (long t = 0; t < ms; t += step) ScanAfter(step);
+    }
+}

@@ -1,0 +1,18 @@
+<Project Sdk="Kiln.Sdk/0.2.0-dev.28">
+  <!-- A lab check, not part of the mod: [KilnTest] methods for what a dedicated lab server can show with no player:
+       the Kiln calls the loot loop relies on, the mod's server part, and the cost of one scan.
+         dotnet build tests/LabTest -t:KilnDeploy -p:KilnServer=<lab server folder>
+         kiln test kiln-auto-loot-labtest -\-server <lab server folder> -->
+  <PropertyGroup>
+    <KilnModId>kiln-auto-loot-labtest</KilnModId>
+    <KilnModName>Kiln Auto Loot lab test</KilnModName>
+    <Version>0.1.0</Version>
+    <KilnSide>server</KilnSide>
+    <KilnServices>Players;World;Spawn;Gameplay;Items;Ui;Testing</KilnServices>
+    <KilnGameIds>None</KilnGameIds>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+  <ItemGroup>
+    <KilnDependency Include="kiln-auto-loot" Version="0.1.0" />
+  </ItemGroup>
+</Project>

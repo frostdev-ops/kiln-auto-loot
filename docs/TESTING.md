@@ -1,0 +1,79 @@
+# Testing Kiln Auto Loot in the game
+
+The offline tests (`dotnet test tests/Offline`) and the lab test mods (`tests/LabTest`, `tests/LabSmash`) cover the
+rules and what a dedicated server can show without a player. Everything below needs a real player in a real world.
+
+## Setup
+1. Back up your save (stack sizes and felled trees change it).
+2. `dotnet build -c Release -t:KilnPack -p:KilnPackageOutputPath=dist/`, then import `dist/kiln-auto-loot-<version>.zip`
+   in the Kiln Launcher's Library and switch it on in your profile (Kiln 0.2.0-dev.28 or later).
+3. Before starting: set `"counterLog": true` in `kiln/config/kiln-auto-loot-server.json` (or tick it on the World tab
+   later). The mod then writes its counters every 5 s and its whole classification to
+   `kiln/data/kiln-auto-loot/` (`kiln-auto-loot.log`, the classification dump).
+4. Host a world (a test world, or a copy) and walk somewhere with loot: a ruin with barrels, a camp, bushes, a farm.
+
+## 1. Window and keys
+- [ ] F8 opens "Kiln Auto Loot <version>" with six tabs; switching tabs keeps the width; F8, Esc, the X and Close all
+      close it; Esc does not also open the pause menu; while it is open the camera and movement don't react.
+- [ ] The status line says whether auto loot is on and names the F9 key; F9 flips it with a short note, also with the
+      window open. Rebinding F8/F9 in Kiln's Keys page works and the texts name the new key.
+- [ ] Every setting has a tooltip; changes save at once (`kiln-auto-loot-client.json`); editing that file by hand
+      updates the open window.
+- [ ] With the game in German: the window, the notes and the item names are German and nothing is cut off.
+- [ ] The Filters tab right after loading: the item list fills by itself (no "still loading" that stays).
+
+## 2. Loose things
+- [ ] Rocks, sticks, ore, mushrooms and dropped items within the radius are picked up without pressing E; each thing
+      once (no doubled amounts on stones, mushrooms, fireflies).
+- [ ] Each group switch (ground loot, stones, collectibles, plants, crops, fish) stops its group at once, also when
+      you hold E; the radius slider and a group radius larger than the general one both work.
+- [ ] "Take things where they lie" off: things are still picked up (no fly-in), mushrooms and fireflies only right
+      next to you.
+- [ ] Inventory full: the "inventory full" note appears (at most once a minute) and nothing stutters while loot lies
+      around.
+
+## 3. Containers
+- [ ] A fresh corpse waits about a second, then empties; elites and bosses bring their bonus loot (jewels, runes).
+- [ ] "Bosses" off: boss, mini boss and elite corpses stay for you (try a Fogger Berserker or Heavy Mage corpse too).
+- [ ] World chests, coffins, cupboards and heaps empty; your own chests and locked chests are never touched.
+- [ ] Quest items (map pieces, lore scrolls, instruments, eternal ammunition, the farmer hat) stay in containers while
+      "leave quest items" is on, and come along when it is off.
+- [ ] While a chest, crafting station, dialogue, the inventory, the map or the pause menu is open, nothing is taken
+      and the open window never closes or switches by itself; with a controller too.
+- [ ] "Pause near enemies": nothing is taken while an enemy is close, it carries on about 2 s after the last one.
+
+## 4. Plants and crops
+- [ ] Berry bushes, herbs, fibre, reeds and fireflies are harvested, each once per visit.
+- [ ] Farm beds: only ripe crops; a bed in an early stage (Nettle, Rooibos, sugar cane, plant fibre at stage 1) is left
+      to grow.
+
+## 5. Skip list
+- [ ] Type 3 letters: suggestions in the window's language; Enter takes the first; a group can be skipped whole and
+      taken again; entries show their x; "Clear the list" works; an unknown "=Name" is marked.
+- [ ] A skipped item stays on the ground and in chests and corpses, with a short note (at most 3 times per item); a
+      bush that would give a skipped item is not harvested; holding E still takes nothing of a skipped item; pressing E
+      on it takes it.
+
+## 6. Smashing
+- [ ] Barrels, crates, pots and broken furniture in ruins break once a second and their loot is picked up.
+- [ ] Inside your base nothing breaks; near your base buildable furniture stays whole.
+- [ ] "Fell trees" on (test world!): trees, stumps and logs come down and drop wood; harvest trees (hazelnut, coffee)
+      stay. "Smash bee hives": hives break, honey is picked up.
+- [ ] "Stones" off: rock boulders stay whole.
+- [ ] Chandeliers, telescopes, showcases, doors, ladders and anything of a quest stay whole.
+
+## 7. World tab (hosting)
+- [ ] Stack size 9999 (default): wood and stone stack to 9999; 0 brings back the game's sizes; the number field and the
+      -/+ buttons work.
+- [ ] Backpack cheat on: every backpack recipe gives the best backpack for 1 of each ingredient; off restores them.
+- [ ] Lowering "furthest radius" to 20 shows that the server caps your 40 m radius.
+- [ ] "enabled" off, back to the menu, host again: the mod does nothing in that world; on again, it is back.
+
+## 8. Optional: a dedicated server
+- [ ] Join a server with the mod: your settings apply there, the World tab is read-only with the server's values, a
+      skip list with English or German names works, opening a chest pauses only you.
+- [ ] A player without the mod gets the server's defaults.
+
+## What to send back
+`kiln/logs/kiln.log`, `kiln/data/kiln-auto-loot/kiln-auto-loot.log` and the classification dump, plus a note of which
+boxes failed.

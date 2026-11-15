@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Offline tests of Kiln Auto Loot's pure rules (src/Core) and with no game:
+         dotnet test tests/Offline
+       References the mod as Kiln's unit-test template does (docs/kiln/modding/unit-tests.md): Kiln.TestKit + the mod. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <AssemblyName>KilnAutoLoot.Offline</AssemblyName>
+    <RootNamespace>KilnAutoLoot.Offline</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Kiln.TestKit" Version="0.2.0-dev.28" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="xunit.v3" Version="3.1.0" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../KilnAutoLoot.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- xunit.v3 adds no global using of its own -->
+    <Using Include="Xunit" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(CoreOnly)' == 'true'">
+    <!-- -p:CoreOnly=true: only the src/Core tests (the top folder), while another part's tests do not build -->
+    <Compile Remove="*/**/*.cs" />
+  </ItemGroup>
+</Project>
