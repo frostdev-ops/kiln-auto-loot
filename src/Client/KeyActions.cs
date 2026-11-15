@@ -19,3 +19,33 @@ internal static class KeyActions
     /// <summary>The new looting value and the toast's text key (Texts.Get).</summary>
     public static (bool On, string TextKey) Toggle(bool looting) => !looting ? (true, "toggleOn") : (false, "toggleOff");
 }
+
+/// <summary>One press that reaches a key twice counts once. Kiln drops a held key's repeats by its own held state, which
+/// a focus change clears, and a bouncing switch sends down, up, down: seen on a player's PC as the F8 window opening and
+/// closing again 40 ms later. A press of the same key within <see cref="WindowMs"/> of the last press it took is that
+/// press. Key handlers (the game's window thread); locked anyway. Pure.</summary>
+internal sealed class KeyDebounce(Core.IClock clock)
+{
+    public const long WindowMs = 250;
+
+    private readonly object _lock = new();
+    private readonly Dictionary<string, long> _taken = new(StringComparer.Ordinal);
+
+    /// <summary>Whether this press of <paramref name="key"/> acts. When it does not, <paramref name="sinceMs"/> is the
+    /// time since the press it repeats.</summary>
+    public bool Take(string key, out long sinceMs)
+    {
+        var now = clock.NowMs;
+        lock (_lock)
+        {
+            if (_taken.TryGetValue(key, out var last) && now - last < WindowMs)
+            {
+                sinceMs = now - last;
+                return false;
+            }
+            _taken[key] = now;
+        }
+        sinceMs = 0;
+        return true;
+    }
+}

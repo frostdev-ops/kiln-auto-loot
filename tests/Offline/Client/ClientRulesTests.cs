@@ -82,6 +82,24 @@ public class KeyActionTests
         Assert.True(KeyActions.ToggleActs(kilnMenuOpen: false));
         Assert.False(KeyActions.ToggleActs(kilnMenuOpen: true));
     }
+
+    [Fact]
+    public void A_press_that_arrives_twice_counts_once()
+    {
+        var clock = new FakeClock { NowMs = 10_000 };
+        var gate = new KeyDebounce(clock);
+        Assert.True(gate.Take("menu", out _));
+        clock.NowMs += 40;   // the F8 window opened and closed again 40 ms later on a player's PC
+        Assert.False(gate.Take("menu", out var since));
+        Assert.Equal(40, since);
+        Assert.True(gate.Take("toggle", out _));   // another key is its own
+        clock.NowMs = 10_000 + KeyDebounce.WindowMs - 1;
+        Assert.False(gate.Take("menu", out _));
+        clock.NowMs = 10_000 + KeyDebounce.WindowMs;   // counted from the press it took, not from the dropped ones
+        Assert.True(gate.Take("menu", out _));
+        clock.NowMs += KeyDebounce.WindowMs;
+        Assert.True(gate.Take("menu", out _));
+    }
 }
 
 public class WindowSignalTests

@@ -23,6 +23,8 @@ internal sealed class ClientPart(Data data, Server.LootServer server)
     private KeyBinding? _menuKey, _toggleKey, _nextProfileKey, _focusKey;
     private readonly Dictionary<string, (KeyBinding Binding, string Key)> _profileKeys = new();   // tick thread
     private readonly FocusNotes _focus = new();
+    private readonly KeyDebounce _debounce = new(new WallClock());
+    private int _bouncesSaid;
     private (ClientState State, uint ClientSession, uint ServerSession) _session;
     private uint _handedSession = uint.MaxValue;
     private int _itemsVersion;   // the item table version the skip ids last followed
@@ -97,9 +99,20 @@ internal sealed class ClientPart(Data data, Server.LootServer server)
 
     // ---------------------------------------------------------------- keys (main thread)
 
+    /// <summary>Whether this press of <paramref name="bindingId"/> acts (KeyDebounce). The first few presses it drops in
+    /// a game are logged.</summary>
+    private bool Pressed(string bindingId)
+    {
+        if (_debounce.Take(bindingId, out var since)) return true;
+        if (Interlocked.Increment(ref _bouncesSaid) <= 5)
+            AutoLootMod.ModContext?.Log.Info($"key {bindingId}: pressed again {since} ms after the press it took: counted " +
+                "once (a key that bounces, or one press that reached the mod twice)");
+        return false;
+    }
+
     private void OnMenuKey()
     {
-        if (_window is null) return;
+        if (_window is null || !Pressed(MenuKeyId)) return;
         switch (KeyActions.MenuKey(_window.IsOpen, Ui.MenuOpen))
         {
             case MenuKeyAction.Open: _window.Open(); break;
@@ -109,7 +122,7 @@ internal sealed class ClientPart(Data data, Server.LootServer server)
 
     private void OnToggleKey()
     {
-        if (!KeyActions.ToggleActs(Ui.MenuOpen)) return;
+        if (!Pressed(ToggleKeyId) || !KeyActions.ToggleActs(Ui.MenuOpen)) return;
         _link.Change(p =>
         {
             p.Looting = KeyActions.Toggle(p.Looting).On;
@@ -125,7 +138,7 @@ internal sealed class ClientPart(Data data, Server.LootServer server)
 
     private void OnNextProfileKey()
     {
-        if (KeyActions.ToggleActs(Ui.MenuOpen)) _link.NextProfile();
+        if (Pressed(ProfileKeys.NextProfileId) && KeyActions.ToggleActs(Ui.MenuOpen)) _link.NextProfile();
     }
 
     private void ToastProfile(ProfileView profile)
@@ -162,7 +175,7 @@ internal sealed class ClientPart(Data data, Server.LootServer server)
                 var target = id;
                 var binding = KeyBindings.Register(bindingId, key, () =>
                 {
-                    if (KeyActions.ToggleActs(Ui.MenuOpen)) _link.SwitchProfile(target);
+                    if (Pressed(bindingId) && KeyActions.ToggleActs(Ui.MenuOpen)) _link.SwitchProfile(target);
                 }, "Profile: " + profile.Display(false), Category);
                 _profileKeys[id] = (binding, key);
             }
@@ -177,7 +190,7 @@ internal sealed class ClientPart(Data data, Server.LootServer server)
 
     private void OnFocusKey()
     {
-        if (KeyActions.ToggleActs(Ui.MenuOpen)) SendCommand(CommandKind.ToggleFocus);
+        if (Pressed(ProfileKeys.FocusId) && KeyActions.ToggleActs(Ui.MenuOpen)) SendCommand(CommandKind.ToggleFocus);
     }
 
     /// <summary>Asks the server part for a gather-focus change (main or render thread). Hosted: in-process on the tick
