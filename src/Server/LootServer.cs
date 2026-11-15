@@ -101,6 +101,10 @@ internal sealed class LootServer(Data data)
     }
 
     /// <summary>The local player's window state, from the client part in a hosted game. Tick thread.</summary>
+    /// <summary>The host's own command (the gather focus key), from the client part in the same process. Tick thread.
+    /// Filled in by the rules wave; answers with LocalServerInfo.</summary>
+    public void SetLocalCommand(EntityId player, Net.CommandKind kind) { }
+
     public void SetLocalWindowOpen(EntityId player, bool open)
     {
         _hostWindow = (player, open);
@@ -252,7 +256,7 @@ internal sealed class LootServer(Data data)
         if (_loop is null || _config is null) return;
         var s = _config.Value;
         var msg = new ServerInfoMsg(SettingsJson.Write(_loop.SettingsOf(player)), SettingsJson.WriteLimits(s.Limits),
-            s.MaxStack, s.BackpackCheat, Kiln.Client.IsHosting, _enabled);
+            s.MaxStack, s.BackpackCheat, Kiln.Client.IsHosting, _enabled, LineOfSight: false, FocusItem: 0);   // wired by the rules wave
         if (IsHostPlayer(player)) LocalServerInfo?.Invoke(msg);
         else if (ChannelHub.HasMod(player)) AutoLootMod.Hub.SendTo(player, msg);
     }

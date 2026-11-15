@@ -15,6 +15,7 @@ internal sealed class ChannelHub : IDisposable
     public event Action<ClientStateMsg, EntityId>? ClientStateReceived;
     public event Action<NoticeMsg>? NoticeReceived;                    // player's game: from the server
     public event Action<ServerInfoMsg>? ServerInfoReceived;
+    public event Action<CommandMsg, EntityId>? CommandReceived;   // server: from a player's game
 
     /// <summary>Not required: players without the mod may join and get the server's defaults.</summary>
     public void Open()
@@ -24,7 +25,8 @@ internal sealed class ChannelHub : IDisposable
             .Register<PersonalMsg>((m, ctx) => PersonalReceived?.Invoke(m, ctx.Player), NetDirection.ToServer)
             .Register<ClientStateMsg>((m, ctx) => ClientStateReceived?.Invoke(m, ctx.Player), NetDirection.ToServer)
             .Register<NoticeMsg>((m, _) => NoticeReceived?.Invoke(m), NetDirection.ToClient)
-            .Register<ServerInfoMsg>((m, _) => ServerInfoReceived?.Invoke(m), NetDirection.ToClient);
+            .Register<ServerInfoMsg>((m, _) => ServerInfoReceived?.Invoke(m), NetDirection.ToClient)
+            .Register<CommandMsg>((m, ctx) => CommandReceived?.Invoke(m, ctx.Player), NetDirection.ToServer);
     }
 
     /// <summary>Whether this player's game has the mod (and so the channel).</summary>

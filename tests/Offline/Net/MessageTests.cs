@@ -71,7 +71,7 @@ public sealed class MessageTests
     [InlineData(false)]
     public void ServerInfoMsg_round_trips_Enabled(bool enabled)
     {
-        var m = new ServerInfoMsg("{\"radius\":5}", "{\"maxRadius\":20}", 500, true, false, enabled);
+        var m = new ServerInfoMsg("{\"radius\":5}", "{\"maxRadius\":20}", 500, true, false, enabled, true, 1234u);
         var r = new NetReader(Bytes(m.Encode));
         var back = ServerInfoMsg.Decode(ref r);
         Assert.True(r.End);

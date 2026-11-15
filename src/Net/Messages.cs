@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 // The messages between the player's game (window, toasts) and the server world (looting), on channel
 // "kiln-auto-loot:main". Registered in the same order on both sides (Channels.Open): PersonalMsg 0, ClientStateMsg 1,
-// NoticeMsg 2, ServerInfoMsg 3. In a hosted game the local player's messages never cross the network: the client
+// NoticeMsg 2, ServerInfoMsg 3, CommandMsg 4 (new messages are only ever appended). In a hosted game the local player's messages never cross the network: the client
 // part hands them to the server part in the same process (Context.Scheduler.Post), the way more-flame-altars does.
 using Kiln;
 using KilnAutoLoot.Core;
@@ -67,12 +67,36 @@ public sealed record NoticeMsg(NoticeKind Kind, uint ItemId) : INetMessage<Notic
 
 /// <summary>Server to player's game: what the server applies for this player after its limits (EffectiveJson, a
 /// PersonalSettings), the limits themselves, and the world settings the window shows read-only. Enabled: the world runs
-/// with the mod on (the value read at the world's start, the one in effect).</summary>
+/// with the mod on (the value read at the world's start, the one in effect). LineOfSight: the server can check what a
+/// player sees (otherwise visibleOnly has no effect, and the window says so). FocusItem: the item the player's gather
+/// focus is on, 0 = none.</summary>
 public sealed record ServerInfoMsg(string EffectiveJson, string LimitsJson, int MaxStack, bool BackpackCheat, bool Hosted,
-    bool Enabled) : INetMessage<ServerInfoMsg>
+    bool Enabled, bool LineOfSight, uint FocusItem) : INetMessage<ServerInfoMsg>
 {
     public void Encode(NetWriter w) =>
-        w.String(EffectiveJson).String(LimitsJson).Int32(MaxStack).Bool(BackpackCheat).Bool(Hosted).Bool(Enabled);
+        w.String(EffectiveJson).String(LimitsJson).Int32(MaxStack).Bool(BackpackCheat).Bool(Hosted).Bool(Enabled)
+         .Bool(LineOfSight).UInt32(FocusItem);
     public static ServerInfoMsg Decode(ref NetReader r) =>
-        new(r.String(Channels.MaxJson), r.String(4096), r.Int32(), r.Bool(), r.Bool(), r.Bool());
+        new(r.String(Channels.MaxJson), r.String(4096), r.Int32(), r.Bool(), r.Bool(), r.Bool(), r.Bool(), r.UInt32());
+}
+
+/// <summary>What a player's command asks the server to do.</summary>
+public enum CommandKind : byte
+{
+    /// <summary>Gather focus on the item this player last took by hand; again = focus off.</summary>
+    ToggleFocus = 1,
+    /// <summary>Gather focus off.</summary>
+    ClearFocus = 2,
+}
+
+/// <summary>Player's game to server: a command (the gather focus key). The server answers with a ServerInfoMsg.</summary>
+public sealed record CommandMsg(CommandKind Kind) : INetMessage<CommandMsg>
+{
+    public void Encode(NetWriter w) => w.Byte((byte)Kind);
+    public static CommandMsg Decode(ref NetReader r)
+    {
+        var kind = (CommandKind)r.Byte();
+        if (kind is not (CommandKind.ToggleFocus or CommandKind.ClearFocus)) throw new NetFormatException("Unknown command.");
+        return new(kind);
+    }
 }

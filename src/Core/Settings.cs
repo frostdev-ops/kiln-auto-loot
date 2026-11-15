@@ -29,6 +29,25 @@ public sealed class PersonalSettings
     public string SkipList { get; set; } = "";
     [Comment("Show a short note when an item on the skip list stays behind.")] public bool SkipNotice { get; set; } = true;
 
+    // Which list decides, and gear rarity
+    [Comment("Which list decides: skip = take everything except the skip list, only = take nothing except the only list.")]
+    public FilterMode ItemFilter { get; set; } = FilterMode.Skip;
+    [Comment("With itemFilter only: the items to take, the same kind of entries as the skip list.")]
+    public string OnlyList { get; set; } = "";
+    [Comment("Weapons, armor, rings and shields below this rarity stay where they are: common, uncommon, rare, epic or legendary.")]
+    public GearRarity MinGearRarity { get; set; } = GearRarity.Common;
+
+    // Where: a height window around you, so a cave's loot stays in the cave
+    [Comment("Only take what is at most this many meters above you. 0 = no limit."), Range(0, 50)] public float HeightAbove { get; set; } = 4f;
+    [Comment("Only take what is at most this many meters below you. 0 = no limit."), Range(0, 50)] public float HeightBelow { get; set; } = 4f;
+
+    // The bag
+    [Comment("Only top up stacks you already carry, up to full; never start a new stack.")] public bool FillCarriedStacks { get; set; }
+    [Comment("Keep this many bag slots free: once only these are left, only stacks you carry are topped up. 0 = off."), Range(0, 64)]
+    public int KeepFreeSlots { get; set; }
+    [Comment("Stop taking an item once you carry this many, comma separated: =Name:500 for one item, #Group:2000 for a group.")]
+    public string CarryLimits { get; set; } = "";
+
     // Ranges per group: 0 = use radius; a group may reach further than radius
     [Range(0, 50)] public float GroundRadius { get; set; }
     [Range(0, 50)] public float CollectiblesRadius { get; set; }
@@ -83,3 +102,9 @@ public sealed class ServerLimits
     [Comment("false = no tree felling for anyone.")] public bool AllowFelling { get; set; } = true;
     [Comment("false = no bee hive smashing for anyone.")] public bool AllowHives { get; set; } = true;
 }
+
+/// <summary>Which list decides what is taken.</summary>
+public enum FilterMode { Skip, Only }
+
+/// <summary>The game's item rarities, lowest first.</summary>
+public enum GearRarity { Common, Uncommon, Rare, Epic, Legendary }
