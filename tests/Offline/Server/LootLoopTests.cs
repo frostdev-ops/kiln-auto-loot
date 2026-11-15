@@ -183,12 +183,62 @@ public sealed class LootLoopTests
         var other = new EntityId(9);
         rig.Game.PlayerList.Add(new GamePlayer(other, new WorldPosition(100, 0, 0), UiOpen: true));
         rig.Game.Add(LoopRig.Twig, 101, Pickup, pickupItem: 1);
-        rig.ScanFor(500);
+        rig.ScanFor(LootLoop.SettingsWaitMs + 500);   // the wait for settings it never sends, then the UI pause
         Assert.DoesNotContain(rig.Game.Loots, l => l.Guest == other);
 
         rig.Game.PlayerList[1] = rig.Game.PlayerList[1] with { UiOpen = false };
         rig.ScanAfter(100);
         Assert.Contains(rig.Game.Loots, l => l.Guest == other);
+    }
+
+    [Fact]
+    public void A_player_is_left_alone_until_their_own_settings_arrive()
+    {
+        var rig = new LoopRig(s => s.OpenDelay = 0);
+        var other = rig.Game.AddPlayer(100, 0, 0);
+        rig.Game.Add(LoopRig.Twig, 101, Pickup, pickupItem: 1);
+        Assert.False(rig.Loop.Acts(other));                   // not seen in game yet
+        rig.ScanFor(2000);
+        Assert.DoesNotContain(rig.Game.Loots, l => l.Guest == other);
+        Assert.False(rig.Loop.Acts(other));
+        Assert.True(rig.Loop.Counters.SettingsWaits > 0);
+
+        rig.Loop.SetPersonal(other, new PersonalSettings { OpenDelay = 0 });
+        Assert.True(rig.Loop.Acts(other));
+        rig.ScanAfter(100);
+        Assert.Contains(rig.Game.Loots, l => l.Guest == other);
+        Assert.DoesNotContain(rig.KeyLines, l => l.Contains("no settings from their game"));
+    }
+
+    [Fact]
+    public void What_they_switched_off_is_not_taken_with_the_defaults_in_the_moment_before_their_settings_arrive()
+    {
+        var rig = new LoopRig(s => s.OpenDelay = 0);
+        var other = rig.Game.AddPlayer(100, 0, 0);
+        rig.Game.Add(LoopRig.Twig, 101, Pickup, pickupItem: 1);
+        rig.ScanFor(500);                                     // in the world, settings still on their way
+        rig.Loop.SetPersonal(other, new PersonalSettings { OpenDelay = 0, GroundLoot = false });
+        rig.ScanFor(2000);
+        Assert.DoesNotContain(rig.Game.Loots, l => l.Guest == other);
+    }
+
+    [Fact]
+    public void A_game_without_the_mod_gets_the_defaults_once_the_wait_is_over_counted_from_its_arrival_in_the_world()
+    {
+        var rig = new LoopRig(s => s.OpenDelay = 0);
+        var other = new EntityId(9);
+        rig.Loop.Join(other);                                 // joined, still loading
+        rig.ScanFor(30_000);
+        rig.Game.PlayerList.Add(new GamePlayer(other, new WorldPosition(100, 0, 0), UiOpen: false));
+        rig.Game.Add(LoopRig.Twig, 101, Pickup, pickupItem: 1);
+        rig.ScanFor(LootLoop.SettingsWaitMs - 100);           // the wait starts at its arrival, not at the join
+        Assert.DoesNotContain(rig.Game.Loots, l => l.Guest == other);
+        Assert.False(rig.Loop.Acts(other));
+
+        rig.ScanFor(200);
+        Assert.True(rig.Loop.Acts(other));
+        Assert.Contains(rig.Game.Loots, l => l.Guest == other);
+        Assert.Single(rig.KeyLines, l => l.Contains("no settings from their game"));
     }
 
     [Fact]
@@ -216,6 +266,7 @@ public sealed class LootLoopTests
     {
         var rig = new LoopRig();
         var second = rig.Game.AddPlayer(x: 1);
+        rig.Loop.SetPersonal(second, new PersonalSettings());
         for (var i = 0; i < 50; i++) rig.Game.Add(LoopRig.Twig, 1 + i * 0.01, Pickup, pickupItem: 1);
         rig.ScanAfter(100);
         Assert.Equal(LootLoop.MaxInjectsPerScan, rig.Game.Loots.Count);

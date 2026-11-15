@@ -330,6 +330,9 @@ internal sealed class SettingsLink(Server.LootServer server)
     }
 
     /// <summary>A new connection or a new hosted world: the next send goes out whatever was sent before (any thread).</summary>
+    /// <summary>The hosted world the settings last went to (uint.MaxValue: none since the last world). Any thread.</summary>
+    public uint HandedSession => Volatile.Read(ref _sentSession);
+
     public void Resend() => Post(() =>
     {
         _sentJson = null;

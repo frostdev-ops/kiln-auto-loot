@@ -20,6 +20,16 @@ internal sealed class PlayerLoot
 
     public EntityId Entity { get; }
 
+    /// <summary>The player's game has handed its settings over (a message that did not read counts too: the player has
+    /// the mod). Until then, or until <see cref="LootLoop.SettingsWaitMs"/> in game, the mod does nothing for them.</summary>
+    public bool OwnSettings { get; set; }
+
+    /// <summary>When a scan first saw the player in game (alive, with a position); null = not yet.</summary>
+    public long? FirstSeenMs { get; set; }
+
+    /// <summary>The wait for the player's own settings ran out and the key line saying so went out.</summary>
+    public bool DefaultsSaid { get; set; }
+
     /// <summary>What the player's game sent (PersonalMsg, or SetLocalPersonal for the host), unclamped; null = the
     /// player has no Kiln Auto Loot (or has not sent yet): the server's defaults apply.</summary>
     public PersonalSettings? Sent { get; set; }

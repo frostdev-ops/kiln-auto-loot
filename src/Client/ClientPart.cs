@@ -26,7 +26,7 @@ internal sealed class ClientPart(Data data, Server.LootServer server)
     private readonly KeyDebounce _debounce = new(new WallClock());
     private int _bouncesSaid;
     private (ClientState State, uint ClientSession, uint ServerSession) _session;
-    private uint _handedSession = uint.MaxValue;
+    private long _nextHandoffMs;   // hosted: when the settings may be handed over again (main thread)
     private int _itemsVersion;   // the item table version the skip ids last followed
     private bool _started;
 
@@ -290,10 +290,13 @@ internal sealed class ClientPart(Data data, Server.LootServer server)
             if (KClient.IsRemote) _link.Resend();
             else _link.Forget();
         }
-        // hosted: the server part registers its config at ServerStarted; hand the settings over once per hosted world
-        if (KClient.IsHosting && server.ServerConfig is not null && _handedSession != KClient.ServerWorldSession)
+        // hosted: the server part registers its config at ServerStarted; hand the settings over to each hosted world,
+        // again every 250 ms until it has them (the host's player may not exist yet at the first try, and the server part
+        // does nothing for the host until they are there). Settings too large for a message are never handed over.
+        if (KClient.IsHosting && server.ServerConfig is not null && !KClient.LocalPlayer.IsNone && !_link.TooLarge &&
+            _link.HandedSession != KClient.ServerWorldSession && Environment.TickCount64 >= _nextHandoffMs)
         {
-            _handedSession = KClient.ServerWorldSession;
+            _nextHandoffMs = Environment.TickCount64 + 250;
             _link.Resend();
         }
         // the item table filled (or filled again): the skip list's ids for the server follow it

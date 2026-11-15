@@ -11,6 +11,7 @@ internal sealed class LootCounters
     public long Scans;            // scans of all players
     public long Rechecks;         // 2-second marks at which every target is looked at again
     public long PlayerScans;      // one player scanned
+    public long SettingsWaits;    // ... skipped: their own settings have not arrived yet (LootLoop.SettingsWaitMs)
     public long WindowPauses;     // ... skipped: a game window or the F8 window is open
     public long EnemyNear;        // ... an enemy was found within enemyDistance
     public long EnemyPauses;      // ... skipped: the enemy pause holds
@@ -66,7 +67,7 @@ internal sealed class LootCounters
     }
 
     public string CountersLine() =>
-        $"counters | scan: scans={Scans} rechecks={Rechecks} players={PlayerScans} windowPauses={WindowPauses} " +
+        $"counters | scan: scans={Scans} rechecks={Rechecks} players={PlayerScans} settingsWaits={SettingsWaits} windowPauses={WindowPauses} " +
         $"enemyNear={EnemyNear} enemyPauses={EnemyPauses} looking={PlayersLooting} " +
         $"| targets: pickups={PickupsSeen} containers={ContainersSeen} unknown={UnknownTemplates} heldBack={ContainersHeldBack} " +
         $"notReleased={NotReleased} groupOff={GroupOff} outOfRange={OutOfRange} yieldSkipped={YieldSkipped} " +

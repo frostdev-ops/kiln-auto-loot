@@ -180,7 +180,14 @@ internal sealed class LoopRig
         var s = new PersonalSettings();
         settings?.Invoke(s);
         if (hasMod) Loop.SetPersonal(Player, s, skipIds, onlyIds);
-        else Loop.Join(Player);
+        else
+        {
+            // a game without the mod sends nothing: the defaults apply once the wait for its settings is over
+            Loop.Join(Player);
+            Loop.Scan();
+            Clock.NowMs += LootLoop.SettingsWaitMs;
+            Loop.Scan();
+        }
     }
 
     /// <summary>Advance the clock and run one scan.</summary>

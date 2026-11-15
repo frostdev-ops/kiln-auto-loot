@@ -362,7 +362,7 @@ internal sealed class LootServer(Data data)
         var now = _clock.NowMs;
         foreach (var (entity, state) in _loop.Players)
         {
-            if (now < state.NextSmashMs) continue;
+            if (now < state.NextSmashMs || !_loop.Acts(entity)) continue;   // nothing before their own settings
             state.NextSmashMs = now + 1000;
             if (Kiln.Players.Find(entity) is not { State: PlayerState.InGame, IsDead: false, Position: { } at }) continue;
             _smash.Hit = _config.Value.CounterLog ? (t, kind, sw) => SmashLine(entity, t, kind, sw) : null;

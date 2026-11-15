@@ -65,6 +65,29 @@ internal sealed class LootLoop
 
     public IReadOnlyDictionary<EntityId, PlayerLoot> Players => _players;
 
+    /// <summary>How long a player seen in game waits for their own settings before the world's defaults apply (a game
+    /// without the mod). Until then the mod neither loots nor smashes for them: with the defaults it would take and break
+    /// what they switched off (Stones on: boulders) in the moment before their settings arrive, longer on a slow PC. The
+    /// wait starts when they are in the world, not at the join, so a long load does not use it up.</summary>
+    public const long SettingsWaitMs = 10_000;
+
+    /// <summary>Whether the mod acts for <paramref name="player"/> now: their own settings arrived, or they have been in
+    /// game <see cref="SettingsWaitMs"/> without them. False for a player no scan has seen in game yet. Tick thread.</summary>
+    public bool Acts(EntityId player) => _players.TryGetValue(player, out var p) && Settled(p, _clock.NowMs);
+
+    private bool Settled(PlayerLoot p, long now)
+    {
+        if (p.OwnSettings) return true;
+        if (p.FirstSeenMs is not { } seen || now - seen < SettingsWaitMs) return false;
+        if (!p.DefaultsSaid)
+        {
+            p.DefaultsSaid = true;
+            _keyLine($"player {p.Entity}: no settings from their game {SettingsWaitMs / 1000} s after they came into the " +
+                     "world: the world's defaults apply (a game without Kiln Auto Loot)");
+        }
+        return true;
+    }
+
     // ---------------------------------------------------------------- settings and players
 
     /// <summary>The server settings (at start and on every change): re-clamps every player.</summary>
@@ -106,6 +129,7 @@ internal sealed class LootLoop
             }
             sent = null;
         }
+        p.OwnSettings = true;
         if (sent is not null)
         {
             p.Sent = sent;
@@ -379,6 +403,13 @@ internal sealed class LootLoop
     {
         var s = p.Settings;
         Counters.PlayerScans++;
+        // nothing until the player's own settings are here (or the wait for them is over)
+        p.FirstSeenMs ??= _clock.NowMs;
+        if (!Settled(p, _clock.NowMs))
+        {
+            Counters.SettingsWaits++;
+            return;
+        }
         // a game window or the F8 window is open: no accept, no loot-all for this player.
         var window = p.ReportsWindow ? p.WindowOpen : gp.UiOpen;
         if (window)
