@@ -26,12 +26,26 @@ notes run in each player's game.
 - **Pauses** while a game window is open (a chest, crafting, a dialogue, the inventory, the map, the pause menu), and,
   if you switch it on, while an enemy is near.
 - **Holding E** follows your switches too: a group you turned off stays where it is.
+- **Profiles**: switch your whole setup in one go, in the window or with a key (**F10** cycles them, any profile can
+  have its own key). Built in: Everything, Wood & sticks, Stone & ore, Plants & crops, Plunder, Treasure hunter; make
+  your own from any setup.
+- **Skip list or only list**: leave chosen items behind, or take nothing but the ones you list (exact items, parts of
+  names, whole categories). A plant is harvested whole once anything it gives is wanted.
+- **Gather focus**: take one item by hand, press **F11**, and only that item is collected around you until you press
+  F11 again.
+- **Rarity**: weapons, armor, rings and shields below a rarity you choose stay where they are.
+- **Height window**: only what is within a few meters above or below you (4 m each by default), so a cave's loot stays
+  in the cave and the cave doesn't empty the hill above it.
+- **Bag-aware**: top up only the stacks you already carry, keep some bag slots free, or stop at a set amount of an item
+  or a whole category ("500 wood logs").
 
 ## Using it
-- **F8** opens the settings window; **F9** turns auto loot on and off. Both keys can be changed in Kiln's Keys page.
+- **F8** opens the settings window; **F9** turns auto loot on and off; **F10** switches to the next profile; **F11**
+  turns the gather focus on and off. All keys can be changed in Kiln's Keys page.
 - Every change is saved at once and takes effect at once, except switching the whole mod off and on (that needs the
   world to start again).
-- Your own settings are in `kiln/config/kiln-auto-loot-client.json`, the world's in `kiln-auto-loot-server.json`.
+- Your own settings are in `kiln/config/kiln-auto-loot-client.json` (the active profile), your profiles in
+  `kiln/data/kiln-auto-loot/profiles.json`, the world's settings in `kiln-auto-loot-server.json`.
 - When you host, the World tab sets the stack size, the backpack cheat and the limits for your players. On a dedicated
   server those come from the server's file, and the server can cap what each player chooses (the window shows it).
 - Players who join without the mod get the server's default settings.
@@ -42,8 +56,8 @@ notes run in each player's game.
 - **Felled trees** may not grow back. Try tree felling in a test world, or back up your save.
 - **Pulling items in**: with "take things where they lie" off, there is no flying-to-you animation (the game draws that
   in the player's own game); things are still picked up.
-- **Line of sight** ("only take what is in plain view") needs Kiln's line-of-sight checks, which a hosting game only
-  has with Kiln's `"preview"` setting in 0.2.0-dev.28. Without it everything in range counts as visible.
+- **Line of sight** ("only take what I can see") needs Kiln's line-of-sight checks, which a hosting game does not have
+  yet in 0.2.0-dev.28; the window says so. The height window covers caves meanwhile.
 
 ## Requirements
 Kiln 0.2.0-dev.28 or later, on the server and (for the window, the keys and the notes) in each player's game.

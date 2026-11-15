@@ -69,7 +69,23 @@ rules and what a dedicated server can show without a player. Everything below ne
 - [ ] Lowering "furthest radius" to 20 shows that the server caps your 40 m radius.
 - [ ] "enabled" off, back to the menu, host again: the mod does nothing in that world; on again, it is back.
 
-## 8. Optional: a dedicated server
+## 8. Profiles, lists, focus and the bag
+- [ ] F10 cycles the profiles with a short note; the profile bar shows the active one; New, Rename (with a key such as
+      Ctrl+1, which then switches to it), Delete (asks twice) and Reset on a built-in work.
+- [ ] "Wood & sticks" takes only logs and sticks (twig bushes are harvested whole, their fibre comes along); "Stone &
+      ore" only stone, flint and ore; "Plunder" only corpses and chests; "Treasure hunter" leaves gear below Rare.
+- [ ] Only list: "Only this" on an item switches to it; the skip list is kept and comes back when you switch to skip.
+- [ ] Gather focus: take a stick by hand, press F11: "Gathering only: ..."; only sticks are collected; F11 again ends
+      it; F11 before taking anything by hand shows the hint.
+- [ ] Height: standing on a hill above a cave, nothing in the cave is taken or smashed; inside the cave, nothing on the
+      surface above. 0 = no limit.
+- [ ] Fill carried stacks: with 30 of 50 sticks in your bag, a pickup of 15 is taken, one of 25 stays; from a chest of
+      40 sticks, 20 move and 20 stay.
+- [ ] Keep 2 free slots: when only 2 are left, only stacks you carry are topped up.
+- [ ] Carry limit "=<logs>:100" (from the editor): the mod stops at 100 logs.
+- [ ] A broken `profiles.json` (edit it badly by hand) does not stop the game; it is kept as `profiles.json.bad`.
+
+## 9. Optional: a dedicated server
 - [ ] Join a server with the mod: your settings apply there, the World tab is read-only with the server's values, a
       skip list with English or German names works, opening a chest pauses only you.
 - [ ] A player without the mod gets the server's defaults.
