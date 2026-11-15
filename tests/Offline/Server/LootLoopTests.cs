@@ -242,6 +242,20 @@ public sealed class LootLoopTests
     }
 
     [Fact]
+    public void Hold_E_goes_through_while_their_settings_are_on_the_way_and_follows_the_defaults_after_the_wait()
+    {
+        var server = new ServerSettings();
+        server.Defaults.GroundLoot = false;
+        var rig = new LoopRig(server: server);
+        var other = rig.Game.AddPlayer(100, 0, 0);
+        var twig = rig.Game.Add(LoopRig.Twig, 101, Pickup, pickupItem: 1);
+        rig.ScanAfter(100);
+        Assert.False(rig.Loop.ShouldCancelHoldE(other, twig.Id, null));   // the defaults are not their choice yet
+        rig.ScanFor(LootLoop.SettingsWaitMs);
+        Assert.True(rig.Loop.ShouldCancelHoldE(other, twig.Id, null));    // a game without the mod: the defaults hold
+    }
+
+    [Fact]
     public void Autoloot_off_sends_nothing()
     {
         var rig = new LoopRig(s => s.Looting = false);

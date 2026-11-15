@@ -808,6 +808,7 @@ internal sealed class LootLoop
     public bool ShouldCancelHoldE(EntityId guest, EntityId host, WorldPosition? hostPosition)
     {
         if (!_players.TryGetValue(guest, out var p)) return false;
+        if (!Settled(p, _clock.NowMs)) return false;   // their settings are on the way: their own hold-E goes through
         if (_game.PositionOf(guest) is not { } from) return false;
         if ((hostPosition ?? _game.PositionOf(host)) is not { } at) return false;
         if (Classify(host) is not { Rule: { } rule }) return false;

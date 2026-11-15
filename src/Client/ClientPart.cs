@@ -292,8 +292,10 @@ internal sealed class ClientPart(Data data, Server.LootServer server)
         }
         // hosted: the server part registers its config at ServerStarted; hand the settings over to each hosted world,
         // again every 250 ms until it has them (the host's player may not exist yet at the first try, and the server part
-        // does nothing for the host until they are there). Settings too large for a message are never handed over.
-        if (KClient.IsHosting && server.ServerConfig is not null && !KClient.LocalPlayer.IsNone && !_link.TooLarge &&
+        // does nothing for the host until they are there). Settings too large for a message are never handed over
+        // (SendIfChanged refuses them each time); TooLarge is no guard here: it stays set after a refused edit while
+        // the saved settings fit.
+        if (KClient.IsHosting && server.ServerConfig is not null && !KClient.LocalPlayer.IsNone &&
             _link.HandedSession != KClient.ServerWorldSession && Environment.TickCount64 >= _nextHandoffMs)
         {
             _nextHandoffMs = Environment.TickCount64 + 250;

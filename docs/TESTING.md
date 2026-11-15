@@ -9,8 +9,9 @@ rules and what a dedicated server can show without a player. Everything below ne
    in the Kiln Launcher's Library and switch it on in your profile (Kiln 0.2.0-dev.28 or later).
 3. Set `"counterLog": true` in `kiln-auto-loot-server.json` (it is not in the F8 window): in the Kiln Launcher, Kiln
    Auto Loot > Configs > kiln-auto-loot-server, or by hand in your profile's config folder (`kiln/config/` without a
-   profile). Kiln picks a change up while the game runs. The mod then writes its counters every 5 s and its whole
-   classification to `kiln/data/kiln-auto-loot/` (`kiln-auto-loot.log`, the classification dump).
+   profile). The mod then writes its counters every 5 s to `kiln/data/kiln-auto-loot/kiln-auto-loot.log`, from the
+   moment Kiln picks the change up (also while the game runs), and its whole classification (the classification dump,
+   same folder) when a world starts with it on.
 4. Host a world (a test world, or a copy) and walk somewhere with loot: a ruin with barrels, a camp, bushes, a farm.
 
 ## 1. Window and keys
