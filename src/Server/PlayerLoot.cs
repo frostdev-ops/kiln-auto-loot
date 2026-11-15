@@ -48,6 +48,19 @@ internal sealed class PlayerLoot
     /// <summary>The item the player last took by hand (a single pickup), 0 = none yet.</summary>
     public uint HandItem { get; set; }
 
+    /// <summary>A single pickup the player asked for by hand, not yet seen arriving: the item and until when.</summary>
+    public (uint Item, long Until)? HandPending { get; set; }
+
+    /// <summary>The command budget: the start of the current second and the commands in it.</summary>
+    public long? CommandWindowStart { get; set; }
+    public int CommandCount { get; set; }
+
+    /// <summary>A command that changed nothing was answered already (no second answer until something changes).</summary>
+    public bool QuietAnswered { get; set; }
+
+    /// <summary><see cref="Settings"/> as JSON, written once per change.</summary>
+    public string? EffectiveJson { get; set; }
+
     /// <summary>The gather focus item, 0 = off. Dropped when the player leaves and at the world's stop.</summary>
     public uint Focus { get; set; }
 

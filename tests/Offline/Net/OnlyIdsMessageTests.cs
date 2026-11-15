@@ -63,6 +63,59 @@ public sealed class OnlyIdsMessageTests
     }
 
     [Fact]
+    public void The_channel_version_changed_with_the_wire_layout()
+    {
+        // test build 1 sent JSON and skip ids only, on channel "1": this decoder cannot read that, so the version moved
+        var old = Bytes(w =>
+        {
+            w.String("{}").Int32(1);
+            w.UInt32(6);
+        });
+        Assert.ThrowsAny<Exception>(() =>
+        {
+            var r = new NetReader(old);
+            PersonalMsg.Decode(ref r);
+        });
+        Assert.Equal("2", Channels.Version);
+    }
+
+    [Fact]
+    public void All_three_lists_at_their_bounds_fit_one_message()
+    {
+        string List(string prefix, string suffix) => string.Join(",", Enumerable.Range(0, KilnAutoLoot.Core.SkipListBounds.MaxEntries)
+            .Select(i => prefix + i.ToString("D3") + new string('x', KilnAutoLoot.Core.SkipListBounds.MaxEntryLength - prefix.Length - 3 - suffix.Length) + suffix));
+        var s = new KilnAutoLoot.Core.PersonalSettings
+        {
+            SkipList = List("=", ""), OnlyList = List("#", ""), CarryLimits = List("=", ":9999999"),
+        };
+        Assert.True(KilnAutoLoot.Core.SettingsRules.ListsWithin(s));
+        Assert.True(KilnAutoLoot.Core.SettingsRules.FitsMessage(s));
+        var json = SettingsJson.Write(s);
+        var many = Enumerable.Range(0, Channels.MaxSkipIds).Select(i => (uint)i).ToArray();
+        var bytes = Bytes(new PersonalMsg(json, many, many).Encode);
+        Assert.True(bytes.Length <= Channels.MaxMessageBytes);
+        Assert.True(Channels.MaxMessageBytes < 256 * 1024);
+        var r = new NetReader(bytes);
+        Assert.Equal(json, PersonalMsg.Decode(ref r).Json);
+    }
+
+    [Fact]
+    public void Settings_over_the_json_bound_do_not_fit_and_the_server_keeps_the_previous_ones()
+    {
+        // escaped characters make the JSON longer than the lists' own bounds allow for
+        string List() => string.Join(",", Enumerable.Range(0, KilnAutoLoot.Core.SkipListBounds.MaxEntries)
+            .Select(_ => "=" + new string('<', KilnAutoLoot.Core.SkipListBounds.MaxEntryLength - 1)));
+        var s = new KilnAutoLoot.Core.PersonalSettings { SkipList = List(), OnlyList = List(), CarryLimits = List(), Radius = 7 };
+        Assert.True(KilnAutoLoot.Core.SettingsRules.ListsWithin(s));
+        Assert.False(KilnAutoLoot.Core.SettingsRules.FitsMessage(s));
+
+        var rig = new KilnAutoLoot.Offline.LootServerTests.LoopRig(x => x.Radius = 12);
+        rig.Loop.SetPersonal(rig.Player, s);
+        Assert.Equal(12f, rig.Loop.SettingsOf(rig.Player).Radius);
+        Assert.Single(rig.KeyLines, l => l.Contains("bytes as JSON"));
+    }
+
+    [Fact]
     public void ServerInfoMsg_carries_line_of_sight_and_the_focus_item()
     {
         var m = new ServerInfoMsg("{}", "{}", 9999, false, true, true, LineOfSight: true, FocusItem: 77);

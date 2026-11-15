@@ -54,6 +54,8 @@ internal sealed class LootServer(Data data)
     }
     private long _nextCounterLine, _lastCountedScans = -1, _nextErrorLog;
     private (EntityId Player, PersonalSettings Settings)? _hostPersonal;
+    private ServerLimits? _limitsFor;   // the limits _limitsJson was written for
+    private string? _limitsJson;
     private (EntityId Player, bool Open)? _hostWindow;
 
     private static bool IsServerWorld => Kiln.Client.IsDedicatedServer || Kiln.Client.IsHosting;
@@ -69,6 +71,7 @@ internal sealed class LootServer(Data data)
         _subscriptions.Add(Events.On<ServerStartedEvent>(e => StartWorld($"ServerStarted ({e.Source})")));
         _subscriptions.Add(Events.On<ServerStoppingEvent>(e => StopWorld($"ServerStopping ({e.Reason})")));
         _subscriptions.Add(Events.On<LootEvent>(OnLoot));
+        _subscriptions.Add(Events.On<ItemPickupEvent>(OnItemPickup));
         AutoLootMod.Hub.PersonalReceived += OnPersonal;
         AutoLootMod.Hub.ClientStateReceived += OnClientState;
         AutoLootMod.Hub.CommandReceived += OnCommand;
@@ -188,6 +191,7 @@ internal sealed class LootServer(Data data)
         if (_loop is not null) KeyLine($"world stops ({why}): {_loop.Counters.Summary()}");
         _loop?.Reset();
         _loop = null;
+        _limitsFor = null;
         _badJsonLogged.Clear();
     }
 
@@ -195,6 +199,7 @@ internal sealed class LootServer(Data data)
     {
         if (!_running || _loop is null || _config is null) return;
         var s = _config.Value;
+        _limitsFor = null;   // the limits may have changed in place: write their JSON again
         if (s.Enabled != _enabled) KeyLine($"enabled={s.Enabled}: takes effect when the world starts again");
         if (!_enabled) return;
         WorldData.Apply(s);
@@ -240,8 +245,7 @@ internal sealed class LootServer(Data data)
     private void RunCommand(EntityId player, CommandKind kind)
     {
         if (!_running || _loop is null) return;
-        if (_enabled && _looting) _loop.Command(player, kind);
-        SendInfo(player);
+        if (_loop.Command(player, kind, apply: _enabled && _looting).Reply) SendInfo(player);
     }
 
     private void ApplySettings()
@@ -269,7 +273,12 @@ internal sealed class LootServer(Data data)
     {
         if (_loop is null || _config is null) return;
         var s = _config.Value;
-        var msg = new ServerInfoMsg(SettingsJson.Write(_loop.SettingsOf(player)), SettingsJson.WriteLimits(s.Limits),
+        if (!ReferenceEquals(_limitsFor, s.Limits))
+        {
+            _limitsFor = s.Limits;
+            _limitsJson = SettingsJson.WriteLimits(s.Limits);
+        }
+        var msg = new ServerInfoMsg(_loop.EffectiveJsonOf(player), _limitsJson!,
             s.MaxStack, s.BackpackCheat, Kiln.Client.IsHosting, _enabled, LineOfSight: _loop.SightAvailable,
             FocusItem: _loop.FocusOf(player));
         if (IsHostPlayer(player)) LocalServerInfo?.Invoke(msg);
@@ -321,8 +330,8 @@ internal sealed class LootServer(Data data)
                 if (_config?.Value.CounterLog == true && _loop.Counters.HoldECanceled <= 60)
                     _diag?.Write($"hold-E stopped: player {e.Guest}, target {e.Host}");
             }
-            else if (!e.LootAll && _loop.HandPickupItem(e.Host) is { } item)
-                _loop.TookByHand(e.Guest, item);   // a single pickup by hand: what a gather focus would be on
+            else if (!e.Canceled)
+                _loop.HandLoot(e.Guest, e.Host, e.LootAll);   // a single pickup by hand: confirmed when the item arrives
         }
         catch (Exception ex)
         {
@@ -332,6 +341,13 @@ internal sealed class LootServer(Data data)
                 Log?.Error(ex, "Kiln Auto Loot: the hold-E check failed");
             }
         }
+    }
+
+    /// <summary>Items arrived in a player's inventory: confirms a pending hand take (gather focus). Tick thread.</summary>
+    private void OnItemPickup(ItemPickupEvent e)
+    {
+        if (!_running || !_looting || _loop is null) return;
+        _loop.ItemReceived(e.Receiver, e.ItemId);
     }
 
     /// <summary>Smash.Run once per second per player (the smash rhythm).</summary>

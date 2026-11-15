@@ -81,6 +81,7 @@ internal sealed class ProfileBar(SettingsLink link, WindowKeys keys)
             ui.Tooltip(T("profileResetHelp"));
         }
         if (link.ProfileError is { } error) ui.TextWrapped(Texts.Format("profileSaveError", german, error));
+        if (link.SwitchError is { } failed) ui.TextWrapped(Texts.Format(failed.TextKey, german, failed.Detail ?? ""));
 
         if (_mode != EditMode.None) DrawEdit(ui, fs, german, book);
     }

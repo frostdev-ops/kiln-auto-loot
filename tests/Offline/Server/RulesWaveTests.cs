@@ -13,7 +13,7 @@ public sealed class RulesWaveTests
 {
     private static readonly string[] Pickup = [];
     private static readonly string[] Inv = [LootLoop.InventoryComponent];
-    private const uint Twigs = 1, Stone = 2, Fibre = 3, Apple = 6, Sword = 9;
+    private const uint Twigs = 1, Stone = 2, Fibre = 3, Apple = 6, Flint = 7, Sword = 9;
 
     private static LoopRig Rig(Action<PersonalSettings> settings, ItemTable? items = null, uint[]? onlyIds = null) =>
         new(s => { s.OpenDelay = 0; settings(s); }, items: items, onlyIds: onlyIds);
@@ -136,19 +136,92 @@ public sealed class RulesWaveTests
     }
 
     [Fact]
-    public void A_bush_is_harvested_only_when_its_yield_has_room()
+    public void Slots_of_one_container_share_a_group_limit()
+    {
+        var rig = Rig(s => s.CarryLimits = "#Materials:35");
+        rig.Game.BagSlots = [new BagSlot(Stone, 30, true)];
+        var chest = rig.Game.Add(LoopRig.Chest, 4, Inv);
+        chest.Slots = [new ContainerSlot(11, Twigs, 8), new ContainerSlot(12, Stone, 8)];
+        rig.ScanAfter(100);
+        Assert.Empty(rig.Game.Loots);
+        var moved = rig.Game.Moves.Select((m, i) => rig.Game.MoveCounts[i] == 0 ? 8 : rig.Game.MoveCounts[i]).Sum();
+        Assert.Equal(5, moved);
+    }
+
+    [Fact]
+    public void Keep_free_slots_stops_a_container_before_it_crosses_into_the_kept_slots()
+    {
+        var rig = Rig(s => s.KeepFreeSlots = 2);
+        rig.Game.BagSlots = [];
+        rig.Game.FreeSlotCount = 3;                // one usable slot above the two kept
+        var chest = rig.Game.Add(LoopRig.Chest, 4, Inv);
+        chest.Slots = [new ContainerSlot(11, Apple, 2), new ContainerSlot(12, Flint, 3)];
+        rig.ScanAfter(100);
+        Assert.Empty(rig.Game.Loots);
+        Assert.Equal([11ul], rig.Game.Moves.Select(m => m.Slot).ToArray());
+    }
+
+    [Fact]
+    public void Keep_free_slots_leaves_a_pickup_that_needs_more_than_the_usable_slots()
+    {
+        var rig = Rig(s => s.KeepFreeSlots = 2);
+        rig.Game.BagSlots = [];
+        rig.Game.FreeSlotCount = 3;
+        var big = rig.Game.Add(LoopRig.Twig, 2, Pickup, pickupItem: Twigs);
+        big.PickupAmount = 120;                    // three stacks of 50, one slot usable
+        var fits = rig.Game.Add(LoopRig.Twig, 3, Pickup, pickupItem: Stone);
+        fits.PickupAmount = 50;
+        rig.ScanAfter(100);
+        Assert.False(Took(rig, big));
+        Assert.True(Took(rig, fits));
+    }
+
+    [Fact]
+    public void Under_a_bag_rule_a_bush_is_harvested_only_when_its_live_contents_fit_whole()
     {
         var rig = Rig(s => s.FillCarriedStacks = true, items: WithFibreStack());
-        rig.Game.BagSlots = [new BagSlot(Fibre, 10, true)];
+        rig.Game.BagSlots = [new BagSlot(Fibre, 40, true)];
+        var bush = rig.Game.Add(LoopRig.Bush, 2, Inv);
+        bush.Slots = [new ContainerSlot(1, Fibre, 10)];
+        rig.ScanFor(500);
+        Assert.True(Took(rig, bush));             // 10 into the 40 of 50
+
+        var over = Rig(s => s.FillCarriedStacks = true, items: WithFibreStack());
+        over.Game.BagSlots = [new BagSlot(Fibre, 45, true)];
+        var bush2 = over.Game.Add(LoopRig.Bush, 2, Inv);
+        bush2.Slots = [new ContainerSlot(1, Fibre, 10)];
+        over.ScanFor(500);
+        Assert.False(Took(over, bush2));          // 10 do not fit into 5
+
+        var unread = Rig(s => s.FillCarriedStacks = true, items: WithFibreStack());
+        unread.Game.BagSlots = [new BagSlot(Fibre, 10, true)];
+        var bush3 = unread.Game.Add(LoopRig.Bush, 2, Inv);   // no readable contents
+        unread.ScanFor(500);
+        Assert.False(Took(unread, bush3));
+        Assert.True(unread.Loop.Counters.HarvestUnread > 0);
+    }
+
+    [Fact]
+    public void A_harvest_reserves_its_whole_contents_for_the_rest_of_the_scan()
+    {
+        var rig = Rig(s => s.CarryLimits = "=Plant Fiber:12", items: WithFibreStack());
+        rig.Game.BagSlots = [];
+        var a = rig.Game.Add(LoopRig.Bush, 2, Inv);
+        a.Slots = [new ContainerSlot(1, Fibre, 8)];
+        var b = rig.Game.Add(LoopRig.Bush, 3, Inv);
+        b.Slots = [new ContainerSlot(1, Fibre, 8)];
+        rig.ScanAfter(100);
+        Assert.True(Took(rig, a));
+        Assert.False(Took(rig, b));               // 8 + 8 > 12
+    }
+
+    [Fact]
+    public void Without_a_bag_rule_a_harvest_is_not_read()
+    {
+        var rig = Rig(s => s.CarryLimits = "=Apple:1");   // names nothing the bush gives
         var bush = rig.Game.Add(LoopRig.Bush, 2, Inv);
         rig.ScanFor(500);
         Assert.True(Took(rig, bush));
-
-        var none = Rig(s => s.FillCarriedStacks = true, items: WithFibreStack());
-        none.Game.BagSlots = [];
-        var bush2 = none.Game.Add(LoopRig.Bush, 2, Inv);
-        none.ScanFor(500);
-        Assert.False(Took(none, bush2));
     }
 
     private static ItemTable WithFibreStack() =>
@@ -289,13 +362,13 @@ public sealed class RulesWaveTests
     public void Focus_from_a_hand_take_toggles_on_and_off_and_clears()
     {
         var rig = Rig(_ => { });
-        Assert.Equal(0u, rig.Loop.Command(rig.Player, CommandKind.ToggleFocus));   // nothing taken by hand yet
+        Assert.Equal(0u, rig.Loop.Command(rig.Player, CommandKind.ToggleFocus).Focus);   // nothing taken by hand yet
 
         var hand = rig.Game.Add(LoopRig.Twig, 1, Pickup, pickupItem: Twigs);
         Assert.Equal(Twigs, rig.Loop.HandPickupItem(hand.Id));
         rig.Loop.TookByHand(rig.Player, Twigs);
         rig.Game.Remove(hand);
-        Assert.Equal(Twigs, rig.Loop.Command(rig.Player, CommandKind.ToggleFocus));
+        Assert.Equal(Twigs, rig.Loop.Command(rig.Player, CommandKind.ToggleFocus).Focus);
         Assert.Equal(Twigs, rig.Loop.FocusOf(rig.Player));
 
         var stone = rig.Game.Add(LoopRig.Twig, 2, Pickup, pickupItem: Stone);
@@ -305,10 +378,11 @@ public sealed class RulesWaveTests
         Assert.True(Took(rig, twig));
         Assert.True(rig.Loop.Counters.NotFocus > 0);
 
-        Assert.Equal(0u, rig.Loop.Command(rig.Player, CommandKind.ToggleFocus));   // again: off
-        Assert.Equal(Twigs, rig.Loop.Command(rig.Player, CommandKind.ToggleFocus));
-        Assert.Equal(0u, rig.Loop.Command(rig.Player, CommandKind.ClearFocus));
-        Assert.Equal(0u, rig.Loop.Command(rig.Player, CommandKind.ClearFocus));
+        rig.Clock.NowMs += 1000;                  // a new second of the command budget
+        Assert.Equal(0u, rig.Loop.Command(rig.Player, CommandKind.ToggleFocus).Focus);   // again: off
+        Assert.Equal(Twigs, rig.Loop.Command(rig.Player, CommandKind.ToggleFocus).Focus);
+        Assert.Equal(0u, rig.Loop.Command(rig.Player, CommandKind.ClearFocus).Focus);
+        Assert.Equal(0u, rig.Loop.Command(rig.Player, CommandKind.ClearFocus).Focus);
     }
 
     [Fact]
@@ -321,7 +395,7 @@ public sealed class RulesWaveTests
         Assert.Equal(Twigs, rig.Loop.FocusOf(rig.Player));
         rig.Loop.Leave(rig.Player);
         Assert.Equal(0u, rig.Loop.FocusOf(rig.Player));
-        Assert.Equal(0u, rig.Loop.Command(rig.Player, CommandKind.ToggleFocus));   // the hand item went too
+        Assert.Equal(0u, rig.Loop.Command(rig.Player, CommandKind.ToggleFocus).Focus);   // the hand item went too
 
         rig.Loop.TookByHand(rig.Player, Twigs);
         rig.Loop.Command(rig.Player, CommandKind.ToggleFocus);
@@ -339,6 +413,82 @@ public sealed class RulesWaveTests
         chest.Slots = [new ContainerSlot(11, Twigs, 5), new ContainerSlot(12, Stone, 3)];
         rig.ScanAfter(100);
         Assert.Equal([11ul], rig.Game.Moves.Select(m => m.Slot).ToArray());
+    }
+
+    [Fact]
+    public void The_hand_item_comes_from_an_item_that_actually_arrived()
+    {
+        var rig = Rig(_ => { });
+        var twig = rig.Game.Add(LoopRig.Twig, 1, Pickup, pickupItem: Twigs);
+        rig.Loop.HandLoot(rig.Player, twig.Id, lootAll: false);
+        rig.Loop.ItemReceived(rig.Player, Twigs);              // the twigs arrived
+        Assert.Equal(Twigs, rig.Loop.Command(rig.Player, CommandKind.ToggleFocus).Focus);
+        rig.Loop.Command(rig.Player, CommandKind.ClearFocus);
+
+        var sword = rig.Game.Add(LoopRig.Twig, 1, Pickup, pickupItem: Sword);
+        rig.Loop.HandLoot(rig.Player, sword.Id, lootAll: false);   // refused: a full bag, a zone; nothing arrives
+        rig.Clock.NowMs += LootLoop.HandTakeWindowMs + 1;
+        rig.Loop.ItemReceived(rig.Player, Sword);              // too late to belong to that take
+        Assert.Equal(Twigs, rig.Loop.Command(rig.Player, CommandKind.ToggleFocus).Focus);
+    }
+
+    [Fact]
+    public void Our_own_takes_loot_alls_and_other_players_items_never_set_the_hand_item()
+    {
+        var rig = Rig(_ => { });
+        var stone = rig.Game.Add(LoopRig.Twig, 1, Pickup, pickupItem: Stone);
+        rig.Loop.ItemReceived(rig.Player, Stone);              // the mod's own take: nothing pending
+        rig.Loop.HandLoot(rig.Player, stone.Id, lootAll: true);   // a loot-all by hand: not a single pickup
+        rig.Loop.ItemReceived(rig.Player, Stone);
+        var other = rig.Game.AddPlayer(2, 0, 0);
+        rig.Loop.Join(other);
+        rig.Loop.HandLoot(rig.Player, stone.Id, lootAll: false);
+        rig.Loop.ItemReceived(other, Stone);                   // another player's inventory
+        rig.Loop.ItemReceived(rig.Player, Apple);              // a different item
+        Assert.Equal(0u, rig.Loop.Command(rig.Player, CommandKind.ToggleFocus).Focus);
+        rig.Loop.ItemReceived(rig.Player, Stone);              // now it arrives
+        Assert.Equal(Stone, rig.Loop.Command(rig.Player, CommandKind.ToggleFocus).Focus);
+    }
+
+    [Fact]
+    public void Commands_are_budgeted_per_player_and_redundant_answers_coalesced()
+    {
+        var rig = Rig(_ => { });
+        rig.Loop.TookByHand(rig.Player, Twigs);
+        Assert.True(rig.Loop.Command(rig.Player, CommandKind.ClearFocus).Reply);    // nothing changed: answered once
+        Assert.False(rig.Loop.Command(rig.Player, CommandKind.ClearFocus).Reply);   // and not again
+        var on = rig.Loop.Command(rig.Player, CommandKind.ToggleFocus);
+        Assert.Equal((Twigs, true), (on.Focus, on.Reply));                           // a change: answered
+        Assert.True(rig.Loop.Command(rig.Player, CommandKind.ClearFocus).Reply);
+        var dropped = rig.Loop.Command(rig.Player, CommandKind.ToggleFocus);         // the fifth in this second
+        Assert.Equal((0u, false), (dropped.Focus, dropped.Reply));
+        Assert.Equal(1, rig.Loop.Counters.CommandsDropped);
+
+        rig.Clock.NowMs += 1000;
+        Assert.Equal(Twigs, rig.Loop.Command(rig.Player, CommandKind.ToggleFocus).Focus);
+
+        rig.Loop.Leave(rig.Player);                            // the budget and the answers go with the player
+        Assert.True(rig.Loop.Command(rig.Player, CommandKind.ClearFocus).Reply);
+    }
+
+    [Fact]
+    public void A_world_with_the_mod_off_answers_commands_without_changing_focus()
+    {
+        var rig = Rig(_ => { });
+        rig.Loop.TookByHand(rig.Player, Twigs);
+        var r = rig.Loop.Command(rig.Player, CommandKind.ToggleFocus, apply: false);
+        Assert.Equal((0u, true), (r.Focus, r.Reply));
+    }
+
+    [Fact]
+    public void The_effective_json_is_written_once_per_change()
+    {
+        var rig = Rig(s => s.Radius = 12);
+        var a = rig.Loop.EffectiveJsonOf(rig.Player);
+        Assert.Same(a, rig.Loop.EffectiveJsonOf(rig.Player));
+        Assert.Equal(12f, SettingsJson.Read(a)!.Radius);
+        rig.Loop.SetPersonal(rig.Player, new PersonalSettings { Radius = 9 });
+        Assert.Equal(9f, SettingsJson.Read(rig.Loop.EffectiveJsonOf(rig.Player))!.Radius);
     }
 
     // ---------------------------------------------------------------- hold-E guard

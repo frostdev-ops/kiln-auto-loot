@@ -226,47 +226,66 @@ internal sealed class ProfileBook
         }
     }
 
-    /// <summary>The book from the file's text, or null when it is not a profile file of ours (bad JSON, another format,
-    /// no usable profile). Profiles without an id or with an id seen before are dropped; an unknown active profile
-    /// becomes the first one; a missing or bad settings object reads as the defaults.</summary>
+    /// <summary>The book from the file's text, or null when it is not a profile file of ours (bad JSON, a property
+    /// written twice at the top, another format, no usable profile). Profiles without an id, with an id seen before or
+    /// with a property written twice are dropped; an unknown active profile becomes the first one; a missing or bad
+    /// settings object reads as the defaults.</summary>
     public static ProfileBook? FromJson(string? json)
     {
         if (string.IsNullOrWhiteSpace(json)) return null;
-        JsonObject? root;
+        // a JsonObject builds its properties when first read, and a property written twice throws only then: every read
+        // of the document is guarded, not just the parse
         try
         {
-            root = JsonNode.Parse(json) as JsonObject;
+            return Interpret(JsonNode.Parse(json) as JsonObject);
         }
-        catch (JsonException)
+        catch (Exception e) when (e is JsonException or ArgumentException or InvalidOperationException)
         {
             return null;
         }
+    }
+
+    private static ProfileBook? Interpret(JsonObject? root)
+    {
         if (root is null || Str(root["format"]) != Format || root["profiles"] is not JsonArray list) return null;
         var book = new ProfileBook();
         foreach (var node in list)
         {
-            if (node is not JsonObject o || ProfileKeys.SafeId(Str(o["id"])) is not { } id) continue;
-            if (book._profiles.Count >= MaxProfiles || book.Find(id) is not null) continue;
-            PersonalSettings settings;
             try
             {
-                settings = o["settings"]?.Deserialize<PersonalSettings>(JsonOptions) ?? new PersonalSettings();
+                book.Read(node);
             }
-            catch (Exception e) when (e is JsonException or NotSupportedException or InvalidOperationException)
+            catch (Exception e) when (e is JsonException or ArgumentException or InvalidOperationException)
             {
-                settings = new PersonalSettings();
+                // this entry only: the others still count
             }
-            var key = ProfileKeys.Normalize(Str(o["key"]));
-            if (key is not null && book._profiles.Any(p => ProfileKeys.Same(p.Key, key))) key = null;
-            var name = Name(Str(o["name"]));
-            if (name is null && !BuiltInProfiles.IsBuiltIn(id)) name = id;
-            book._profiles.Add(new Profile { Id = id, Name = name, Key = key, Settings = settings });
         }
         if (book._profiles.Count == 0) return null;
         var active = Str(root["active"]);
         book._active = book.Find(active ?? "") is not null ? active! : book._profiles[0].Id;
         book.Publish();
         return book;
+    }
+
+    /// <summary>One entry of the file's profile list (dropped when it has no usable id or the id is taken).</summary>
+    private void Read(JsonNode? node)
+    {
+        if (node is not JsonObject o || ProfileKeys.SafeId(Str(o["id"])) is not { } id) return;
+        if (_profiles.Count >= MaxProfiles || Find(id) is not null) return;
+        PersonalSettings settings;
+        try
+        {
+            settings = o["settings"]?.Deserialize<PersonalSettings>(JsonOptions) ?? new PersonalSettings();
+        }
+        catch (Exception e) when (e is JsonException or NotSupportedException or InvalidOperationException or ArgumentException)
+        {
+            settings = new PersonalSettings();
+        }
+        var key = ProfileKeys.Normalize(Str(o["key"]));
+        if (key is not null && _profiles.Any(p => ProfileKeys.Same(p.Key, key))) key = null;
+        var name = Name(Str(o["name"]));
+        if (name is null && !BuiltInProfiles.IsBuiltIn(id)) name = id;
+        _profiles.Add(new Profile { Id = id, Name = name, Key = key, Settings = settings });
     }
 
     private static string? Str(JsonNode? n)
@@ -285,10 +304,15 @@ internal sealed class ProfileBook
 
     private Profile? Find(string id) => _profiles.FirstOrDefault(p => p.Id == id);
 
+    /// <summary>A new id that was never used: the id names the profile's Kiln key binding, and Kiln keeps a rebound key
+    /// for an id after its binding is gone, so a reused id would hand a deleted profile's key to a new one.</summary>
     private string NewId()
     {
-        for (var n = 1; ; n++)
-            if (Find("custom-" + n) is null) return "custom-" + n;
+        while (true)
+        {
+            var id = "p-" + Guid.NewGuid().ToString("N")[..12];
+            if (Find(id) is null) return id;
+        }
     }
 
     /// <summary>The next free "Profile N" number, for the window's New.</summary>

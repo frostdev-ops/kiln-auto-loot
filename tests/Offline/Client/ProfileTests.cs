@@ -148,16 +148,30 @@ public class ProfileBookTests
     {
         var book = Fresh();
         var id = book.Add("  Sticks  ", null, new PersonalSettings { FillCarriedStacks = true });
-        Assert.Equal("custom-1", id);
+        Assert.Equal(id, book.Active.Id);
         Assert.Equal("Sticks", book.Active.Display(false));
         Assert.True(book.SettingsOf(id!)!.FillCarriedStacks);
-        Assert.Equal("custom-2", book.Add("Two", null, new PersonalSettings()));
+        Assert.NotEqual(id, book.Add("Two", null, new PersonalSettings()));
         Assert.Null(book.Add("   ", null, new PersonalSettings()));
         var longId = book.Add(new string('x', 100), null, new PersonalSettings())!;
         Assert.Equal(ProfileBook.MaxNameLength, book.Active.Display(false).Length);
-        Assert.Equal("custom-3", longId);
+        Assert.Equal(longId, ProfileKeys.SafeId(longId));                  // the id is safe for the file and a binding
         Assert.NotNull(book.Add("Keyed", "F7", new PersonalSettings()));
         Assert.Null(book.Add("Other", "f7", new PersonalSettings()));    // that key is taken
+    }
+
+    [Fact]
+    public void An_id_is_never_used_again_after_a_delete()
+    {
+        // the id names the Kiln binding, and Kiln keeps a rebound key for an id: a new profile must not get the old one
+        var book = Fresh();
+        var first = book.Add("Sticks", "F7", new PersonalSettings())!;
+        Assert.True(book.Delete(first, new PersonalSettings(), out _));
+        var second = book.Add("Sticks", "F7", new PersonalSettings())!;
+        Assert.NotEqual(first, second);
+        Assert.NotEqual(ProfileKeys.BindingId(first), ProfileKeys.BindingId(second));
+        Assert.StartsWith("p-", second);
+        Assert.Equal(second, ProfileKeys.SafeId(second));
     }
 
     [Fact]
@@ -230,14 +244,40 @@ public class ProfileStoreTests : IDisposable
         var book = store.Load(new PersonalSettings(), "Mine", out var seeded, out var problem);
         Assert.True(seeded);
         Assert.Null(problem);
-        book.Add("Sticks", "Ctrl+3", new PersonalSettings { FillCarriedStacks = true });
+        var id = book.Add("Sticks", "Ctrl+3", new PersonalSettings { FillCarriedStacks = true });
         Assert.Null(store.Save(book));
         Assert.False(File.Exists(store.FilePath + ".tmp"));
         var again = store.Load(new PersonalSettings(), "Mine", out seeded, out problem);
         Assert.False(seeded);
         Assert.Null(problem);
         Assert.Equal(book.Snapshot.Profiles, again.Snapshot.Profiles);
-        Assert.Equal("custom-1", again.Active.Id);
+        Assert.Equal(id, again.Active.Id);
+    }
+
+    [Fact]
+    public void A_property_written_twice_at_the_top_makes_the_file_unusable()
+    {
+        Directory.CreateDirectory(_dir);
+        var store = new ProfileStore(_dir);
+        var text = "{\"format\":\"kiln-auto-loot-profiles\",\"version\":1,\"active\":\"a\",\"active\":\"b\"," +
+                   "\"profiles\":[{\"id\":\"a\",\"name\":\"A\"}]}";
+        File.WriteAllText(store.FilePath, text);
+        Assert.Null(ProfileBook.FromJson(text));
+        var book = store.Load(new PersonalSettings(), "Mine", out var seeded, out var problem);
+        Assert.True(seeded);
+        Assert.NotNull(problem);
+        Assert.Equal(text, File.ReadAllText(store.FilePath + ".bad"));
+        Assert.Equal(BuiltInProfiles.Ids, book.Snapshot.Profiles.Select(p => p.Id));
+    }
+
+    [Fact]
+    public void A_profile_with_a_property_written_twice_is_skipped_and_the_others_stay()
+    {
+        var text = "{\"format\":\"kiln-auto-loot-profiles\",\"version\":1,\"active\":\"b\",\"profiles\":[" +
+                   "{\"id\":\"a\",\"id\":\"x\",\"name\":\"A\"},{\"id\":\"b\",\"name\":\"B\",\"name\":\"C\"},{\"id\":\"c\",\"name\":\"Kept\"}]}";
+        var book = ProfileBook.FromJson(text)!;
+        Assert.Equal(["c"], book.Snapshot.Profiles.Select(p => p.Id));
+        Assert.Equal("c", book.Active.Id);
     }
 
     [Fact]

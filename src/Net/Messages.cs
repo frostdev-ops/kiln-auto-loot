@@ -11,9 +11,12 @@ namespace KilnAutoLoot.Net;
 internal static class Channels
 {
     public const string Name = "kiln-auto-loot:main";
-    public const string Version = "1";
-    /// <summary>The whole PersonalSettings as JSON: the ignore list can be long, so allow 64 KiB.</summary>
-    public const int MaxJson = 64 * 1024;
+    /// <summary>"2": PersonalMsg carries OnlyIds. A game with test build 1 ("1") then has no channel with this server and
+    /// gets the server's defaults instead of failing to decode every message.</summary>
+    public const string Version = "2";
+    /// <summary>The whole PersonalSettings as JSON: the skip list, only list and carry limits can each be long, so allow
+    /// 128 KiB (SettingsRules.FitsMessage checks a player's settings against it).</summary>
+    public const int MaxJson = SettingsRules.MaxJsonBytes;
     /// <summary>At most this many item ids per list (skip list, only list) in one PersonalMsg (the game has a few
     /// thousand items).</summary>
     public const int MaxSkipIds = 8192;

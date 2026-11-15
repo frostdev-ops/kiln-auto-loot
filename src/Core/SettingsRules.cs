@@ -42,5 +42,22 @@ public static class SettingsRules
     public static bool ListsWithin(PersonalSettings s) =>
         SkipListBounds.Within(s.SkipList) && SkipListBounds.Within(s.OnlyList) && SkipListBounds.Within(s.CarryLimits);
 
+    /// <summary>The most UTF-8 bytes the settings may take as JSON in one PersonalMsg (Net.Channels.MaxJson).</summary>
+    public const int MaxJsonBytes = 128 * 1024;
+
+    /// <summary>The JSON form of the settings on the network (camelCase keys): Net.SettingsJson writes and reads with it.</summary>
+    internal static readonly System.Text.Json.JsonSerializerOptions JsonOptions = new()
+    {
+        PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase,
+        PropertyNameCaseInsensitive = true,
+        NumberHandling = System.Text.Json.Serialization.JsonNumberHandling.AllowNamedFloatingPointLiterals,
+    };
+
+    /// <summary>The settings, written as they cross the network, fit one PersonalMsg's JSON (<see cref="MaxJsonBytes"/>
+    /// bytes of UTF-8). A player's settings that do not are refused whole on the server like lists over their bounds;
+    /// the window checks before it saves or sends.</summary>
+    public static bool FitsMessage(PersonalSettings s) =>
+        System.Text.Encoding.UTF8.GetByteCount(System.Text.Json.JsonSerializer.Serialize(s, JsonOptions)) <= MaxJsonBytes;
+
     private static float Range(float v, float lo, float hi) => float.IsNaN(v) || v < lo ? lo : v > hi ? hi : v;
 }

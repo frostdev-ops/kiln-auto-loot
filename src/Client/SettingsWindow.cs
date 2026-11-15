@@ -143,6 +143,7 @@ internal sealed class SettingsWindow(Data data, SettingsLink link, WindowKeys ke
         ui.Separator();
         ui.TextDisabled(T("footer"));
         if (link.SaveError is { } error) ui.TextWrapped(error);
+        if (link.TooLarge) ui.TextWrapped(T("settingsTooLarge"));
         if (restartPending) ui.Text(Orange, T("restartNote"));
         ui.Spacing();
         if (ui.Button(string.Format(T("close"), keys.Menu()) + "###close")) Close();
@@ -160,10 +161,15 @@ internal sealed class SettingsWindow(Data data, SettingsLink link, WindowKeys ke
         {
             var name = data.Items.TryGet(item, out var row) ? ItemTable.DisplayOf(row, _german) : "#" + item;
             ui.Text(OnGreen, Texts.Format("focusStatus", _german, name, keys.Focus()));
+            ui.Tooltip(T("focusHelp"));
             ui.SameLine();
             if (ui.SmallButton(T("focusStop") + "###focusStop")) command(Net.CommandKind.ClearFocus);
         }
-        else ui.TextDisabled(Texts.Format("focusKey", _german, keys.Focus()));
+        else
+        {
+            ui.TextDisabled(Texts.Format("focusKey", _german, keys.Focus()));
+            ui.Tooltip(T("focusHelp"));
+        }
         if (effective is not null)
         {
             var capped = SettingValues.Differing(_edit, effective).Count();

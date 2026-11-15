@@ -6,7 +6,10 @@
 // hosted game the host's window changes them here through LootServer.ServerConfig.
 // The profiles (ProfileBook, profiles.json) live here too: the config always holds the active profile's settings, so
 // every change that reaches the config (window, F9, a hand edit) is copied into the active profile, and a switch puts
-// the chosen profile's settings into the config and hands them over like any other change.
+// the chosen profile's settings into the config and hands them over like any other change. A switch is all or
+// nothing: the destination is checked first, the copy into the profile is held off while its settings are written, and
+// the active profile changes only once every entry is saved; a failed write puts the previous settings back and leaves
+// both profiles as they were. Settings too large for one message to the server are refused (TooLarge).
 // Threads: every config call runs on the tick thread (Post); the window calls in from the render thread.
 using Kiln;
 using KilnAutoLoot.Core;
@@ -17,7 +20,9 @@ namespace KilnAutoLoot.Client;
 
 internal sealed class SettingsLink(Server.LootServer server)
 {
-    private ModConfig<PersonalSettings>? _cfg;
+    private ModConfig<PersonalSettings>? _kilnCfg;
+    private IPersonalConfig? _cfg;
+    private bool _following = true;            // tick thread: false while a switch writes its settings
     private string? _sentJson;                 // tick thread: what the server has from us
     private int _sentItemsVersion = -1;        // the item table the skip ids of that send came from
     private uint _sentSession = uint.MaxValue; // the hosted world it went to
@@ -40,6 +45,16 @@ internal sealed class SettingsLink(Server.LootServer server)
 
     /// <summary>The last save failure, or null after a save that worked (any thread).</summary>
     public volatile string? SaveError;
+
+    /// <summary>The last change (or the settings in the file) would not fit one message to the server: refused or not
+    /// sent; the window says so (any thread).</summary>
+    public volatile bool TooLarge;
+
+    /// <summary>Why the last profile switch (or reset, or delete of the active profile) failed: a Texts key and the
+    /// file's own error text, or null (any thread).</summary>
+    public sealed record SwitchProblem(string TextKey, string? Detail = null);
+
+    public volatile SwitchProblem? SwitchError;
 
     /// <summary>The server's answer, read once (joined): what it applies for this player, its limits, the world.</summary>
     public sealed record ServerView(PersonalSettings? Effective, ServerLimits? Limits, int MaxStack, bool BackpackCheat,
@@ -64,10 +79,17 @@ internal sealed class SettingsLink(Server.LootServer server)
     /// <summary>Tick thread (OnLoad).</summary>
     public void Start(string dataDirectory, Func<string> mineName)
     {
-        _cfg = Config.Register<PersonalSettings>(ConfigKind.Client);
-        _cfg.Changed += OnFileChanged;
+        _kilnCfg = Config.Register<PersonalSettings>(ConfigKind.Client);
+        _kilnCfg.Changed += OnFileChanged;
+        Attach(new KilnPersonalConfig(_kilnCfg), dataDirectory, mineName());
+    }
+
+    /// <summary>The settings file and the profiles (Start; the offline tests with a fake file). Tick thread.</summary>
+    internal void Attach(IPersonalConfig cfg, string dataDirectory, string mineName)
+    {
+        _cfg = cfg;
         _store = new ProfileStore(dataDirectory);
-        _book = _store.Load(_cfg.Value, mineName(), out var seeded, out var problem);
+        _book = _store.Load(_cfg.Value, mineName, out var seeded, out var problem);
         if (problem is not null) AutoLootMod.ModContext?.Log.Warn("profiles: " + problem);
         // the config is the active profile's settings: an edit made while the game was closed counts for it
         if (_book.UpdateActive(_cfg.Value) || seeded) SaveProfiles();
@@ -75,12 +97,14 @@ internal sealed class SettingsLink(Server.LootServer server)
 
     public void Stop()
     {
-        if (_cfg is not null) _cfg.Changed -= OnFileChanged;
+        if (_kilnCfg is not null) _kilnCfg.Changed -= OnFileChanged;
+        _kilnCfg = null;
         _cfg = null;
     }
 
     private void OnFileChanged(ConfigChangedEvent _)
     {
+        if (!_following) return;   // a switch is writing its settings: it reloads and sends once it is done
         FollowActive();
         PersonalChanged?.Invoke();
         SendIfChanged();
@@ -89,7 +113,7 @@ internal sealed class SettingsLink(Server.LootServer server)
     /// <summary>Tick thread: the settings in use go into the active profile (saved when that changed it).</summary>
     private void FollowActive()
     {
-        if (_cfg is not null && _book is not null && _book.UpdateActive(_cfg.Value)) SaveProfiles();
+        if (_following && _cfg is not null && _book is not null && _book.UpdateActive(_cfg.Value)) SaveProfiles();
     }
 
     private void SaveProfiles()
@@ -112,13 +136,61 @@ internal sealed class SettingsLink(Server.LootServer server)
         if (_book is not null) SwitchNow(_book.NextId());
     });
 
-    private void SwitchNow(string id)
+    /// <summary>Tick thread: the switch itself. True when the profile is active and its settings are in use; false
+    /// (SwitchError says why, nothing changed) otherwise.</summary>
+    internal bool SwitchNow(string id)
     {
-        if (_cfg is null || _book is null) return;
+        if (_cfg is null || _book is null || _book.SettingsOf(id) is not { } target) return false;
         FollowActive();   // whatever is in use belongs to the profile we leave
-        if (_book.Switch(id, _cfg.Value) is not { } next) return;
-        PutInUse(next);
+        target.Language = _cfg.Value.Language;
+        if (!TryPutInUse(target)) return false;
+        _book.Switch(id, _cfg.Value);
+        FollowActive();
+        SwitchError = null;
+        SaveProfiles();
+        ProfilesChanged?.Invoke();
         ProfileSwitched?.Invoke(_book.Active);
+        return true;
+    }
+
+    /// <summary>Tick thread: writes <paramref name="target"/> into the config without copying anything into a profile
+    /// meanwhile. The settings must be valid (in range, lists within their bounds, small enough for one message), and
+    /// every entry must be saved; else the previous settings are written back and SwitchError says why.</summary>
+    private bool TryPutInUse(PersonalSettings target)
+    {
+        if (_cfg is null) return false;
+        if (Invalid(target) is { } why)
+        {
+            SwitchError = new(why);
+            return false;
+        }
+        var before = _cfg.Value.Clone();
+        _following = false;
+        try
+        {
+            var error = Apply(_cfg, SettingValues.Changed(_cfg.Value, target));
+            if (error is null && SettingValues.Changed(_cfg.Value, target).Count == 0) return true;
+            SwitchError = new("profileWriteFailed", error ?? "");
+            var back = Apply(_cfg, SettingValues.Changed(_cfg.Value, before));
+            SaveError = back;   // null when the previous settings are back in the file
+            return false;
+        }
+        finally
+        {
+            _following = true;
+            PersonalChanged?.Invoke();
+            SendIfChanged();
+        }
+    }
+
+    /// <summary>Why a profile's settings cannot be put in use as they are (a Texts key), or null when they can.</summary>
+    internal static string? Invalid(PersonalSettings s)
+    {
+        var clamped = SettingsRules.Clamp(s, new ServerLimits());
+        if (SettingValues.Changed(s, clamped).Count > 0) return "profileOutOfRange";
+        if (!SettingsRules.ListsWithin(s)) return "profileListTooLong";
+        if (!SettingsRules.FitsMessage(s)) return "profileTooLarge";
+        return null;
     }
 
     /// <summary>A new profile from the settings in use, made active.</summary>
@@ -126,19 +198,41 @@ internal sealed class SettingsLink(Server.LootServer server)
 
     public void RenameProfile(string id, string name, string? key) => EditProfiles(book => book.Rename(id, name, key));
 
-    public void DeleteProfile(string id) => EditProfiles(book =>
-    {
-        if (!book.Delete(id, _cfg!.Value, out var apply)) return false;
-        if (apply is not null) PutInUse(apply, saveBook: false);
-        return true;
-    });
+    /// <summary>Deleting the active profile switches to the first other one first; when that switch fails, nothing is
+    /// deleted.</summary>
+    public void DeleteProfile(string id) => Post(() => DeleteNow(id));
 
-    public void ResetProfile(string id) => EditProfiles(book =>
+    internal bool DeleteNow(string id)
     {
-        if (!book.Reset(id, _cfg!.Value, out var apply)) return false;
-        if (apply is not null) PutInUse(apply, saveBook: false);
+        if (_cfg is null || _book is null) return false;
+        var snap = _book.Snapshot;
+        if (snap.Profiles.Count <= 1 || snap.Profiles.All(p => p.Id != id)) return false;
+        if (snap.Active.Id == id && !SwitchNow(snap.Profiles.First(p => p.Id != id).Id)) return false;
+        if (!_book.Delete(id, _cfg.Value, out _)) return false;
+        SaveProfiles();
+        ProfilesChanged?.Invoke();
         return true;
-    });
+    }
+
+    /// <summary>Resetting the active built-in puts its settings in use first; when that fails, nothing is reset.</summary>
+    public void ResetProfile(string id) => Post(() => ResetNow(id));
+
+    internal bool ResetNow(string id)
+    {
+        if (_cfg is null || _book is null || !BuiltInProfiles.IsBuiltIn(id) || _book.SettingsOf(id) is null) return false;
+        FollowActive();
+        if (_book.Active.Id == id)
+        {
+            var target = BuiltInProfiles.Settings(id);
+            target.Language = _cfg.Value.Language;
+            if (!TryPutInUse(target)) return false;
+            SwitchError = null;
+        }
+        if (!_book.Reset(id, _cfg.Value, out _)) return false;
+        SaveProfiles();
+        ProfilesChanged?.Invoke();
+        return true;
+    }
 
     private void EditProfiles(Func<ProfileBook, bool> edit) => Post(() =>
     {
@@ -149,22 +243,6 @@ internal sealed class SettingsLink(Server.LootServer server)
         ProfilesChanged?.Invoke();
     });
 
-    /// <summary>Tick thread: the settings of the now active profile into the config (every changed entry), to the server,
-    /// and the window reloads. The book is active on the new profile already, so the config's change events copy into
-    /// the right profile.</summary>
-    private void PutInUse(PersonalSettings next, bool saveBook = true)
-    {
-        if (_cfg is null) return;
-        SaveError = Apply(_cfg, SettingValues.Changed(_cfg.Value, next));
-        FollowActive();
-        if (saveBook)
-        {
-            SaveProfiles();
-            ProfilesChanged?.Invoke();
-        }
-        PersonalChanged?.Invoke();
-        SendIfChanged();
-    }
 
     /// <summary>Runs <paramref name="work"/> on the tick thread.</summary>
     public bool Post(Action work)
@@ -186,13 +264,31 @@ internal sealed class SettingsLink(Server.LootServer server)
     public void Commit(PersonalSettings edited)
     {
         var snapshot = edited.Clone();
-        Post(() =>
+        Post(() => CommitNow(snapshot));
+    }
+
+    /// <summary>Tick thread: Commit's work. False when nothing was saved (refused as too large, or no file).</summary>
+    internal bool CommitNow(PersonalSettings edited)
+    {
+        if (_cfg is null || Refused(edited)) return false;
+        SaveError = Apply(_cfg, SettingValues.Changed(_cfg.Value, edited));
+        FollowActive();
+        SendIfChanged();
+        return true;
+    }
+
+    /// <summary>A change that would make the settings too large for one message is refused (the window takes the saved
+    /// settings again and says so). Tick thread.</summary>
+    private bool Refused(PersonalSettings next)
+    {
+        if (SettingsRules.FitsMessage(next))
         {
-            if (_cfg is null) return;
-            SaveError = Apply(_cfg, SettingValues.Changed(_cfg.Value, snapshot));
-            FollowActive();
-            SendIfChanged();
-        });
+            TooLarge = false;
+            return false;
+        }
+        TooLarge = true;
+        PersonalChanged?.Invoke();
+        return true;
     }
 
     /// <summary>Changes one personal entry on the tick thread, then sends (F9). <paramref name="done"/> gets the saved
@@ -201,6 +297,7 @@ internal sealed class SettingsLink(Server.LootServer server)
     {
         if (_cfg is null) return;
         var next = edit(_cfg.Value.Clone());
+        if (Refused(next)) return;
         SaveError = Apply(_cfg, SettingValues.Changed(_cfg.Value, next));
         FollowActive();
         SendIfChanged();
@@ -224,7 +321,7 @@ internal sealed class SettingsLink(Server.LootServer server)
     /// <summary>TrySet per changed entry. TrySet is all or nothing: true means the file holds the value,
     /// false names why ("cannot write ..." included); LastWriteError is read too (an earlier write
     /// that failed and was not repeated). Null = every entry saved.</summary>
-    private static string? Apply(ConfigFile file, IEnumerable<(string Path, object? Value)> changes)
+    private static string? Apply(IPersonalConfig file, IEnumerable<(string Path, object? Value)> changes)
     {
         string? failed = null;
         foreach (var (path, value) in changes)
@@ -258,6 +355,12 @@ internal sealed class SettingsLink(Server.LootServer server)
     {
         if (_cfg is null) return;
         var mine = _cfg.Value.Clone();
+        // a hand-edited file too large for one message is not sent (the server would drop it); the window says so
+        if (!SettingsRules.FitsMessage(mine))
+        {
+            TooLarge = true;
+            return;
+        }
         var json = SettingsJson.Write(mine);
         if (KClient.IsHosting)
         {

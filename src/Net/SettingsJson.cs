@@ -10,12 +10,7 @@ namespace KilnAutoLoot.Net;
 
 internal static class SettingsJson
 {
-    private static readonly JsonSerializerOptions Options = new()
-    {
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        PropertyNameCaseInsensitive = true,
-        NumberHandling = System.Text.Json.Serialization.JsonNumberHandling.AllowNamedFloatingPointLiterals,
-    };
+    private static readonly JsonSerializerOptions Options = SettingsRules.JsonOptions;
 
     public static string Write(PersonalSettings s) => JsonSerializer.Serialize(s, Options);
 

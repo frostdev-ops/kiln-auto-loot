@@ -35,6 +35,24 @@ public sealed class Bag
         }
     }
 
+    private Bag(Bag from)
+    {
+        FreeSlots = from.FreeSlots;
+        _maxStack = from._maxStack;
+        _held = new Dictionary<uint, int>(from._held);
+        _room = new Dictionary<uint, int>(from._room);
+    }
+
+    /// <summary>A copy to plan against: what is reserved on it does not touch this bag.</summary>
+    public Bag Clone() => new(this);
+
+    /// <summary>The max stack the world uses now for <paramref name="item"/>; 0 = not known.</summary>
+    public int MaxStack(uint item) => Math.Max(0, _maxStack(item));
+
+    /// <summary>How many of <paramref name="item"/> fit into <paramref name="slots"/> new stacks (an item whose max stack
+    /// is not known counts one per slot).</summary>
+    public long SlotCapacity(uint item, int slots) => slots <= 0 ? 0 : (long)slots * Math.Max(1, MaxStack(item));
+
     /// <summary>Free backpack slots now (after what this scan took); below 0 = not known.</summary>
     public int FreeSlots { get; private set; }
 

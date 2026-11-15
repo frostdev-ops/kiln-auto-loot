@@ -76,7 +76,8 @@ public sealed class BagRulesTests
     {
         var s = S(x => x.KeepFreeSlots = 2);
         var three = BagOf(3, new BagSlot(Twigs, 30, true));
-        Assert.Equal(int.MaxValue, BagRules.Allowance(Apple, s, three, CarryLimits.None, out _));   // 3 free: anything
+        Assert.Equal(20, BagRules.Allowance(Apple, s, three, CarryLimits.None, out _));   // one usable slot of 20
+        Assert.Equal(70, BagRules.Allowance(Twigs, s, three, CarryLimits.None, out _));   // 20 room + one slot of 50
         Assert.False(BagRules.TopUpOnly(s, three));
         var two = BagOf(2, new BagSlot(Twigs, 30, true));
         Assert.True(BagRules.TopUpOnly(s, two));
@@ -125,14 +126,32 @@ public sealed class BagRulesTests
     }
 
     [Fact]
-    public void A_harvest_needs_room_for_every_yield_item()
+    public void A_whole_take_has_to_fit_with_every_part_planned_after_the_one_before()
     {
         var s = S(x => x.FillCarriedStacks = true);
         var bag = BagOf(5, new BagSlot(Twigs, 30, true));
-        Assert.Equal(BagRefusal.None, BagRules.Harvest([Twigs], s, bag, CarryLimits.None));
-        Assert.Equal(BagRefusal.NoRoom, BagRules.Harvest([Twigs, Flint], s, bag, CarryLimits.None));
-        Assert.Equal(BagRefusal.NoRoom, BagRules.Harvest([], s, bag, CarryLimits.None));   // yield not known
-        Assert.Equal(BagRefusal.None, BagRules.Harvest([Flint], S(), null, CarryLimits.None));   // no rule on
+        Assert.Equal(BagRefusal.None, BagRules.Fits([(Twigs, 20)], s, bag, CarryLimits.None));
+        Assert.Equal(BagRefusal.NoRoom, BagRules.Fits([(Twigs, 15), (Twigs, 6)], s, bag, CarryLimits.None));
+        Assert.Equal(BagRefusal.NoRoom, BagRules.Fits([(Twigs, 3), (Flint, 1)], s, bag, CarryLimits.None));
+        Assert.Equal(20, bag.Room(Twigs));        // planning never touches the bag itself
+        Assert.Equal(BagRefusal.None, BagRules.Fits([(Flint, 9)], S(), null, CarryLimits.None));   // no rule on
+
+        var limits = new CarryLimits("#Materials:35", Fixtures.Items());
+        var held = BagOf(5, new BagSlot(Stone, 30, true));
+        var ls = S(x => x.CarryLimits = "#Materials:35");
+        Assert.Equal(BagRefusal.None, BagRules.Fits([(Twigs, 2), (Stone, 3)], ls, held, limits));
+        Assert.Equal(BagRefusal.CarryLimit, BagRules.Fits([(Twigs, 3), (Stone, 3)], ls, held, limits));   // 6 > 5 shared
+    }
+
+    [Fact]
+    public void Keep_free_slots_bounds_a_whole_take_by_the_usable_slots()
+    {
+        var s = S(x => x.KeepFreeSlots = 2);
+        var bag = BagOf(4);                       // two usable slots
+        Assert.Equal(BagRefusal.None, BagRules.Fits([(Twigs, 100)], s, bag, CarryLimits.None));
+        Assert.Equal(BagRefusal.NoRoom, BagRules.Fits([(Twigs, 101)], s, bag, CarryLimits.None));
+        Assert.Equal(BagRefusal.NoRoom, BagRules.Fits([(Twigs, 60), (Apple, 1)], s, bag, CarryLimits.None));
+        Assert.Equal(BagRefusal.NoRoom, BagRules.Fits([(Twigs, 1)], s, BagOf(-1), CarryLimits.None));   // free slots unknown
     }
 
     [Fact]
