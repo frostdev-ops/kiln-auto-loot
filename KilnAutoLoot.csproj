@@ -22,6 +22,8 @@
     <KilnUpdatesRepository>frostdev-ops/kiln-auto-loot</KilnUpdatesRepository>
     <KilnUpdatesAsset>kiln-auto-loot-{version}.zip</KilnUpdatesAsset>
     <Nullable>enable</Nullable>
+    <!-- release builds carry no build-machine paths: the DLL's PDB path and the PDB's source paths start at /_/ -->
+    <ContinuousIntegrationBuild Condition="'$(Configuration)' == 'Release'">true</ContinuousIntegrationBuild>
   </PropertyGroup>
   <ItemGroup>
     <Compile Remove="tests/**" />
