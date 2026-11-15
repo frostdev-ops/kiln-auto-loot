@@ -102,6 +102,7 @@ internal sealed class LootServer(Data data)
         _hostPersonal = (player, settings.Clone());
         if (_loop is null) return;   // applied when the world starts
         _loop.SetPersonal(player, settings.Clone());
+        SettingsLine(player, "host");
         SendInfo(player);
     }
 
@@ -143,6 +144,7 @@ internal sealed class LootServer(Data data)
         KeyLine($"defaults for players without the mod: radius={d.Radius:0.0} looting={B(d.Looting)} corpses={B(d.Corpses)} " +
                 $"takeInPlace={B(d.TakeInPlace)} visibleOnly={B(d.VisibleOnly)}");
         KeyLine($"data: {Data.Templates.Count} templates, {Data.Items.All.Count} items, {Data.Quest.Count} quest items");
+        ProbeTrace.WorldUp(this, _loop, Data, _context);   // the probe build only
         if (!_enabled)
         {
             KeyLine("enabled=false in kiln-auto-loot-server.json: this world gets no looting, smashing or data changes");
@@ -188,6 +190,7 @@ internal sealed class LootServer(Data data)
         }
         try { StatusLines.Remove(StatusId); }
         catch (Exception) { }
+        ProbeTrace.WorldDown();   // the probe build only
         if (_loop is not null) KeyLine($"world stops ({why}): {_loop.Counters.Summary()}");
         _loop?.Reset();
         _loop = null;
@@ -255,6 +258,7 @@ internal sealed class LootServer(Data data)
         {
             if (!read && _badJsonLogged.Add(player))
                 Log?.Warn($"Kiln Auto Loot: player {player} sent settings that do not read; keeping the previous ones");
+            SettingsLine(player, "sent");
             SendInfo(player);
         }
     }
@@ -291,6 +295,7 @@ internal sealed class LootServer(Data data)
     {
         _clock.Advance(tick.WallDeltaMs);
         if (!_running || _loop is null) return;
+        ProbeTrace.Tick();   // the probe build only
         try { ApplySettings(); }   // also in a world with the mod off: the players' windows get the answer
         catch (Exception e)
         {
@@ -360,8 +365,24 @@ internal sealed class LootServer(Data data)
             if (now < state.NextSmashMs) continue;
             state.NextSmashMs = now + 1000;
             if (Kiln.Players.Find(entity) is not { State: PlayerState.InGame, IsDead: false, Position: { } at }) continue;
+            _smash.Hit = _config.Value.CounterLog ? (t, kind, sw) => SmashLine(entity, t, kind, sw) : null;
             _smash.Run(entity, at, state.Settings, _config.Value.Limits);
         }
+    }
+
+    /// <summary>counterLog: one line per smash hit, with the switches the server used for that player.</summary>
+    private void SmashLine(EntityId player, SmashTarget t, SmashKind kind, SmashSwitches sw) =>
+        _diag?.Write($"smash: player {player} hit {Spawn.Template(t.Template)?.Name ?? t.Template.ToString()} as " +
+                     $"{SmashTable.WordOf(kind)} (stones {B(sw.Stones)}, buildables {B(sw.Buildables)}, trees {B(sw.Trees)}, hives {B(sw.Hives)})");
+
+    /// <summary>counterLog: the switches a player's settings came with, as the server applies them.</summary>
+    private void SettingsLine(EntityId player, string how)
+    {
+        if (_config?.Value.CounterLog != true || _loop is null) return;
+        var s = _loop.SettingsOf(player);
+        _diag?.Write($"settings: player {player} ({how}): looting {B(s.Looting)}, groundLoot {B(s.GroundLoot)}, stones {B(s.Stones)}, " +
+                     $"smash {B(s.Smash)}, buildables {B(s.SmashBuildables)}, fellTrees {B(s.FellTrees)}, radius {s.Radius:0}, " +
+                     $"height {s.HeightAbove:0}/{s.HeightBelow:0}");
     }
 
     private void CounterLine()

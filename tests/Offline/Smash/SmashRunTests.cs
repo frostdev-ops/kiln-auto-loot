@@ -122,6 +122,8 @@ public sealed class SmashRunTests
         Assert.True(HitOnce(TStone, S()));
         _world.Hits.Clear(); _world.Entities.Clear();
         Assert.False(HitOnce(TStone, S(x => x.Stones = false)));
+        _world.Hits.Clear(); _world.Entities.Clear();
+        Assert.False(HitOnce(TStone, S(x => x.GroundLoot = false)));   // stones need "things on the ground", as for pickups
     }
 
     [Fact] public void Shared_stones_need_both_switches_and_no_build_zone()

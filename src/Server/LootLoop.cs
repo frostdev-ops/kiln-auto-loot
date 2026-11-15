@@ -417,17 +417,20 @@ internal sealed class LootLoop
         if (_game.PositionOf(e) is not { } at) return;
         if (!HeightWindow.Allows(at.Y - gp.Position.Y, p.Settings))
         {
+            ProbeTrace.Note(e, $"height: outside the height window (dy {at.Y - gp.Position.Y:0.0} m)");
             Counters.HeightOut++;   // above or below the player's height window: as if out of range
             return;
         }
         var d2 = DistanceSquared(gp.Position, at);
         if (Classify(e) is not { Rule: { } rule, Key: var key })
         {
+            ProbeTrace.Note(e, "table: not in the template table (never taken)");
             Counters.UnknownTemplates++;   // a template not in templates.txt: never
             return;
         }
         var hasPickup = _game.TryPickupItem(e, out var item);
         var container = Release.IsContainerTarget(rule, hasPickup);
+        ProbeTrace.Note(e, $"seen: {rule.Group} {rule.Flags}, {(container ? "container path" : $"pickup path, item {item}")}");
         if (container) Counters.ContainersSeen++;
         else Counters.PickupsSeen++;
         if (container) ContainerTarget(p, gp, e, key, rule, d2);
@@ -443,25 +446,37 @@ internal sealed class LootLoop
         if (rule.Group == Group.Enemy && !dead) return;   // a living enemy: never looted (gate step 3)
         if (!Release.ContainerReleased(rule, dead))
         {
+            ProbeTrace.Note(e, "container: not released");
             Counters.ContainersHeldBack++;   // gate step 4
             return;
         }
         var verdict = LootRules.Decide(rule, released: true, d2, s, p.Filter, out var noticeItem);
         if (verdict != Verdict.Allowed)
         {
+            ProbeTrace.Note(e, $"container: refused ({verdict})");
             CountRefusal(p, verdict, noticeItem);
             return;
         }
-        if (Release.IsHarvest(rule) && !HarvestFits(p, gp, e, rule, out _)) return;   // checked before the accept too
-        if (!InSight(p, gp, e, key)) return;
+        if (Release.IsHarvest(rule) && !HarvestFits(p, gp, e, rule, out _))
+        {
+            ProbeTrace.Note(e, "container: the harvest does not fit the bag rules");
+            return;   // checked before the accept too
+        }
+        if (!InSight(p, gp, e, key))
+        {
+            ProbeTrace.Note(e, "container: not in sight");
+            return;
+        }
         if (_budget <= 0)
         {
+            ProbeTrace.Note(e, "container: the scan's send budget is spent");
             Counters.CapReached++;   // the visit table is not asked: its answer would be spent without a send
             return;
         }
         Counters.ContainerTries++;
         var offer = _game.OfferOf(e);
         var step = p.Visits.Next(key, offer.Usable, offer.OfferId, s.OpenDelay, Release.HarvestOnce(rule));
+        ProbeTrace.Note(e, $"container: step {step} (offer present {offer.Present}, disabled {offer.Disabled}, id {offer.OfferId})");
         switch (step)
         {
             case TargetStep.Wait:
@@ -476,6 +491,7 @@ internal sealed class LootLoop
                 Counters.Injects++;
                 Counters.Accepts++;
                 _game.Interact(gp.Entity, e, offer.OfferId);
+                ProbeTrace.Note(e, $"send: accept (offer {offer.OfferId})");
                 p.Visits.Accepted(key, offer.OfferId);
                 break;
             case TargetStep.Loot:
@@ -501,11 +517,21 @@ internal sealed class LootLoop
         // a loot-all takes everything, so it goes out only after a read showed nothing has to stay; an inventory that
         // cannot be read (kiln.items off, a failed read) is left and tried again in the next scan
         var slots = _game.Slots(e);
+        if (slots is null && Release.LootUnread(rule))
+        {
+            // a fog-nest crystal: its essence comes with the loot-all only; the item filter judged its yield before, and a
+            // bag rule that cannot see the amounts leaves it (as for a harvest)
+            ProbeTrace.Note(e, "loot: unread ground loot, loot-all like a harvest");
+            if (HarvestFits(p, gp, e, rule, out _)) SendLoot(p, gp, e, key, offer);
+            return;
+        }
         if (slots is null)
         {
+            ProbeTrace.Note(e, "loot: the inventory cannot be read");
             Counters.Unreadable++;
             return;
         }
+        ProbeTrace.Note(e, $"loot: slots [{string.Join(", ", slots.Select(x => $"{x.Item} x{x.Count}"))}]");
 
         // what each slot gives: the whole slot (count 0), part of it (the bag's allowance), or nothing
         var take = new List<(ContainerSlot Slot, int Count)>();
@@ -555,6 +581,7 @@ internal sealed class LootLoop
                     break;
             }
 
+        ProbeTrace.Note(e, $"loot: {take.Count} slots to take, something kept: {kept}");
         if (take.Count == 0)
         {
             // nothing to take: corpses and chests stay as they are; others still get the loot-all (harvest-like)
@@ -605,6 +632,7 @@ internal sealed class LootLoop
             p.PendingMoves[key] = p.PendingMoves.GetValueOrDefault(key) + 1;
             var item = slot.Item;
             p.MovesInFlight[item] = p.MovesInFlight.GetValueOrDefault(item) + moving;
+            ProbeTrace.Note(e, $"send: move slot {slot.Id} ({item} x{moving})");
             _game.Move(e, slot.Id, gp.Entity, count, outcome => MoveAnswered(p, key, outcome, item, moving));
         }
         if (sent > 0)
@@ -640,6 +668,7 @@ internal sealed class LootLoop
         _budget--;
         Counters.Injects++;
         CountLootKind(offer);
+        ProbeTrace.Note(e, $"send: loot-all (offer present {offer.Present}, disabled {offer.Disabled})");
         _game.Loot(gp.Entity, e);
         p.Visits.Looted(key);
         return true;
@@ -659,7 +688,11 @@ internal sealed class LootLoop
         var s = p.Settings;
         var verdict = LootRules.Decide(rule, released: false, d2, s, p.Filter, out var noticeItem);
         var wanted = verdict == Verdict.Allowed;
-        if (!wanted) CountRefusal(p, verdict, noticeItem);
+        if (!wanted)
+        {
+            ProbeTrace.Note(e, $"pickup: refused ({verdict})");
+            CountRefusal(p, verdict, noticeItem);
+        }
         var details = _game.PickupDetails(e) ?? new GroundItem(1, GearRules.UnknownRarity);
         if (wanted)   // the pickup's own item: the item filter, then the rarity rule
             switch (p.Filter.Check(item))
@@ -689,6 +722,8 @@ internal sealed class LootLoop
         if (wanted && BagRules.NeedsBag(s, p.Limits) &&
             CountBag(BagRules.Pickup(item, details.Amount, s, BagOf(p, gp), p.Limits))) wanted = false;
         var withInventory = _game.HasInventory(e);
+        ProbeTrace.Note(e, $"pickup: wanted after the item, rarity and bag rules: {wanted} (amount {details.Amount}, " +
+                           $"rarity {details.Rarity}, own inventory {withInventory})");
         // takeInPlace off: static pickups (with an inventory) cannot be pulled: only within 0.75 m.
         if (wanted && withInventory && !s.TakeInPlace && d2 > StaticPickupNearSquared) wanted = false;
         if (wanted && !InSight(p, gp, e, key)) wanted = false;
@@ -701,6 +736,7 @@ internal sealed class LootLoop
         if (raiseFull) InventoryFull(p);
         if (!may)
         {
+            ProbeTrace.Note(e, $"pickup: not now (wanted {wanted})");
             if (wanted) Counters.PickupWaits++;
             return;
         }
@@ -717,6 +753,7 @@ internal sealed class LootLoop
                 Counters.Injects++;
                 Counters.Accepts++;
                 _game.Interact(gp.Entity, e, offer.OfferId);
+                ProbeTrace.Note(e, $"send: accept before the pickup (offer {offer.OfferId})");
                 p.Visits.Accepted(key, offer.OfferId);
             }
         }
@@ -724,6 +761,7 @@ internal sealed class LootLoop
         Counters.Injects++;
         Counters.CountLooted(item, details.Amount);
         p.Bag?.Took(item, details.Amount);
+        ProbeTrace.Note(e, $"send: pickup loot ({item} x{details.Amount})");
         _game.Loot(gp.Entity, e);
         p.Pickups.Taken(key);
     }

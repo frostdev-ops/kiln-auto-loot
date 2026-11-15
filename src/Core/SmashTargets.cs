@@ -6,7 +6,8 @@
 // rolls loot when it breaks, and breakable furniture and containers (barrels, crates, pots, baskets, shelves, chairs).
 // Structure, light sources, story objects and anything a quest or a mechanism needs stay whole. The kinds:
 //   Shared  a prop players can also build (an item places it): only away from build zones, so a base is never hit.
-//   Stone   a rock boulder: only while stones are collected (smashing it is how its stone is gathered).
+//   Stone   a rock boulder, or clutter that gives stone (a stone-filled mine cart): only while stones are collected
+//           (smashing it is how its stone is gathered).
 //   Tree    a tree, stump, fallen trunk or deadwood (a wood resource node in the world): only with tree felling on.
 //   Beehive a wild bee hive: with hive smashing on, or felled with the trees.
 using KilnAutoLoot.Server;
@@ -54,8 +55,14 @@ internal static class SmashTargets
         var clutter = name.StartsWith("prop_destructible_", StringComparison.Ordinal) || t.Has("RandomLootOnDestroy") ||
                       (name.Contains("furniture") && name.Contains("broken")) || HasClutterWord(name);
         if (!clutter) return null;
+        // clutter that gives stone when it breaks (a stone-filled mine cart) follows the stones switch like a boulder
+        if (IsStoneNode(t)) return shared ? SmashKind.StoneShared : SmashKind.Stone;
         return shared ? SmashKind.Shared : SmashKind.Smash;
     }
+
+    /// <summary>A resource node of stone (boulders, and coal and ore for the game's tools).</summary>
+    private static bool IsStoneNode(TemplateFacts t) =>
+        t.Has("MiningNode") && string.Equals(t.Value("MiningNode.resourceType"), "Stone", StringComparison.OrdinalIgnoreCase);
 
     public static bool HasClutterWord(string lowerName)
     {

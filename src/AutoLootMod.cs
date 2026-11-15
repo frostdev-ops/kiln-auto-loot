@@ -8,7 +8,7 @@ namespace KilnAutoLoot;
 
 public sealed class AutoLootMod : Mod
 {
-    internal const string Version = "0.1.0-test.2";
+    internal const string Version = "0.1.0-test.3";
     internal const string Id = "kiln-auto-loot";
 
     private Server.LootServer? _server;

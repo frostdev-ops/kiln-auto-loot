@@ -9,7 +9,7 @@
   <PropertyGroup>
     <KilnModId>kiln-auto-loot</KilnModId>
     <KilnModName>Kiln Auto Loot</KilnModName>
-    <Version>0.1.0-test.2</Version>
+    <Version>0.1.0-test.3</Version>
     <Description>Automatic looting around you: items, resources, collectibles, plants, crops, enemy corpses and chests, with quest items left in place. Smashes barrels, crates and urns in ruins, bigger stacks, F8 settings.</Description>
     <Authors>Frostdev</Authors>
     <AssemblyName>KilnAutoLoot</AssemblyName>
@@ -25,6 +25,16 @@
     <!-- release builds carry no build-machine paths: the DLL's PDB path and the PDB's source paths start at /_/ -->
     <ContinuousIntegrationBuild Condition="'$(Configuration)' == 'Release'">true</ContinuousIntegrationBuild>
   </PropertyGroup>
+  <!-- The probe build: a developer's console in a hosted game (src/Probe, the ProbeTrace calls), never a release:
+         dotnet build -c Release -t:KilnPack -p:KilnAutoLootProbe=true -p:KilnPackageOutputPath=<folder>/ -->
+  <PropertyGroup Condition="'$(KilnAutoLootProbe)' == 'true'">
+    <DefineConstants>$(DefineConstants);KILN_AUTOLOOT_PROBE</DefineConstants>
+    <Version>$(Version).probe.3</Version>
+    <OutputPath>bin/probe/$(Configuration)/</OutputPath>
+  </PropertyGroup>
+  <ItemGroup Condition="'$(KilnAutoLootProbe)' != 'true'">
+    <Compile Remove="src/Probe/**" />
+  </ItemGroup>
   <ItemGroup>
     <Compile Remove="tests/**" />
     <None Remove="tests/**" />

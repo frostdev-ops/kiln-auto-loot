@@ -489,6 +489,23 @@ public sealed class UnreadableInventoryTests
     }
 
     [Fact]
+    public void A_fog_nest_crystal_gets_its_loot_all_although_its_inventory_cannot_be_read()
+    {
+        // the crystal has a DefaultInventory and no Inventory: the read fails, and only the loot-all hands its essence over
+        // (the accept alone moves its offer on); found in a hosted game with the probe build
+        var rig = new LoopRig(s => s.OpenDelay = 0);
+        var crystal = rig.Game.Add(LoopRig.FogNest, 3, [LootLoop.OfferComponent]);
+        crystal.Offer = new Offer(true, false, 1);
+        crystal.Slots = null;
+        rig.ScanFor(300);
+        Assert.Single(rig.Game.Interacts);
+        crystal.Offer = new Offer(true, false, 2);        // the accept moved the offer on
+        rig.ScanFor(3000);
+        Assert.Single(rig.Game.Loots);                    // once per visit, also when the bag was full
+        Assert.Equal(0, rig.Loop.Counters.Unreadable);
+    }
+
+    [Fact]
     public void A_plant_is_still_harvested_without_reading_its_inventory()
     {
         var rig = new LoopRig(s => s.OpenDelay = 0);

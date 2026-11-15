@@ -51,6 +51,9 @@ internal sealed class Smash
 
     internal SmashTable Table => _table ??= _loadTable();
 
+    /// <summary>Told after each hit (the debug log while counterLog is on): the target, its kind and the switches used.</summary>
+    public Action<SmashTarget, SmashKind, SmashSwitches>? Hit { get; set; }
+
     /// <summary>At ServerStartedEvent (per hosted world).</summary>
     public void Start()
     {
@@ -93,8 +96,18 @@ internal sealed class Smash
         var wanted = new List<(double Dist, SmashTarget Target, SmashKind Kind)>();
         foreach (var e in _world.Within(_candidates, position, sw.Radius))
         {
-            if (_world.Inspect(e) is not { } target || !table.TryGet(target.Template, out var kind)) continue;
-            if (!HeightWindow.Allows(target.Position.Y - position.Y, s)) continue;   // the player's height window
+            if (_world.Inspect(e) is not { } target || !table.TryGet(target.Template, out var kind))
+            {
+                ProbeTrace.Note(e, "smash: not a smash target");
+                continue;
+            }
+            if (!HeightWindow.Allows(target.Position.Y - position.Y, s))
+            {
+                ProbeTrace.Note(e, $"smash: {kind}, outside the height window");
+                continue;   // the player's height window
+            }
+            ProbeTrace.Note(e, $"smash: {kind}, wanted {SmashRules.Wants(kind, sw, NearBuildZone)} (stones {sw.Stones}, " +
+                               $"buildables {sw.Buildables}, trees {sw.Trees}, hives {sw.Hives}), may hit {MayHit(target, now)}");
             if (!SmashRules.Wants(kind, sw, NearBuildZone) || !MayHit(target, now)) continue;
             var dist = target.Position.DistanceTo(position);
             if (dist <= sw.Radius) wanted.Add((dist, target, kind));
@@ -104,7 +117,9 @@ internal sealed class Smash
         foreach (var (target, kind) in picked)
         {
             Remember(target, now);
+            ProbeTrace.Note(target.Entity, $"smash: hit as {kind}");
             _world.Hit(player, target, kind);
+            Hit?.Invoke(target, kind, sw);
         }
     }
 

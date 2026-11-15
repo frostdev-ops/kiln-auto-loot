@@ -297,6 +297,10 @@ public class SmashTargetsTests
     {
         Assert.Equal(SmashKind.Stone, Kind("Prop_Destructible_Resource_Stone_Grassland_01_b", ["Destructible", "MiningNode"], Stone));
         Assert.Equal(SmashKind.StoneShared, Kind("Prop_Destructible_Resource_Stone_X", ["Destructible", "MiningNode"], Stone, buildable: true));
+        // a stone-filled mine cart (clutter that drops random loot and gives stone) follows the stones switch too: seen
+        // smashed with stones off in a hosted game (probe build)
+        Assert.Equal(SmashKind.Stone, Kind("Prop_Ancients_Container_Mining_02_B", ["Destructible", "MiningNode", "RandomLootOnDestroy"], Stone));
+        Assert.Equal(SmashKind.Smash, Kind("Prop_Ancients_Container_Mining_02_A", ["Destructible", "RandomLootOnDestroy"]));
     }
 
     [Fact]
