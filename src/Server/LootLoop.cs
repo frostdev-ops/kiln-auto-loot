@@ -459,10 +459,11 @@ internal sealed class LootLoop
             Counters.UnknownTemplates++;   // a template not in templates.txt: never
             return;
         }
-        if ((rule.Flags & TemplateFlags.Decor) != 0 && gp.NearBase)
+        if ((rule.Flags & TemplateFlags.Decor) != 0 && p.Settings.OldBooks && gp.NearBase)
         {
-            // furniture the world placed that players also build (the books of villages and ruins): in a base it may
-            // be part of the décor, so it stays there; pressing E still takes it
+            // furniture the world placed that players also build (the books of villages and ruins): oldBooks off, the
+            // group switch leaves it (LootRules); on, it still stays in and near a base, where it may be part of the
+            // décor. Pressing E takes it either way
             ProbeTrace.Note(e, "decor: left, the player is in or near a base");
             Counters.DecorLeft++;
             return;

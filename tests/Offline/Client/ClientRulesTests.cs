@@ -174,8 +174,8 @@ public class SettingsJsonTests
     public void Json_uses_the_settings_keys()
     {
         var json = SettingsJson.Write(new PersonalSettings());
-        foreach (var key in new[] { "looting", "radius", "takeInPlace", "visibleOnly", "groundLoot", "stones", "collectibles",
-                     "plants", "crops", "fish", "skipList", "skipNotice", "groundRadius", "collectiblesRadius", "plantsRadius",
+        foreach (var key in new[] { "looting", "radius", "takeInPlace", "visibleOnly", "groundLoot", "stones", "oldBooks",
+                     "collectibles", "plants", "crops", "fish", "skipList", "skipNotice", "groundRadius", "collectiblesRadius", "plantsRadius",
                      "cropsRadius", "corpsesRadius", "chestsRadius", "enemyPause", "enemyDistance", "corpses", "bosses",
                      "openDelay", "chests", "leaveQuestItems", "smash", "smashBuildables", "fellTrees", "smashHives", "language" })
             Assert.Contains($"\"{key}\":", json);
@@ -254,7 +254,7 @@ public class CatalogTests
     {
         Assert.Equal(["looting", "containers", "smashing", "filters", "where", "ranges", "world"], SettingCatalog.Pages.Select(p => p.Key));
         string[] On(string page) => SettingCatalog.Pages.Single(p => p.Key == page).Settings.Select(s => s.Key).ToArray();
-        Assert.Equal(["looting", "radius", "takeInPlace", "groundLoot", "stones", "collectibles", "plants",
+        Assert.Equal(["looting", "radius", "takeInPlace", "groundLoot", "stones", "oldBooks", "collectibles", "plants",
                       "crops", "fish"], On("looting"));
         Assert.Equal(["corpses", "bosses", "chests", "openDelay", "leaveQuestItems"], On("containers"));
         Assert.Equal(["smash", "smashBuildables", "fellTrees", "smashHives"], On("smashing"));

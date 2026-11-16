@@ -42,7 +42,8 @@ public static class LootRules
         bool bossCorpse = group == Group.Corpse && (rule.Flags & (TemplateFlags.Boss | TemplateFlags.Elite)) != 0;
         bool off = group switch
         {
-            Group.Ground => !s.GroundLoot || ((rule.Flags & TemplateFlags.Stone) != 0 && !s.Stones),
+            Group.Ground => !s.GroundLoot || ((rule.Flags & TemplateFlags.Stone) != 0 && !s.Stones) ||
+                            ((rule.Flags & TemplateFlags.Decor) != 0 && !s.OldBooks),
             Group.Collectible => !s.Collectibles,
             Group.Plant => !s.Plants,
             Group.Farm => !s.Crops,

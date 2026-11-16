@@ -13,8 +13,8 @@
 //      harvestable too, but harvesting them early would waste the crop.
 //   4. Pickups (PickupItem): never quest things; collectibles by their item's category; swarms (fireflies and the like,
 //      which the game shows as an effect, not a model) are taken like bushes; the rest is ground loot, stones flagged,
-//      and so is furniture the world places that players can also build (the books of villages and ruins: decor, left
-//      near a base). The generic drops (what other templates spawn their loot as, with no item of their own: the game
+//      and so is furniture the world places that players can also build (the books of villages and ruins: decor, the
+//      oldBooks switch). The generic drops (what other templates spawn their loot as, with no item of their own: the game
 //      sets it at the spawn) are ground loot flagged generic, judged by their live item (GenericDrops), also the ones
 //      that carry no PickupItem in their template.
 //   5. Things the player empties or harvests (an offer and a default inventory): boss loot is never taken; enemy remains

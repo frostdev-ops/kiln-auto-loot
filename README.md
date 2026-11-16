@@ -19,8 +19,8 @@ notes run in each player's game.
   game has time to fill in its special loot.
 - **Leaves things behind on purpose**: quest items stay in containers for you to take, and a skip list keeps any item
   you name (by name, part of a name, or a whole group) on the ground and in containers. A plant whose harvest would
-  bring a skipped item is left alone. Old books lying in villages and ruins stay put while you are in or near a base,
-  where they may be part of the décor.
+  bring a skipped item is left alone. Old books lying in villages and ruins stay put unless you switch **Old books** on,
+  and even then not in or near a base, where they may be part of the décor.
 - **Smashes** barrels, crates, pots and wrecked furniture around you once a second, never in a base. Optional:
   furniture players could build (only well away from a base), bee hives, and, experimental, trees.
 - **Bigger stacks**: every stackable item up to 9999 by default (at most 65535, 0 = the game's own sizes).

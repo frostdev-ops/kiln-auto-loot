@@ -1,10 +1,12 @@
 # Changelog
 
-## 0.1.4 (not released yet)
-- Old books lying in villages and ruins (the world's furniture that gives Old Books) stay put while you are in or near
-  a base: built around, they are part of the décor, and the mod took them. Away from any base they are picked up as
-  before, and E takes them anywhere. Books you build yourself were never taken.
-- Counter log: the pickups part shows how many of those books were left near a base (decorLeft).
+## 0.1.4
+- Old books lying in villages and ruins (the world's furniture that gives Old Books) are no longer picked up: built
+  around, they are part of a base's décor, and the mod took them. A new switch, Old books (F8, Looting), takes them
+  again out in the world; even then they stay while you are in or near a base. It is off by default. E takes them
+  either way, and books you build yourself were never taken.
+- Counter log: the settings line names the oldBooks switch, and the pickups part shows how many books were left near
+  a base (decorLeft).
 
 ## 0.1.3
 - Next profile has no key by default now (it was F10): XHL-Core opens its window on F10, and with Kiln Auto Loot

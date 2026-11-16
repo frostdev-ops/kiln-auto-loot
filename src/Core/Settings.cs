@@ -19,8 +19,9 @@ public sealed class PersonalSettings
     [Comment("How far around you the mod reaches, in meters (also how far smashing reaches)."), Range(1, 50)] public float Radius { get; set; } = 15f;
     [Comment("Take things where they lie. false = the game's short pull range; mushrooms and other fixed pickups need to be within reach.")] public bool TakeInPlace { get; set; } = true;
     [Comment("Only take what is in plain view from where you stand.")] public bool VisibleOnly { get; set; }
-    [Comment("Loose things in the open world: rocks, sticks, ore, mushrooms, dropped potions and arrows. Old books stay while you are in or near a base. Off: boulders are not smashed either.")] public bool GroundLoot { get; set; } = true;
+    [Comment("Loose things in the open world: rocks, sticks, ore, mushrooms, dropped potions and arrows. Off: boulders are not smashed either.")] public bool GroundLoot { get; set; } = true;
     [Comment("Stones and stone piles. Also decides whether boulders and stone carts get smashed. Needs groundLoot (off: no stones, no boulders).")] public bool Stones { get; set; } = true;
+    [Comment("Old books lying in villages and ruins (they give Old Books). Off by default; never in or near a base. Needs groundLoot.")] public bool OldBooks { get; set; } = false;
     [Comment("Fossils, urns, gnomes and the other finds you collect for their own sake.")] public bool Collectibles { get; set; } = true;
     [Comment("What grows on living plants: berries, herbs, fibre, reeds, fireflies.")] public bool Plants { get; set; } = true;
     [Comment("Ripe crops from farm beds, also in your base. Seedlings are left alone.")] public bool Crops { get; set; } = true;
