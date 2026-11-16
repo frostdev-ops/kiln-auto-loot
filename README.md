@@ -26,9 +26,9 @@ notes run in each player's game.
 - **Pauses** while a game window is open (a chest, crafting, a dialogue, the inventory, the map, the pause menu), and,
   if you switch it on, while an enemy is near.
 - **E is yours**: whatever the switches say, anything you press or hold E on is taken as in the game without the mod.
-- **Profiles**: switch your whole setup in one go, in the window or with a key (**F10** cycles them, any profile can
-  have its own key). Built in: Everything, Wood & sticks, Stone & ore, Plants & crops, Plunder, Treasure hunter; make
-  your own from any setup.
+- **Profiles**: switch your whole setup in one go, in the window or with a key (**Ctrl+F10** cycles them, any profile
+  can have its own key). Built in: Everything, Wood & sticks, Stone & ore, Plants & crops, Plunder, Treasure hunter;
+  make your own from any setup.
 - **Skip list or only list**: leave chosen items behind, or take nothing but the ones you list (exact items, parts of
   names, whole categories). A plant is harvested whole once anything it gives is wanted.
 - **Gather focus**: take one item by hand, press **F11**, and only that item is collected around you until you press
@@ -40,8 +40,8 @@ notes run in each player's game.
   or a whole category ("500 wood logs").
 
 ## Using it
-- **F8** opens the settings window; **F9** turns auto loot on and off; **F10** switches to the next profile; **F11**
-  turns the gather focus on and off. All keys can be changed in Kiln's Keys page.
+- **F8** opens the settings window; **F9** turns auto loot on and off; **Ctrl+F10** switches to the next profile;
+  **F11** turns the gather focus on and off. All keys can be changed in Kiln's Keys page.
 - Every change is saved at once and takes effect at once, except switching the whole mod off and on (that needs the
   world to start again).
 - Your own settings are in `kiln/config/kiln-auto-loot-client.json` (the active profile), your profiles in

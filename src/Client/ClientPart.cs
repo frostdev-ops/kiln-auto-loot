@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
-// The player's game: the F8 window, the F9 key, the profile keys (F10 next, one per profile when set), the gather focus
-// key (F11), the notices, and telling the server when a game window is open.
+// The player's game: the F8 window, the F9 key, the profile keys (Ctrl+F10 next, one per profile when set), the gather
+// focus key (F11), the notices, and telling the server when a game window is open.
 // The parts: SettingsLink (the settings file and the handoff to the server part),
 // SettingsWindow + IgnoreEditor (drawing), and the pure rules in KeyActions, WindowSignal, StackField, Notices.
 using Kiln;

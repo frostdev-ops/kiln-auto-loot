@@ -460,6 +460,17 @@ public class ProfileKeyTests
     }
 
     [Fact]
+    public void Next_profile_default_is_ctrl_F10_so_bare_F10_reaches_other_loaders()
+    {
+        // Kiln keeps a bound key from the game and the other loaders; XHL-Core opens its window on bare F10
+        Assert.True(Kiln.KeyChord.TryParse(ProfileKeys.DefaultNextProfileKey, out var chord));
+        Assert.Equal(new Kiln.KeyChord(0x79, Kiln.KeyMods.Ctrl), chord);
+        string[] defaults = [KeyNames.DefaultMenuKey, KeyNames.DefaultAutoLootKey, ProfileKeys.DefaultNextProfileKey, ProfileKeys.DefaultFocusKey];
+        foreach (var key in defaults) Assert.Single(defaults, k => ProfileKeys.Same(k, key));
+        Assert.False(ProfileKeys.IsTaken("F10", defaults));
+    }
+
+    [Fact]
     public void Binding_ids_follow_safe_profile_ids()
     {
         Assert.Equal("kiln-auto-loot.profile.custom-1", ProfileKeys.BindingId("custom-1"));
