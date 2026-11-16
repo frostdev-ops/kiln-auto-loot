@@ -47,7 +47,7 @@ internal sealed class ProfileBar(SettingsLink link, WindowKeys keys)
             _mode = EditMode.None;
             link.SwitchProfile(snap.Profiles[index].Id);
         }
-        ui.Tooltip(string.Format(T("profileNextKey"), keys.NextProfile()));
+        ui.Tooltip(ProfileKeys.Normalize(keys.NextProfile()) is { } next ? string.Format(T("profileNextKey"), next) : T("profileNextNoKey"));
 
         ui.SameLine();
         if (ui.SmallButton(T("profileNew") + "###new"))

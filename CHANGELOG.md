@@ -1,8 +1,9 @@
 # Changelog
 
 ## Unreleased
-- Next profile is on Ctrl+F10 now, not F10: XHL-Core opens its window on F10, and with Kiln Auto Loot loaded F10
-  never reached it. A next-profile key you set yourself on Kiln's Keys page stays as it is.
+- Next profile has no key by default now (it was F10): XHL-Core opens its window on F10, and with Kiln Auto Loot
+  loaded F10 never reached it. Give it a key in Kiln's Keys page (Kiln Auto Loot, Next profile) to switch with one
+  press; a key you set there already stays as it is.
 
 ## 0.1.2
 - Loose loot from broken barrels, crates and pots and from some resource nodes is picked up (string, torn cloth, flint

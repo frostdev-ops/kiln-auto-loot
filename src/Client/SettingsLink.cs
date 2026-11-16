@@ -124,7 +124,7 @@ internal sealed class SettingsLink(Server.LootServer server)
 
     // ---------------------------------------------------------------- profiles (any thread; the work on the tick thread)
 
-    /// <summary>Raised on the tick thread after a switch (the combo, Ctrl+F10, a profile's key) with the profile now active.</summary>
+    /// <summary>Raised on the tick thread after a switch (the combo, the next-profile key, a profile's key) with the profile now active.</summary>
     public event Action<ProfileView>? ProfileSwitched;
 
     /// <summary>Switches to a profile: its settings go into the config and to the server. An unknown id does nothing.</summary>

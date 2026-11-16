@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// The player's profiles: named sets of personal settings to switch between quickly (Ctrl+F10, a profile's own key, or the
+// The player's profiles: named sets of personal settings to switch between quickly (the next-profile key, a profile's own key, or the
 // combo at the top of the F8 window). Kept in the player's game only, in profiles.json in the mod's data folder (our
 // own format, versioned). The Kiln config kiln-auto-loot-client.json stays what it was, the settings in use: it always
 // holds the active profile's settings, so a change in the window or by hand in the file goes into the active profile
@@ -78,7 +78,7 @@ internal sealed class ProfileBook
         lock (_lock) return Find(id)?.Settings.Clone();
     }
 
-    /// <summary>The profile after the active one, wrapping round (Ctrl+F10).</summary>
+    /// <summary>The profile after the active one, wrapping round (the next-profile key).</summary>
     public string NextId()
     {
         lock (_lock)

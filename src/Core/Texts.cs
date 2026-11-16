@@ -336,6 +336,8 @@ public static class Texts
         ["profileSave"] = ("Save", "Speichern"),
         ["profileCancel"] = ("Cancel", "Abbrechen"),
         ["profileNextKey"] = ("{0} switches to the next profile", "{0} wechselt zum nächsten Profil"),
+        ["profileNextNoKey"] = ("Give \"Next profile\" a key in Kiln's Keys page to switch with one press",
+            "Gib \"Next profile\" auf Kilns Tastenseite eine Taste, dann wechselst du mit einem Druck"),
         ["profileNewName"] = ("Profile {0}", "Profil {0}"),
         ["profileMine"] = ("My settings", "Meine Einstellungen"),
         ["profileSwitched"] = ("Profile: {0}", "Profil: {0}"),

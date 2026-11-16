@@ -460,14 +460,16 @@ public class ProfileKeyTests
     }
 
     [Fact]
-    public void Next_profile_default_is_ctrl_F10_so_bare_F10_reaches_other_loaders()
+    public void Next_profile_has_no_key_by_default_so_F10_reaches_other_loaders()
     {
-        // Kiln keeps a bound key from the game and the other loaders; XHL-Core opens its window on bare F10
+        // Kiln keeps a bound key from the game and the other loaders; XHL-Core opens its window on F10
         Assert.True(Kiln.KeyChord.TryParse(ProfileKeys.DefaultNextProfileKey, out var chord));
-        Assert.Equal(new Kiln.KeyChord(0x79, Kiln.KeyMods.Ctrl), chord);
+        Assert.True(chord.IsNone);
+        Assert.Null(ProfileKeys.Normalize(ProfileKeys.DefaultNextProfileKey));
         string[] defaults = [KeyNames.DefaultMenuKey, KeyNames.DefaultAutoLootKey, ProfileKeys.DefaultNextProfileKey, ProfileKeys.DefaultFocusKey];
-        foreach (var key in defaults) Assert.Single(defaults, k => ProfileKeys.Same(k, key));
         Assert.False(ProfileKeys.IsTaken("F10", defaults));
+        Assert.False(ProfileKeys.IsTaken("None", defaults));   // an unbound key never blocks a profile's own key
+        Assert.False(ProfileKeys.IsTaken("Ctrl+F10", defaults));
     }
 
     [Fact]

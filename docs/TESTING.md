@@ -74,9 +74,10 @@ rules and what a dedicated server can show without a player. Everything below ne
 - [ ] "enabled" off, back to the menu, host again: the mod does nothing in that world; on again, it is back.
 
 ## 8. Profiles, lists, focus and the bag
-- [ ] Ctrl+F10 cycles the profiles with a short note (bare F10 does nothing here, so another loader's F10 window
-      opens); the profile bar shows the active one; New, Rename (with a key such as Ctrl+1, which then switches to
-      it), Delete (asks twice) and Reset on a built-in work.
+- [ ] Next profile has no key at first (F10 does nothing here, so another loader's F10 window opens; the profile
+      combo's tooltip says to set one on Kiln's Keys page); once given one there, it cycles the profiles with a short
+      note; the profile bar shows the active one; New, Rename (with a key such as Ctrl+1, which then switches to it),
+      Delete (asks twice) and Reset on a built-in work.
 - [ ] "Wood & sticks" takes only logs and sticks (twig bushes are harvested whole, their fibre comes along); "Stone &
       ore" only stone, flint and ore; "Plunder" only corpses and chests; "Treasure hunter" leaves gear below Rare.
 - [ ] Only list: "Only this" on an item switches to it; the skip list is kept and comes back when you switch to skip.

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
-// The keys of the profiles and of gather focus. Ctrl+F10 goes to the next profile (not bare F10: XHL-Core opens its
-// window on F10, and Kiln keeps a bound key from the game and the other loaders) and F11 turns gather focus on or off;
+// The keys of the profiles and of gather focus. Next profile has no key until the player gives it one on Kiln's Keys
+// page (it was F10, but XHL-Core opens its window on F10, and Kiln keeps a bound key from the game and the other
+// loaders); F11 turns gather focus on or off;
 // a profile may have a key of its own (registered with Kiln while it is set, so it can be rebound on Kiln's Keys page
 // like any other). The key texts are Kiln key names ("Ctrl+1", "F7"); whether Kiln knows a name is Kiln's to say
 // (KeyChord.TryParse, in the window). Pure.
@@ -8,7 +9,7 @@ namespace KilnAutoLoot.Client;
 
 internal static class ProfileKeys
 {
-    public const string DefaultNextProfileKey = "Ctrl+F10";
+    public const string DefaultNextProfileKey = "None";
     public const string DefaultFocusKey = "F11";
     public const string NextProfileId = "kiln-auto-loot.next-profile";
     public const string FocusId = "kiln-auto-loot.focus";
