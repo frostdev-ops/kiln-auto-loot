@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// The game layer of the loot loop: every Kiln call the loop and the hold-E guard make goes through IGame, so
+// The game layer of the loot loop: every Kiln call the loop makes goes through IGame, so
 // tests/Offline/Server drives the whole loop with a fake world. KilnGame is the real one (tick thread only).
 // The types here use only Kiln.Api's EntityId and WorldPosition, never a service assembly's type, so the offline tests
 // load without Kiln's service DLLs.

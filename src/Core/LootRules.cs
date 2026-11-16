@@ -19,6 +19,13 @@ public static class LootRules
         out uint noticeItem) =>
         Decide(rule, released, distanceSquared, s, ItemFilter.SkipOnly(ignore), out noticeItem);
 
+    /// <summary>The first item of the template's yield that is on the skip list, 0 = none (or no known yield).</summary>
+    public static uint FirstIgnoredYield(TemplateRule rule, IgnoreList ignore)
+    {
+        foreach (var id in rule.Yield) if (ignore.Contains(id)) return id;
+        return 0;
+    }
+
     /// <summary>As above, with the player's whole item filter. Skip mode judges the yield against the skip list as
     /// always. A picking filter (only mode, gather focus) judges a container-path target by its yield: a harvest
     /// (plant, crop, heap) needs at least one yield item the filter takes (the whole yield comes along, so the rest of

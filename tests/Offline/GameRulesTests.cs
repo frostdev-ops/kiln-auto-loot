@@ -74,8 +74,12 @@ public class TemplateRulesTests
         var corpse = One(Facts.T("LootContainer_Enemy_Skeleton_Elite_Melee", Facts.Corpse));
         Assert.Equal(Group.Corpse, corpse?.Group);
         Assert.Equal(TemplateFlags.Elite, corpse?.Flags);
-        Assert.Equal(Group.Corpse, One(Facts.T("LootPickup_Material_Bones", Facts.Corpse))?.Group);
-        Assert.Equal(Group.Corpse, One(Facts.T("LootPickup_Material_Fur_Patch_BatLoot", ["DefaultInventory", "DestroyOnLoot", "InteractionOfferRuntime"]))?.Group);
+        var bones = One(Facts.T("LootPickup_Material_Bones", Facts.Corpse));
+        Assert.Equal(Group.Corpse, bones?.Group);
+        Assert.Equal(TemplateFlags.Drop, bones?.Flags);
+        var fur = One(Facts.T("LootPickup_Material_Fur_Patch_BatLoot", ["DefaultInventory", "DestroyOnLoot", "InteractionOfferRuntime"]));
+        Assert.Equal(Group.Corpse, fur?.Group);
+        Assert.Equal(TemplateFlags.Drop, fur?.Flags);
         Assert.Equal(Group.Plant, One(Facts.T("LootPickup_Material_Plant_Fibre_Bush", Facts.Bush))?.Group);
     }
 

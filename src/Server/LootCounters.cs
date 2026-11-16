@@ -51,8 +51,8 @@ internal sealed class LootCounters
     public long PickupWaits;      // the pickup tracker held a pickup back
     public long FixedPickups;     // a pickup with its own inventory (mushrooms, stone piles)
 
-    // Kiln side: injects sent, moves, the per-scan cap, hold-E stops, sight.
-    public long Injects, Moves, CapReached, HoldECanceled, SightBlocked;
+    // Kiln side: injects sent, moves, the per-scan cap, sight.
+    public long Injects, Moves, CapReached, SightBlocked;
 
     /// <summary>Scan time of the last 5 s, in microseconds.</summary>
     public long ScanMicros, ScanCount, ScanMaxMicros;
@@ -76,7 +76,7 @@ internal sealed class LootCounters
         $"| containers: tries={ContainerTries} waiting={Waiting} harvested={AlreadyHarvested} accepts={Accepts} " +
         $"lootAll={LootAlls}/{LootNoOffer}/{LootOfferOff} questKept={QuestKept} unreadable={Unreadable} skipped={SkippedInContainers}/{SkippedPickups} " +
         $"| pickups: waits={PickupWaits} fixed={FixedPickups} " +
-        $"| kiln: injects={Injects} moves={Moves} capReached={CapReached} holdEStopped={HoldECanceled} sightBlocked={SightBlocked}";
+        $"| kiln: injects={Injects} moves={Moves} capReached={CapReached} sightBlocked={SightBlocked}";
 
     /// <summary>The timing line with the items taken; resets their 5 s parts.</summary>
     public string TimingLine()
@@ -91,5 +91,5 @@ internal sealed class LootCounters
     }
 
     public string Summary() =>
-        $"scans {PlayerScans}, accepts {Accepts}, loot-alls {LootAlls}, moves {Moves}, hold-E stopped {HoldECanceled}";
+        $"scans {PlayerScans}, accepts {Accepts}, loot-alls {LootAlls}, moves {Moves}";
 }

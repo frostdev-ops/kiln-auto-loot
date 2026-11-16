@@ -17,9 +17,10 @@ namespace KilnAutoLoot.Core;
 /// <summary>A template's loot group (TemplateRules). <see cref="Unknown"/>: a group word the fixtures do not know.</summary>
 public enum Group { Unknown, Ground, Collectible, Plant, Farm, Corpse, Chest, Boss, Enemy, Fish }
 
-/// <summary>What else a template is (TemplateRules).</summary>
+/// <summary>What else a template is (TemplateRules). <see cref="Drop"/>: a corpse group pile a creature leaves (bones,
+/// bat fur, critter parts) whose loot-all hands its default inventory over, as for the fog-nest crystals.</summary>
 [Flags]
-public enum TemplateFlags { None = 0, Stone = 1, Swarm = 2, Boss = 4, Elite = 8, Animal = 16 }
+public enum TemplateFlags { None = 0, Stone = 1, Swarm = 2, Boss = 4, Elite = 8, Animal = 16, Drop = 32 }
 
 public sealed record TemplateRule(Guid Guid, Group Group, TemplateFlags Flags, string Name, IReadOnlyList<uint> Yield);
 

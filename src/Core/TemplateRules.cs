@@ -136,8 +136,11 @@ public static class TemplateRules
             if (c.BossCorpse(name)) flags |= TemplateFlags.Boss;
             return Rule(t, Group.Corpse, flags);
         }
-        // material a creature drops as a container (bat fur, bones, critter parts); growing material is a plant (below)
-        if (name.StartsWith("lootpickup_material", StringComparison.Ordinal) && !t.Has("Destructible")) return Rule(t, Group.Corpse, flags);
+        // material a creature drops as a container (bat fur, bones, critter parts); growing material is a plant (below).
+        // Most of them have no inventory of their own (DefaultInventory only, like the fog-nest crystals): the loot-all
+        // hands it over, so they are flagged drop (Release.LootUnread)
+        if (name.StartsWith("lootpickup_material", StringComparison.Ordinal) && !t.Has("Destructible"))
+            return Rule(t, Group.Corpse, flags | TemplateFlags.Drop);
         if (name.Contains("locked")) return null;                                              // opened with a key, by the player
         // trees that give nuts or beans and stay standing (harvested in place, refilled later)
         if (name.Contains("_harvest") && !t.Has("RandomLoot") && t.Has("DefaultInventory")) return Rule(t, Group.Plant, TemplateFlags.None);

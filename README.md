@@ -25,7 +25,7 @@ notes run in each player's game.
 - **Bigger stacks**: every stackable item up to 9999 by default (at most 65535, 0 = the game's own sizes).
 - **Pauses** while a game window is open (a chest, crafting, a dialogue, the inventory, the map, the pause menu), and,
   if you switch it on, while an enemy is near.
-- **Holding E** follows your switches too: a group you turned off stays where it is.
+- **E is yours**: whatever the switches say, anything you press or hold E on is taken as in the game without the mod.
 - **Profiles**: switch your whole setup in one go, in the window or with a key (**F10** cycles them, any profile can
   have its own key). Built in: Everything, Wood & sticks, Stone & ore, Plants & crops, Plunder, Treasure hunter; make
   your own from any setup.

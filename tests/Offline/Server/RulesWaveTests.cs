@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // The loot loop with the player's own rules: the bag (top up carried stacks, keep free slots, carry limits), the only
-// list, gear rarity, the height window (looting and smashing), gather focus, and the hold-E guard with them.
+// list, gear rarity, the height window (looting and smashing) and gather focus.
 using Kiln;
 using KilnAutoLoot.Core;
 using KilnAutoLoot.Net;
@@ -489,49 +489,6 @@ public sealed class RulesWaveTests
         Assert.Equal(12f, SettingsJson.Read(a)!.Radius);
         rig.Loop.SetPersonal(rig.Player, new PersonalSettings { Radius = 9 });
         Assert.Equal(9f, SettingsJson.Read(rig.Loop.EffectiveJsonOf(rig.Player))!.Radius);
-    }
-
-    // ---------------------------------------------------------------- hold-E guard
-
-    [Fact]
-    public void Hold_E_never_cancels_a_hand_take_for_the_only_list_focus_or_rarity()
-    {
-        var rig = Rig(s => { s.ItemFilter = FilterMode.Only; s.OnlyList = "=Twigs"; s.MinGearRarity = GearRarity.Rare; },
-            items: BagRulesTests.GearItems());
-        var stone = rig.Game.Add(LoopRig.Twig, 2, Pickup, pickupItem: Stone);
-        var bush = rig.Game.Add(LoopRig.Bush, 2, Inv);
-        var sword = rig.Game.Add(LoopRig.Twig, 2, Pickup, pickupItem: Sword);
-        sword.Rarity = 1;
-        Assert.False(rig.Loop.ShouldCancelHoldE(rig.Player, stone.Id, null));   // not on the only list
-        Assert.False(rig.Loop.ShouldCancelHoldE(rig.Player, bush.Id, null));    // a harvest of an unlisted yield
-        Assert.False(rig.Loop.ShouldCancelHoldE(rig.Player, sword.Id, null));   // uncommon gear below Rare
-        Assert.Equal(0, rig.Loop.Counters.HoldECanceled);
-
-        var focus = Rig(_ => { });
-        focus.Loop.TookByHand(focus.Player, Twigs);
-        focus.Loop.Command(focus.Player, CommandKind.ToggleFocus);
-        var other = focus.Game.Add(LoopRig.Twig, 2, Pickup, pickupItem: Stone);
-        Assert.False(focus.Loop.ShouldCancelHoldE(focus.Player, other.Id, null));   // not the focus item
-        Assert.Equal(Stone, focus.Loop.HandPickupItem(other.Id));                    // remembered for the next toggle
-    }
-
-    [Fact]
-    public void Hold_E_still_cancels_a_skipped_pickup_also_in_only_mode()
-    {
-        var rig = Rig(s => { s.SkipList = "=Stone"; s.ItemFilter = FilterMode.Only; s.OnlyList = "=Twigs"; });
-        var stone = rig.Game.Add(LoopRig.Twig, 2, Pickup, pickupItem: Stone);
-        Assert.True(rig.Loop.ShouldCancelHoldE(rig.Player, stone.Id, null));
-    }
-
-    [Fact]
-    public void Hold_E_ignores_the_height_window_and_the_bag()
-    {
-        var rig = Rig(s => { s.HeightAbove = 2; s.FillCarriedStacks = true; s.CarryLimits = "=Apple:0"; });
-        rig.Game.BagSlots = [];
-        var high = rig.Game.Add(LoopRig.Twig, 1, Pickup, pickupItem: Twigs, y: 8);
-        var apple = rig.Game.Add(LoopRig.Twig, 1, Pickup, pickupItem: Apple);
-        Assert.False(rig.Loop.ShouldCancelHoldE(rig.Player, high.Id, null));
-        Assert.False(rig.Loop.ShouldCancelHoldE(rig.Player, apple.Id, null));
     }
 
     [Fact]

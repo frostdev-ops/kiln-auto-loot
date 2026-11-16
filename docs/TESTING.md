@@ -27,8 +27,9 @@ rules and what a dedicated server can show without a player. Everything below ne
 ## 2. Loose things
 - [ ] Rocks, sticks, ore, mushrooms and dropped items within the radius are picked up without pressing E; each thing
       once (no doubled amounts on stones, mushrooms, fireflies).
-- [ ] Each group switch (ground loot, stones, collectibles, plants, crops, fish) stops its group at once, also when
-      you hold E; the radius slider and a group radius larger than the general one both work.
+- [ ] Each group switch (ground loot, stones, collectibles, plants, crops, fish) stops its group at once; pressing or
+      holding E still takes a switched-off thing, also beyond its group radius and with auto loot off (F9); the radius
+      slider and a group radius larger than the general one both work.
 - [ ] "Take things where they lie" off: things are still picked up (no fly-in), mushrooms and fireflies only right
       next to you.
 - [ ] Inventory full: the "inventory full" note appears (at most once a minute) and nothing stutters while loot lies
@@ -36,6 +37,8 @@ rules and what a dedicated server can show without a player. Everything below ne
 
 ## 3. Containers
 - [ ] A fresh corpse waits about a second, then empties; elites and bosses bring their bonus loot (jewels, runes).
+- [ ] The piles creatures leave are taken: skeleton hound and skeleton bones (also in a Hollow Halls), bat fur,
+      critter parts.
 - [ ] "Bosses" off: boss, mini boss and elite corpses stay for you (try a Fogger Berserker or Heavy Mage corpse too).
 - [ ] World chests, coffins, cupboards and heaps empty; your own chests and locked chests are never touched.
 - [ ] Quest items (map pieces, lore scrolls, instruments, eternal ammunition, the farmer hat) stay in containers while
@@ -53,8 +56,7 @@ rules and what a dedicated server can show without a player. Everything below ne
 - [ ] Type 3 letters: suggestions in the window's language; Enter takes the first; a group can be skipped whole and
       taken again; entries show their x; "Clear the list" works; an unknown "=Name" is marked.
 - [ ] A skipped item stays on the ground and in chests and corpses, with a short note (at most 3 times per item); a
-      bush that would give a skipped item is not harvested; holding E still takes nothing of a skipped item; pressing E
-      on it takes it.
+      bush that would give a skipped item is not harvested; pressing or holding E on it takes it.
 
 ## 6. Smashing
 - [ ] Barrels, crates, pots and broken furniture in ruins break once a second and their loot is picked up.

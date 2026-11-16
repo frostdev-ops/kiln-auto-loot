@@ -4,7 +4,7 @@
 // hosting game, mods.boot.resource_patches):
 //
 //   The template table lists the templates the mod may take: loot-all targets (corpse, chest, plant incl. swarms, farm,
-//   and the fog-nest resources, ground loot whose loot-all goes out unread) and pickups (ground, collectible, plant pickups, fish). Loot-all
+//   and the fog-nest resources and creature drops, whose loot-all goes out unread) and pickups (ground, collectible, plant pickups, fish). Loot-all
 //   templates whose name holds "boss" are in group "boss", which LootRules always refuses (boss keys and quest
 //   progress stay a hand job). Creatures that fight are group "enemy".
 //
@@ -49,8 +49,12 @@ internal static class Release
         rule.Group == Group.Enemy && (rule.Flags & TemplateFlags.Animal) == 0 && !dead;
 
     /// <summary>One harvest per visit, also without an offer. Ground loot on the container path too (the fog-nest
-    /// crystals): one loot-all per visit, also while the bag is full.</summary>
-    public static bool HarvestOnce(TemplateRule rule) => rule.Group is Group.Plant or Group.Farm or Group.Ground;
+    /// crystals), and the piles a creature leaves (<see cref="IsDrop"/>): one loot-all per visit, also while the bag is
+    /// full.</summary>
+    public static bool HarvestOnce(TemplateRule rule) => rule.Group is Group.Plant or Group.Farm or Group.Ground || IsDrop(rule);
+
+    /// <summary>A corpse group pile a creature leaves (bones, bat fur, critter parts: TemplateFlags.Drop).</summary>
+    public static bool IsDrop(TemplateRule rule) => rule.Group == Group.Corpse && (rule.Flags & TemplateFlags.Drop) != 0;
 
     /// <summary>Targets whose loot-all is a harvest (the yield goes straight into the inventory, past the slot filter): their
     /// inventory is not read for the slot filter, and a loot-all goes out even when the inventory reads empty.</summary>
@@ -58,10 +62,14 @@ internal static class Release
 
     /// <summary>Ground loot on the container path whose inventory cannot be read gets its loot-all anyway, like a harvest:
     /// the fog-nest crystals (Archaic Essence) have a default inventory that is only handed over by the loot-all (the
-    /// accept alone moves their offer on). A readable one keeps the slot filter.</summary>
-    public static bool LootUnread(TemplateRule rule) => rule.Group == Group.Ground;
+    /// accept alone moves their offer on). The piles a creature leaves (<see cref="IsDrop"/>: hound and skeleton bones,
+    /// bat fur) are built the same way. A readable one keeps the slot filter.</summary>
+    public static bool LootUnread(TemplateRule rule) => rule.Group == Group.Ground || IsDrop(rule);
 
     /// <summary>Corpses and chests that read empty are skipped instead of sent another loot-all (they stay in the world
-    /// after looting; another loot-all would move nothing).</summary>
-    public static bool SkipWhenEmpty(TemplateRule rule) => rule.Group is Group.Corpse or Group.Chest or Group.Enemy;
+    /// after looting; another loot-all would move nothing). A creature's pile is not: its default inventory may not be
+    /// in its inventory yet, and the loot-all hands it over (once per visit, <see cref="HarvestOnce"/>; the pile goes
+    /// when it is looted).</summary>
+    public static bool SkipWhenEmpty(TemplateRule rule) =>
+        (rule.Group is Group.Corpse or Group.Chest or Group.Enemy) && !IsDrop(rule);
 }

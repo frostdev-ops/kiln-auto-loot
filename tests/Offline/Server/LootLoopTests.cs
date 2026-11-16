@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// The loot loop (src/Server/LootLoop.cs) against a fake world: containers, pickups, enemy pause, the window pause, the slot filter, hold-E, scan rate.
+// The loot loop (src/Server/LootLoop.cs) against a fake world: containers, pickups, enemy pause, the window pause, the slot filter, scan rate.
 using Kiln;
 using KilnAutoLoot.Core;
 using KilnAutoLoot.Server;
@@ -242,20 +242,6 @@ public sealed class LootLoopTests
     }
 
     [Fact]
-    public void Hold_E_goes_through_while_their_settings_are_on_the_way_and_follows_the_defaults_after_the_wait()
-    {
-        var server = new ServerSettings();
-        server.Defaults.GroundLoot = false;
-        var rig = new LoopRig(server: server);
-        var other = rig.Game.AddPlayer(100, 0, 0);
-        var twig = rig.Game.Add(LoopRig.Twig, 101, Pickup, pickupItem: 1);
-        rig.ScanAfter(100);
-        Assert.False(rig.Loop.ShouldCancelHoldE(other, twig.Id, null));   // the defaults are not their choice yet
-        rig.ScanFor(LootLoop.SettingsWaitMs);
-        Assert.True(rig.Loop.ShouldCancelHoldE(other, twig.Id, null));    // a game without the mod: the defaults hold
-    }
-
-    [Fact]
     public void Autoloot_off_sends_nothing()
     {
         var rig = new LoopRig(s => s.Looting = false);
@@ -468,63 +454,6 @@ public sealed class LootLoopTests
         rig.Loop.Reset();
         Assert.Empty(rig.Loop.Players);
     }
-
-    // ---------------------------------------------------------------- hold-E guard
-
-    [Fact]
-    public void Hold_E_is_canceled_for_a_group_that_is_off()
-    {
-        var rig = new LoopRig(s => s.GroundLoot = false);
-        var twig = rig.Game.Add(LoopRig.Twig, 2, Pickup, pickupItem: 1);
-        Assert.True(rig.Loop.ShouldCancelHoldE(rig.Player, twig.Id, null));
-    }
-
-    [Fact]
-    public void Hold_E_is_canceled_out_of_the_group_radius()
-    {
-        var rig = new LoopRig(s => s.GroundRadius = 2);
-        var twig = rig.Game.Add(LoopRig.Twig, 4, Pickup, pickupItem: 1);
-        Assert.True(rig.Loop.ShouldCancelHoldE(rig.Player, twig.Id, null));
-        Assert.False(rig.Loop.ShouldCancelHoldE(rig.Player, twig.Id, new WorldPosition(1, 0, 0)));
-    }
-
-    [Fact]
-    public void Hold_E_is_canceled_for_a_pickup_whose_item_is_ignored()
-    {
-        var rig = new LoopRig(s => s.SkipList = "=Twigs");
-        var twig = rig.Game.Add(LoopRig.Twig, 2, Pickup, pickupItem: 1);
-        Assert.True(rig.Loop.ShouldCancelHoldE(rig.Player, twig.Id, null));
-    }
-
-    [Fact]
-    public void Hold_E_on_a_chest_of_a_switched_off_group_is_canceled()
-    {
-        var rig = new LoopRig(s => s.Chests = false);
-        var chest = rig.Game.Add(LoopRig.Chest, 2, [LootLoop.InventoryComponent]);
-        Assert.True(rig.Loop.ShouldCancelHoldE(rig.Player, chest.Id, null));
-    }
-
-    [Fact]
-    public void Hold_E_is_left_alone_for_allowed_targets_bosses_living_enemies_and_unknown_templates()
-    {
-        var rig = new LoopRig();
-        var twig = rig.Game.Add(LoopRig.Twig, 2, Pickup, pickupItem: 1);
-        var boss = rig.Game.Add(LoopRig.Boss, 2, Pickup, pickupItem: 7);
-        var enemy = rig.Game.Add(LoopRig.Enemy, 2, [LootLoop.InventoryComponent]);
-        var unknown = rig.Game.Add(LoopRig.Unknown, 2, Pickup, pickupItem: 1);
-        Assert.False(rig.Loop.ShouldCancelHoldE(rig.Player, twig.Id, null));
-        Assert.False(rig.Loop.ShouldCancelHoldE(rig.Player, boss.Id, null));
-        Assert.False(rig.Loop.ShouldCancelHoldE(rig.Player, enemy.Id, null));
-        Assert.False(rig.Loop.ShouldCancelHoldE(rig.Player, unknown.Id, null));
-    }
-
-    [Fact]
-    public void Hold_E_follows_the_rules_also_with_autoloot_off()
-    {
-        var rig = new LoopRig(s => { s.Looting = false; s.GroundLoot = false; });
-        var twig = rig.Game.Add(LoopRig.Twig, 2, Pickup, pickupItem: 1);
-        Assert.True(rig.Loop.ShouldCancelHoldE(rig.Player, twig.Id, null));
-    }
 }
 
 public sealed class UnreadableInventoryTests
@@ -568,6 +497,91 @@ public sealed class UnreadableInventoryTests
         rig.ScanFor(3000);
         Assert.Single(rig.Game.Loots);                    // once per visit, also when the bag was full
         Assert.Equal(0, rig.Loop.Counters.Unreadable);
+    }
+
+    [Fact]
+    public void A_creature_pile_gets_its_loot_all_although_its_inventory_cannot_be_read()
+    {
+        // hound and skeleton bones, bat fur: a DefaultInventory and no Inventory, like the fog-nest crystals (a player's
+        // report: hound bones in a Hollow Halls were never looted)
+        var rig = new LoopRig(s => s.OpenDelay = 0);
+        var bones = rig.Game.Add(LoopRig.Bones, 3, [LootLoop.OfferComponent]);
+        bones.Offer = new Offer(true, false, 1);
+        bones.Slots = null;
+        rig.ScanFor(300);
+        Assert.Single(rig.Game.Interacts);
+        bones.Offer = new Offer(true, false, 2);
+        rig.ScanFor(3000);
+        Assert.Single(rig.Game.Loots);                    // once per visit
+        Assert.Equal(0, rig.Loop.Counters.Unreadable);
+    }
+
+    [Fact]
+    public void A_creature_pile_that_reads_empty_still_gets_one_loot_all()
+    {
+        var rig = new LoopRig(s => s.OpenDelay = 0);
+        var bones = rig.Game.Add(LoopRig.Bones, 3, LoopRig.OfferInv);
+        bones.Offer = new Offer(true, false, 1);
+        bones.Slots = [];                                 // the default inventory is not in its inventory yet
+        rig.ScanFor(300);
+        bones.Offer = new Offer(true, false, 2);        // the accept moved the offer on
+        rig.ScanFor(3000);
+        Assert.Single(rig.Game.Loots);
+        Assert.Empty(rig.Game.Moves);
+    }
+
+    [Fact]
+    public void A_readable_creature_pile_keeps_the_slot_filter()
+    {
+        var rig = new LoopRig(s => { s.OpenDelay = 0; s.SkipList = "=Apple"; });
+        var bones = rig.Game.Add(LoopRig.Bones, 3, LoopRig.OfferInv);
+        bones.Offer = new Offer(true, false, 1);
+        bones.Slots = [new ContainerSlot(10, 6, 1), new ContainerSlot(11, 7, 2)];
+        rig.ScanFor(300);
+        bones.Offer = new Offer(true, false, 2);
+        rig.ScanFor(300);
+        Assert.Empty(rig.Game.Loots);
+        Assert.Equal([11ul], rig.Game.Moves.Select(m => m.Slot).ToArray());
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void An_unread_creature_pile_whose_yield_holds_a_skipped_item_stays(bool unreadable)
+    {
+        var rig = new LoopRig(s => { s.OpenDelay = 0; s.SkipList = "=Apple"; });
+        var bones = rig.Game.Add(LoopRig.Bones, 3, LoopRig.OfferInv);
+        bones.Offer = new Offer(true, false, 1);
+        bones.Slots = unreadable ? null : [];
+        rig.ScanFor(300);
+        bones.Offer = new Offer(true, false, 2);        // the accept moved the offer on
+        rig.ScanFor(3000);
+        Assert.Empty(rig.Game.Loots);
+        Assert.True(rig.Loop.Counters.YieldSkipped > 0);
+    }
+
+    [Fact]
+    public void An_unread_creature_pile_is_taken_whole_in_only_mode_when_its_yield_has_a_listed_item()
+    {
+        var rig = new LoopRig(s => { s.OpenDelay = 0; s.ItemFilter = FilterMode.Only; s.OnlyList = "=Flint"; s.SkipList = "=Apple"; });
+        var bones = rig.Game.Add(LoopRig.Bones, 3, [LootLoop.OfferComponent]);
+        bones.Offer = new Offer(true, false, 1);
+        bones.Slots = null;
+        rig.ScanFor(300);
+        bones.Offer = new Offer(true, false, 2);        // the accept moved the offer on
+        rig.ScanFor(3000);
+        Assert.Single(rig.Game.Loots);
+    }
+
+    [Fact]
+    public void A_creature_pile_follows_the_corpses_switch()
+    {
+        var rig = new LoopRig(s => { s.OpenDelay = 0; s.Corpses = false; });
+        var bones = rig.Game.Add(LoopRig.Bones, 3, [LootLoop.OfferComponent]);
+        bones.Slots = null;
+        rig.ScanFor(3000);
+        Assert.Empty(rig.Game.Loots);
+        Assert.Empty(rig.Game.Interacts);
     }
 
     [Theory]

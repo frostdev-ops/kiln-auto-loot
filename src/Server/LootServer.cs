@@ -289,7 +289,7 @@ internal sealed class LootServer(Data data)
         else if (ChannelHub.HasMod(player)) AutoLootMod.Hub.SendTo(player, msg);
     }
 
-    // ---------------------------------------------------------------- tick, hold-E, smash, diagnostics
+    // ---------------------------------------------------------------- tick, takes by hand, smash, diagnostics
 
     private void OnTick(in TickInfo tick)
     {
@@ -323,27 +323,22 @@ internal sealed class LootServer(Data data)
         }
     }
 
-    /// <summary>The player's own hold-E LootEvent. Pre, cancelable, tick thread.</summary>
+    /// <summary>The player's own LootEvent (E pressed or held): never canceled, whatever the player's switches say (a
+    /// single press of E and the hold-E sweep look the same here, and what a player takes by hand is theirs to take).
+    /// Noted for gather focus only. Pre, tick thread.</summary>
     private void OnLoot(LootEvent e)
     {
-        if (!_running || !_enabled || !_looting || _loop is null || e.Injected || !e.ByPlayer) return;
+        if (!_running || !_enabled || !_looting || _loop is null || e.Injected || !e.ByPlayer || e.Canceled) return;
         try
         {
-            if (_loop.ShouldCancelHoldE(e.Guest, e.Host, e.HostPosition))
-            {
-                e.Cancel();
-                if (_config?.Value.CounterLog == true && _loop.Counters.HoldECanceled <= 60)
-                    _diag?.Write($"hold-E stopped: player {e.Guest}, target {e.Host}");
-            }
-            else if (!e.Canceled)
-                _loop.HandLoot(e.Guest, e.Host, e.LootAll);   // a single pickup by hand: confirmed when the item arrives
+            _loop.HandLoot(e.Guest, e.Host, e.LootAll);   // a single pickup by hand: confirmed when the item arrives
         }
         catch (Exception ex)
         {
             if (_clock.NowMs >= _nextErrorLog)
             {
                 _nextErrorLog = _clock.NowMs + 60_000;
-                Log?.Error(ex, "Kiln Auto Loot: the hold-E check failed");
+                Log?.Error(ex, "Kiln Auto Loot: noting a take by hand failed");
             }
         }
     }
@@ -381,9 +376,16 @@ internal sealed class LootServer(Data data)
         if (_config?.Value.CounterLog != true || _loop is null) return;
         var s = _loop.SettingsOf(player);
         _diag?.Write($"settings: player {player} ({how}): looting {B(s.Looting)}, groundLoot {B(s.GroundLoot)}, stones {B(s.Stones)}, " +
-                     $"smash {B(s.Smash)}, buildables {B(s.SmashBuildables)}, fellTrees {B(s.FellTrees)}, radius {s.Radius:0}, " +
-                     $"height {s.HeightAbove:0}/{s.HeightBelow:0}");
+                     $"collectibles {B(s.Collectibles)}, plants {B(s.Plants)}, crops {B(s.Crops)}, fish {B(s.Fish)}, " +
+                     $"corpses {B(s.Corpses)}, chests {B(s.Chests)}, " +
+                     $"smash {B(s.Smash)}, buildables {B(s.SmashBuildables)}, fellTrees {B(s.FellTrees)}, radius {s.Radius:0} " +
+                     $"(ground {s.GroundRadius:0}, plants {s.PlantsRadius:0}, corpses {s.CorpsesRadius:0}, chests {s.ChestsRadius:0}), " +
+                     $"height {s.HeightAbove:0}/{s.HeightBelow:0}, filter {s.ItemFilter}, skip \"{Short(s.SkipList)}\", " +
+                     $"only \"{Short(s.OnlyList)}\"");
     }
+
+    private static string Short(string? text) =>
+        string.IsNullOrEmpty(text) ? "" : text.Length <= 80 ? text : text[..80] + "...";
 
     private void CounterLine()
     {

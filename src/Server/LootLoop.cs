@@ -417,7 +417,7 @@ internal sealed class LootLoop
             Counters.WindowPauses++;
             return;
         }
-        if (!s.Looting) return;   // the game's own hold-E only (the guard still applies)
+        if (!s.Looting) return;   // only what the player takes by hand (E)
 
         // the mod's own search, exactly enemyDistance, not capped by the loot radius.
         if (s.EnemyPause)
@@ -550,10 +550,11 @@ internal sealed class LootLoop
         var slots = _game.Slots(e);
         if (slots is null && Release.LootUnread(rule))
         {
-            // a fog-nest crystal: its essence comes with the loot-all only; the item filter judged its yield before, and a
-            // bag rule that cannot see the amounts leaves it (as for a harvest)
-            ProbeTrace.Note(e, "loot: unread ground loot, loot-all like a harvest");
-            if (HarvestFits(p, gp, e, rule, out _)) SendLoot(p, gp, e, key, offer);
+            // a fog-nest crystal or a creature's pile (bones, bat fur): its contents come with the loot-all only; the
+            // item filter judged a crystal's yield before, a pile's is judged here, and a bag rule that cannot see the
+            // amounts leaves it (as for a harvest)
+            ProbeTrace.Note(e, "loot: unread ground loot or drop, loot-all like a harvest");
+            TakeUnread(p, gp, e, key, rule, offer);
             return;
         }
         if (slots is null)
@@ -615,8 +616,11 @@ internal sealed class LootLoop
         ProbeTrace.Note(e, $"loot: {take.Count} slots to take, something kept: {kept}");
         if (take.Count == 0)
         {
-            // nothing to take: corpses and chests stay as they are; others still get the loot-all (harvest-like)
-            if (!kept && !Release.SkipWhenEmpty(rule)) SendLoot(p, gp, e, key, offer);
+            // nothing to take: corpses and chests stay as they are; others still get the loot-all (harvest-like), a
+            // creature's pile as when it cannot be read (its default inventory comes with the loot-all)
+            if (kept || Release.SkipWhenEmpty(rule)) return;
+            if (Release.IsDrop(rule)) TakeUnread(p, gp, e, key, rule, offer);
+            else SendLoot(p, gp, e, key, offer);
             return;
         }
 
@@ -687,6 +691,21 @@ internal sealed class LootLoop
             else p.PendingMoves[key] = n - 1;
         }
         if (outcome == MoveOutcome.NoRoom && p.Full.MayNotify()) InventoryFull(p);
+    }
+
+    /// <summary>The loot-all of a target whose contents cannot be seen (a fog-nest crystal, a creature's pile): taken whole.
+    /// In skip mode a pile whose yield holds a skipped item stays (the crystal's yield was judged by LootRules.Decide; a
+    /// picking filter judged both there), and with a bag rule on the live contents have to fit (HarvestFits).</summary>
+    private void TakeUnread(PlayerLoot p, GamePlayer gp, EntityId e, ulong key, TemplateRule rule, Offer offer)
+    {
+        if (Release.IsDrop(rule) && !p.Filter.Picks && LootRules.FirstIgnoredYield(rule, p.Filter.Skip) is var skipped and not 0)
+        {
+            ProbeTrace.Note(e, $"loot: the pile's yield holds skipped item {skipped}");
+            Counters.YieldSkipped++;
+            LeftBehind(p, skipped);
+            return;
+        }
+        if (HarvestFits(p, gp, e, rule, out _)) SendLoot(p, gp, e, key, offer);
     }
 
     /// <summary>Returns whether the loot-all went out (false: the per-scan cap is reached).</summary>
@@ -796,33 +815,6 @@ internal sealed class LootLoop
         ProbeTrace.Note(e, $"send: pickup loot ({item} x{details.Amount})");
         _game.Loot(gp.Entity, e);
         p.Pickups.Taken(key);
-    }
-
-    // ---------------------------------------------------------------- hold-E guard
-
-    /// <summary>The player's own LootEvent (not injected, by a player): true = cancel it, because its target's group is
-    /// off, it is out of its group radius, or it is a pickup whose item is on the skip list. Nothing else the player
-    /// chose (only list, gather focus, gear rarity, height window, bag rules) ever cancels the player's own take: a
-    /// player who presses E on something wants it. Groups that are never automatic (boss, a living enemy, unknown
-    /// templates) are left to the game: a single E press may arrive the same way.</summary>
-    public bool ShouldCancelHoldE(EntityId guest, EntityId host, WorldPosition? hostPosition)
-    {
-        if (!_players.TryGetValue(guest, out var p)) return false;
-        if (!Settled(p, _clock.NowMs)) return false;   // their settings are on the way: their own hold-E goes through
-        if (_game.PositionOf(guest) is not { } from) return false;
-        if ((hostPosition ?? _game.PositionOf(host)) is not { } at) return false;
-        if (Classify(host) is not { Rule: { } rule }) return false;
-        if (rule.Group == Group.Boss) return false;
-        var hasPickup = _game.TryPickupItem(host, out var item);
-        var container = Release.IsContainerTarget(rule, hasPickup);
-        var dead = rule.Group == Group.Enemy && _game.IsDead(host);
-        if (rule.Group == Group.Enemy && !dead) return false;
-        var released = container && Release.ContainerReleased(rule, dead);
-        if (container && !released) return false;
-        var verdict = LootRules.Decide(rule, released, DistanceSquared(from, at), p.Settings, p.Ignore!, out _);
-        var cancel = verdict is Verdict.GroupOff or Verdict.RadiusOut || (!container && p.Ignore!.Contains(item));
-        if (cancel) Counters.HoldECanceled++;
-        return cancel;
     }
 
     // ---------------------------------------------------------------- helpers
