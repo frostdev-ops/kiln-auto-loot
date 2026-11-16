@@ -95,14 +95,21 @@ public sealed class GenericDropTests
         Assert.True(rig.Loop.Counters.GenericLeft > 0);
     }
 
-    [Fact]
-    public void The_only_list_and_gather_focus_judge_the_live_item()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void The_only_list_and_gather_focus_judge_the_live_item(bool focus)
     {
-        var rig = new LoopRig(s => { s.ItemFilter = FilterMode.Only; s.OnlyList = "=Flint"; }, items: Items());
+        var rig = new LoopRig(s => { if (!focus) { s.ItemFilter = FilterMode.Only; s.OnlyList = "=Flint"; } }, items: Items());
+        if (focus)
+        {
+            rig.Loop.TookByHand(rig.Player, 7);   // flint taken by hand, then F11
+            rig.Loop.Command(rig.Player, CommandKind.ToggleFocus);
+        }
         var flint = rig.Game.Add(LoopRig.Generic, 2, Pickup, pickupItem: 7);
         rig.Game.Add(LoopRig.Generic, 3, Pickup, pickupItem: 6);
         rig.ScanFor(3000);
         Assert.Equal([flint.Id], rig.Game.Loots.Select(l => l.Host).Distinct().ToArray());
-        Assert.True(rig.Loop.Counters.NotListed > 0);
+        Assert.True(focus ? rig.Loop.Counters.NotFocus > 0 : rig.Loop.Counters.NotListed > 0);
     }
 }
