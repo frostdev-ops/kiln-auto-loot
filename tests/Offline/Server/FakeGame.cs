@@ -144,6 +144,7 @@ internal sealed class LoopRig
     public static readonly Guid Wolf = new("11111111-0000-0000-0000-000000000008");    // enemy, animal
     public static readonly Guid FogNest = new("11111111-0000-0000-0000-000000000009"); // ground, container path, item 2
     public static readonly Guid Bones = new("11111111-0000-0000-0000-00000000000a");   // corpse drop pile, yield apple + flint
+    public static readonly Guid Parts = new("11111111-0000-0000-0000-00000000000b");   // corpse drop pile, yield unknown
     public static readonly Guid Unknown = new("11111111-0000-0000-0000-0000000000ff");
 
     public const string TemplatesText =
@@ -157,7 +158,8 @@ internal sealed class LoopRig
         "11111111-0000-0000-0000-000000000007\tboss\t\tLootPickup_Enemy_Boss_Test\t7\n" +
         "11111111-0000-0000-0000-000000000008\tenemy\tanimal\tEnemy_Wolf_Test\t\n" +
         "11111111-0000-0000-0000-000000000009\tground\t\tFognest_Ressource_Destructible_Test\t2\n" +
-        "11111111-0000-0000-0000-00000000000a\tcorpse\tdrop\tLootPickup_Material_Skeleton_Hound_Bones_Test\t6,7\n";
+        "11111111-0000-0000-0000-00000000000a\tcorpse\tdrop\tLootPickup_Material_Skeleton_Hound_Bones_Test\t6,7\n" +
+        "11111111-0000-0000-0000-00000000000b\tcorpse\tdrop\tLootPickup_Material_Critter_Parts_Test\t\n";
 
     public static readonly string[] OfferInv = [LootLoop.OfferComponent, LootLoop.InventoryComponent];
 

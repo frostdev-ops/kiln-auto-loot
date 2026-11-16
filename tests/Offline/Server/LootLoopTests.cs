@@ -2,6 +2,7 @@
 // The loot loop (src/Server/LootLoop.cs) against a fake world: containers, pickups, enemy pause, the window pause, the slot filter, scan rate.
 using Kiln;
 using KilnAutoLoot.Core;
+using KilnAutoLoot.Net;
 using KilnAutoLoot.Server;
 using Xunit;
 
@@ -570,6 +571,74 @@ public sealed class UnreadableInventoryTests
         rig.ScanFor(300);
         bones.Offer = new Offer(true, false, 2);        // the accept moved the offer on
         rig.ScanFor(3000);
+        Assert.Single(rig.Game.Loots);
+    }
+
+    [Theory]
+    [InlineData(false, true)]
+    [InlineData(true, true)]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    public void An_unread_creature_pile_without_a_known_yield_stays_under_a_picking_filter(bool focus, bool unreadable)
+    {
+        var rig = new LoopRig(s =>
+        {
+            s.OpenDelay = 0;
+            if (!focus) { s.ItemFilter = FilterMode.Only; s.OnlyList = "=Twigs"; }
+        });
+        if (focus)
+        {
+            rig.Loop.TookByHand(rig.Player, 1);
+            rig.Loop.Command(rig.Player, CommandKind.ToggleFocus);
+        }
+        var parts = rig.Game.Add(LoopRig.Parts, 3, LoopRig.OfferInv);
+        parts.Offer = new Offer(true, false, 1);
+        parts.Slots = unreadable ? null : [];
+        rig.ScanFor(300);
+        parts.Offer = new Offer(true, false, 2);
+        rig.ScanFor(3000);
+        Assert.Empty(rig.Game.Loots);
+        Assert.True(focus ? rig.Loop.Counters.NotFocus > 0 : rig.Loop.Counters.NotListed > 0);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void A_readable_creature_pile_retries_a_slot_move_that_did_not_finish(bool noRoom)
+    {
+        var rig = new LoopRig(s => { s.OpenDelay = 0; s.CarryLimits = "=Flint:3"; });
+        var bones = rig.Game.Add(LoopRig.Bones, 3, [LootLoop.InventoryComponent]);
+        bones.Slots = [new ContainerSlot(11, 7, 5)];
+        rig.ScanAfter(100);
+        var move = Assert.Single(rig.Game.Moves);
+        Assert.Equal(3, Assert.Single(rig.Game.MoveCounts));
+        move.Done(noRoom ? MoveOutcome.NoRoom : MoveOutcome.Failed);
+
+        rig.Game.Clear();
+        rig.ScanAfter(100);
+        Assert.Single(rig.Game.Moves);
+        Assert.Equal(3, Assert.Single(rig.Game.MoveCounts));
+        Assert.Empty(rig.Game.Loots);
+    }
+
+    [Fact]
+    public void A_readable_creature_pile_gives_the_rest_after_a_partial_take()
+    {
+        var rig = new LoopRig(s => { s.OpenDelay = 0; s.CarryLimits = "=Flint:3"; });
+        var bones = rig.Game.Add(LoopRig.Bones, 3, [LootLoop.InventoryComponent]);
+        bones.Slots = [new ContainerSlot(11, 7, 5)];
+        rig.ScanAfter(100);
+        var move = Assert.Single(rig.Game.Moves);
+        bones.Slots = [new ContainerSlot(11, 7, 2)];
+        rig.Game.BagSlots = [new BagSlot(7, 3, true)];
+        move.Done(MoveOutcome.Done);
+        rig.Game.Clear();
+        rig.ScanAfter(100);
+        Assert.Empty(rig.Game.Moves);                     // the carry limit is reached
+        Assert.Empty(rig.Game.Loots);
+
+        rig.Game.BagSlots = [];                           // the player used the flint while still next to the pile
+        rig.ScanAfter(100);
         Assert.Single(rig.Game.Loots);
     }
 

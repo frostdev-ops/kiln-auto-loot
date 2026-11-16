@@ -227,7 +227,7 @@ internal sealed class LootLoop
         return new CommandResult(focus, Reply: true);
     }
 
-    /// <summary>The player's own loot request (not injected, not canceled when the mod's guard let it through): a single
+    /// <summary>The player's own loot request (not injected, not canceled by the game or another mod): a single
     /// pickup is remembered as pending; it becomes the hand item only when the same item arrives in the player's
     /// inventory (<see cref="ItemReceived"/>) within <see cref="HandTakeWindowMs"/>. A refused take (a full bag, a zone,
     /// another mod) never arrives and changes nothing.</summary>
@@ -673,8 +673,9 @@ internal sealed class LootLoop
         if (sent > 0)
         {
             CountLootKind(offer);
-            // Ground slot moves can leave a remainder or fail: only their loot-all finishes the visit.
-            if (rule.Group != Group.Ground) p.Visits.Looted(key);
+            // Ground and creature-pile slot moves can leave a remainder or fail: only their loot-all finishes the visit
+            // (they are harvested once per visit, Release.HarvestOnce).
+            if (rule.Group != Group.Ground && !Release.IsDrop(rule)) p.Visits.Looted(key);
         }
     }
 
@@ -694,16 +695,31 @@ internal sealed class LootLoop
     }
 
     /// <summary>The loot-all of a target whose contents cannot be seen (a fog-nest crystal, a creature's pile): taken whole.
-    /// In skip mode a pile whose yield holds a skipped item stays (the crystal's yield was judged by LootRules.Decide; a
-    /// picking filter judged both there), and with a bag rule on the live contents have to fit (HarvestFits).</summary>
+    /// The crystal's yield was judged by LootRules.Decide. A pile's is judged here, as it comes whole: in skip mode one
+    /// whose yield holds a skipped item stays; a picking filter (only list, gather focus) needs a yield item it takes
+    /// (Decide lets a corpse without a known yield through for its slots, which cannot be seen here). With a bag rule on
+    /// the live contents have to fit (HarvestFits).</summary>
     private void TakeUnread(PlayerLoot p, GamePlayer gp, EntityId e, ulong key, TemplateRule rule, Offer offer)
     {
-        if (Release.IsDrop(rule) && !p.Filter.Picks && LootRules.FirstIgnoredYield(rule, p.Filter.Skip) is var skipped and not 0)
+        if (Release.IsDrop(rule))
         {
-            ProbeTrace.Note(e, $"loot: the pile's yield holds skipped item {skipped}");
-            Counters.YieldSkipped++;
-            LeftBehind(p, skipped);
-            return;
+            if (p.Filter.Picks)
+            {
+                if (!rule.Yield.Any(p.Filter.Allows))
+                {
+                    ProbeTrace.Note(e, "loot: the pile gives nothing the filter takes");
+                    if (p.Filter.Focus != 0) Counters.NotFocus++;
+                    else Counters.NotListed++;
+                    return;
+                }
+            }
+            else if (LootRules.FirstIgnoredYield(rule, p.Filter.Skip) is var skipped and not 0)
+            {
+                ProbeTrace.Note(e, $"loot: the pile's yield holds skipped item {skipped}");
+                Counters.YieldSkipped++;
+                LeftBehind(p, skipped);
+                return;
+            }
         }
         if (HarvestFits(p, gp, e, rule, out _)) SendLoot(p, gp, e, key, offer);
     }
