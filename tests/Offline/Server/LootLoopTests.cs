@@ -643,6 +643,24 @@ public sealed class UnreadableInventoryTests
     }
 
     [Fact]
+    public void A_creature_pile_emptied_by_slot_moves_gets_one_loot_all_and_then_nothing()
+    {
+        // no bag rule: with one on, a pile that reads empty is left (HarvestFits cannot see its amounts)
+        var rig = new LoopRig(s => { s.OpenDelay = 0; s.ItemFilter = FilterMode.Only; s.OnlyList = "=Flint"; });
+        var bones = rig.Game.Add(LoopRig.Bones, 3, [LootLoop.InventoryComponent]);
+        bones.Slots = [new ContainerSlot(10, 6, 1), new ContainerSlot(11, 7, 2)];
+        rig.ScanAfter(100);
+        var move = Assert.Single(rig.Game.Moves);         // the flint moves, the apple (not listed) stays
+        Assert.Equal(11ul, move.Slot);
+        bones.Slots = [];                                 // the player took the apple by hand meanwhile
+        move.Done(MoveOutcome.Done);
+        rig.Game.Clear();
+        rig.ScanFor(3000);
+        Assert.Empty(rig.Game.Moves);
+        Assert.Single(rig.Game.Loots);                    // the pile's loot-all once, then the visit is done
+    }
+
+    [Fact]
     public void A_creature_pile_follows_the_corpses_switch()
     {
         var rig = new LoopRig(s => { s.OpenDelay = 0; s.Corpses = false; });
