@@ -4,7 +4,8 @@
 - Loose loot from broken barrels, crates and pots and from some resource nodes is picked up (string, torn cloth, flint
   and the like were left on the ground). Each piece is judged by the item it carries: the skip and only lists, gather
   focus, the Stones switch for stone, the Collectibles switch for finds; quest items stay.
-- Counter log: the counters line shows how many of those drops were seen and how many were left (generic=seen/left).
+- Counter log: the counters line shows how many of those drops were seen and how many were left because their item
+  could not be read or is a quest item (generic=seen/left).
 
 ## 0.1.1
 - Pressing or holding E takes anything again, whatever your switches, group ranges and F9 say: with a group switched
