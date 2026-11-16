@@ -20,9 +20,11 @@ public enum Group { Unknown, Ground, Collectible, Plant, Farm, Corpse, Chest, Bo
 /// <summary>What else a template is (TemplateRules). <see cref="Drop"/>: a corpse group pile a creature leaves (bones,
 /// bat fur, critter parts) whose loot-all hands its default inventory over, as for the fog-nest crystals.
 /// <see cref="Generic"/>: a pickup the game spawns loot as and gives its item only then (what broken barrels, pots and
-/// some resource nodes drop); judged by that item (GenericDrops).</summary>
+/// some resource nodes drop); judged by that item (GenericDrops). <see cref="Decor"/>: a pickup the game places as
+/// furniture (the books of villages and ruins) that players can also build: left while the player is in or near a base,
+/// where it may be part of the décor.</summary>
 [Flags]
-public enum TemplateFlags { None = 0, Stone = 1, Swarm = 2, Boss = 4, Elite = 8, Animal = 16, Drop = 32, Generic = 64 }
+public enum TemplateFlags { None = 0, Stone = 1, Swarm = 2, Boss = 4, Elite = 8, Animal = 16, Drop = 32, Generic = 64, Decor = 128 }
 
 public sealed record TemplateRule(Guid Guid, Group Group, TemplateFlags Flags, string Name, IReadOnlyList<uint> Yield);
 

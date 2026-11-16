@@ -41,6 +41,7 @@ internal static class ClassificationDump
         if ((f & TemplateFlags.Animal) != 0) parts.Add("animal");
         if ((f & TemplateFlags.Drop) != 0) parts.Add("drop");
         if ((f & TemplateFlags.Generic) != 0) parts.Add("generic");
+        if ((f & TemplateFlags.Decor) != 0) parts.Add("decor");
         return string.Join(",", parts);
     }
 }

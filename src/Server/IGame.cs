@@ -10,7 +10,9 @@ namespace KilnAutoLoot.Server;
 /// <summary>A player in the world this step: in game, alive, with a position.</summary>
 /// <param name="UiOpen">The game's own replicated UI state (PlayerStateId.InFullScreenUi or ClientUiIsInLootingMenu):
 /// the window signal for players whose game has no Kiln Auto Loot.</param>
-internal readonly record struct GamePlayer(EntityId Entity, WorldPosition Position, bool UiOpen);
+/// <param name="NearBase">In a base or near a build zone (PlayerStateId.InBase or IsNearBuildingZone): decor
+/// stays.</param>
+internal readonly record struct GamePlayer(EntityId Entity, WorldPosition Position, bool UiOpen, bool NearBase = false);
 
 /// <summary>Spawn.Inspect's answer: the template behind the entity and the spawn serial (ids are reused).</summary>
 internal readonly record struct Inspected(Guid? Template, ulong Serial);

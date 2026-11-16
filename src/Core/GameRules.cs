@@ -20,6 +20,11 @@ internal static class GameRules
         var dropped = new HashSet<Guid>();
         foreach (var t in facts.Templates) foreach (var g in t.Drops) dropped.Add(g);
 
+        var twins = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var t in facts.Templates)
+            if (buildable.Contains(t.Guid) || TemplateRules.IsBuiltPiece(t.Name))
+                twins.Add(TemplateRules.TwinKey(t.Name));
+
         bool Usable(TemplateFacts t) => TemplateRules.IsWorkable(t.Name);
         var context = new TemplateRules.Context
         {
@@ -29,6 +34,7 @@ internal static class GameRules
             Dropped = dropped,
             IsQuestItem = ItemRules.IsQuestItem,
             BossCorpse = TemplateRules.BossCorpses(facts.Templates),
+            BuildableTwins = twins,
         };
 
         var rules = new List<TemplateRule>();

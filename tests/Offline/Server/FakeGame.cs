@@ -41,10 +41,10 @@ internal sealed class FakeGame : IGame
     public int FreeSlotCount = 10;
     private uint _next = 100;
 
-    public EntityId AddPlayer(double x = 0, double y = 0, double z = 0, bool uiOpen = false)
+    public EntityId AddPlayer(double x = 0, double y = 0, double z = 0, bool uiOpen = false, bool nearBase = false)
     {
         var id = new EntityId((uint)(PlayerList.Count + 1));
-        PlayerList.Add(new GamePlayer(id, new WorldPosition(x, y, z), uiOpen));
+        PlayerList.Add(new GamePlayer(id, new WorldPosition(x, y, z), uiOpen, nearBase));
         return id;
     }
 
@@ -146,6 +146,7 @@ internal sealed class LoopRig
     public static readonly Guid Bones = new("11111111-0000-0000-0000-00000000000a");   // corpse drop pile, yield apple + flint
     public static readonly Guid Parts = new("11111111-0000-0000-0000-00000000000b");   // corpse drop pile, yield unknown
     public static readonly Guid Generic = new("11111111-0000-0000-0000-00000000000c"); // generic drop, its item set at the spawn
+    public static readonly Guid Book = new("11111111-0000-0000-0000-00000000000d");    // world book players also build, item 1
     public static readonly Guid Unknown = new("11111111-0000-0000-0000-0000000000ff");
 
     public const string TemplatesText =
@@ -161,7 +162,8 @@ internal sealed class LoopRig
         "11111111-0000-0000-0000-000000000009\tground\t\tFognest_Ressource_Destructible_Test\t2\n" +
         "11111111-0000-0000-0000-00000000000a\tcorpse\tdrop\tLootPickup_Material_Skeleton_Hound_Bones_Test\t6,7\n" +
         "11111111-0000-0000-0000-00000000000b\tcorpse\tdrop\tLootPickup_Material_Critter_Parts_Test\t\n" +
-        "11111111-0000-0000-0000-00000000000c\tground\tgeneric\tBase_LootPickup_Generic_Gravity_Test\t\n";
+        "11111111-0000-0000-0000-00000000000c\tground\tgeneric\tBase_LootPickup_Generic_Gravity_Test\t\n" +
+        "11111111-0000-0000-0000-00000000000d\tground\tdecor\tProp_Furniture_Book_Pile_Test_Lootpickup\t1\n";
 
     public static readonly string[] OfferInv = [LootLoop.OfferComponent, LootLoop.InventoryComponent];
 

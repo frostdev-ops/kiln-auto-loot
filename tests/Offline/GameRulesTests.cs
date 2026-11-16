@@ -165,6 +165,28 @@ public class TemplateRulesTests
     }
 
     [Fact]
+    public void World_books_players_can_also_build_are_ground_loot_flagged_decor()
+    {
+        // a player's report: Kiln Auto Loot took the old books lying in their base. The world's books give Old Books
+        // when taken; the ones a player builds are other templates, which are never taken at all
+        var oldBooks = Facts.I(20, "Material_T1_OldBooks", "Materials", en: "Old Books");
+        var worldBook = Facts.T("Prop_Furniture_Book_Pile_01_A_Lootpickup", Facts.Pickup, yield: [20]);
+        var builtBook = Facts.T("_DONOTPLACE_Prop_Furniture_Book_Pile_01_A_crafted", ["Destructible", "ModelResource"]);
+        var bookItem = Facts.I(21, "Prop_Decoration_Book_Pile_01_A", "BuildTools", [builtBook.Guid]);
+        var twigs = Facts.T("LootPickup_Material_Twigs", Facts.Pickup, yield: [20]);
+        var c = Facts.Run([worldBook, builtBook, twigs], [oldBooks, bookItem]);
+        var book = Facts.Rule(c, worldBook)!;
+        Assert.Equal((Group.Ground, TemplateFlags.Decor), (book.Group, book.Flags));
+        Assert.Null(Facts.Rule(c, builtBook));
+        Assert.Equal(TemplateFlags.None, Facts.Rule(c, twigs)!.Flags);
+        // without a built piece, the same book is plain ground loot; a built piece no item places still counts
+        Assert.Equal(TemplateFlags.None, Facts.Rule(Facts.Run([worldBook], [oldBooks]), worldBook)!.Flags);
+        Assert.Equal(TemplateFlags.Decor, Facts.Rule(Facts.Run([worldBook, builtBook], [oldBooks]), worldBook)!.Flags);
+        Assert.Equal("prop_furniture_book_pile_01_a", TemplateRules.TwinKey(worldBook.Name));
+        Assert.Equal("prop_furniture_book_pile_01_a", TemplateRules.TwinKey(builtBook.Name));
+    }
+
+    [Fact]
     public void Swarms_are_plants_flagged_swarm()
     {
         var bait = Facts.I(20, "Material_T1_Fire_Fly_FishingBait", "Ammunition") with { Values = new Dictionary<string, string> { ["ammunitionType"] = "FishingBait" } };

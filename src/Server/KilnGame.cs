@@ -24,7 +24,8 @@ internal sealed class KilnGame(Action<string> logOnce) : IGame
         {
             if (p.State != PlayerState.InGame || p.IsDead || p.Position is not { } at) continue;
             var ui = p.Is(PlayerStateId.InFullScreenUi) || p.Is(PlayerStateId.ClientUiIsInLootingMenu);
-            list.Add(new GamePlayer(p.Entity, at, ui));
+            var nearBase = p.IsInBase || p.Is(PlayerStateId.IsNearBuildingZone);
+            list.Add(new GamePlayer(p.Entity, at, ui, nearBase));
         }
         return list;
     }

@@ -11,11 +11,12 @@
 //      farm animals are nothing.
 //   3. Crops (plant growth stages): only the last stage of a crop that can be harvested (farm). Earlier stages may be
 //      harvestable too, but harvesting them early would waste the crop.
-//   4. Pickups (PickupItem): never quest things; collectibles by their item's category; swarms (fireflies and the
-//      like, which the game shows as an effect, not a model) are taken like bushes; the rest is ground loot, stones
-//      flagged. The generic drops (what other templates spawn their loot as, with no item of their own: the game sets
-//      it at the spawn) are ground loot flagged generic, judged by their live item (GenericDrops), also the ones that
-//      carry no PickupItem in their template.
+//   4. Pickups (PickupItem): never quest things; collectibles by their item's category; swarms (fireflies and the like,
+//      which the game shows as an effect, not a model) are taken like bushes; the rest is ground loot, stones flagged,
+//      and so is furniture the world places that players can also build (the books of villages and ruins: decor, left
+//      near a base). The generic drops (what other templates spawn their loot as, with no item of their own: the game
+//      sets it at the spawn) are ground loot flagged generic, judged by their live item (GenericDrops), also the ones
+//      that carry no PickupItem in their template.
 //   5. Things the player empties or harvests (an offer and a default inventory): boss loot is never taken; enemy remains
 //      are corpses; world chests and heaps are chests (the player's own storage, locked chests and the
 //      ones an item places are not); bushes (twig bushes too), reeds and harvest trees are plants; fog-nest resources are ground.
@@ -52,6 +53,31 @@ public static class TemplateRules
         public required Func<ItemFacts, bool> IsQuestItem { get; init; }
         /// <summary>Whether the enemy a corpse belongs to is a boss or mini boss (see <see cref="BossCorpses"/>).</summary>
         public Func<string, bool> BossCorpse { get; init; } = _ => false;
+        /// <summary>The <see cref="TwinKey"/> of every template some item places or the game keeps as a built piece
+        /// (<see cref="IsBuiltPiece"/>): a pickup with the same key is the world's copy of furniture (decor).</summary>
+        public ISet<string> BuildableTwins { get; init; } = new HashSet<string>(StringComparer.Ordinal);
+    }
+
+    /// <summary>A template the game keeps as the built form of a piece ("_DONOTPLACE_..._crafted"), whether or not
+    /// an item places it today.</summary>
+    public static bool IsBuiltPiece(string name)
+    {
+        var lower = name.ToLowerInvariant().TrimStart('_');
+        return lower.StartsWith("donotplace_", StringComparison.Ordinal) &&
+               lower.EndsWith("_crafted", StringComparison.Ordinal);
+    }
+
+    /// <summary>A template's name without the words that tell the world's copy of a piece from the one an item places:
+    /// lower case, without leading underscores, "donotplace_", "_crafted" and "_lootpickup". The world's
+    /// "Prop_Furniture_Book_Pile_01_A_Lootpickup" and the built "_DONOTPLACE_Prop_Furniture_Book_Pile_01_A_crafted"
+    /// share "prop_furniture_book_pile_01_a".</summary>
+    public static string TwinKey(string name)
+    {
+        var key = name.ToLowerInvariant().TrimStart('_');
+        if (key.StartsWith("donotplace_", StringComparison.Ordinal)) key = key["donotplace_".Length..];
+        foreach (var end in new[] { "_crafted", "_lootpickup" })
+            if (key.EndsWith(end, StringComparison.Ordinal)) key = key[..^end.Length];
+        return key;
     }
 
     /// <summary>A base template ("Base_...", "_Base_..."): the others copy it, the world does not place it.</summary>
@@ -107,7 +133,10 @@ public static class TemplateRules
         if (IsSwarm(t, item)) return Rule(t, Group.Plant, TemplateFlags.Swarm);
         if (t.Has("Health") && !IsStone(item)) return null;                                    // something to fight or break first
         if (item is null && c.Dropped.Contains(t.Guid)) return Rule(t, Group.Ground, TemplateFlags.Generic);   // its item comes at the spawn
-        return Rule(t, Group.Ground, IsStone(item) ? TemplateFlags.Stone : TemplateFlags.None);
+        var flags = IsStone(item) ? TemplateFlags.Stone : TemplateFlags.None;
+        // furniture the world places that players can also build: in a base it may be part of the décor
+        if (!c.Buildable.Contains(t.Guid) && c.BuildableTwins.Contains(TwinKey(t.Name))) flags |= TemplateFlags.Decor;
+        return Rule(t, Group.Ground, flags);
     }
 
     /// <summary>A template other templates spawn their loot as (<see cref="Context.Dropped"/>: a resource node's

@@ -30,6 +30,8 @@ rules and what a dedicated server can show without a player. Everything below ne
 - [ ] Each group switch (ground loot, stones, collectibles, plants, crops, fish) stops its group at once; pressing or
       holding E still takes a switched-off thing, also beyond its group radius and with auto loot off (F9); the radius
       slider and a group radius larger than the general one both work.
+- [ ] Old books the world placed (village and ruin furniture that gives Old Books) stay while you stand in or near a
+      base, also with a base built around them; away from any base they are picked up; E still takes them anywhere.
 - [ ] "Take things where they lie" off: things are still picked up (no fly-in), mushrooms and fireflies only right
       next to you.
 - [ ] Inventory full: the "inventory full" note appears (at most once a minute) and nothing stutters while loot lies
