@@ -52,6 +52,50 @@ public class TemplateRulesTests
     }
 
     [Fact]
+    public void A_generic_drop_without_a_pickup_in_its_template_is_ground_loot_judged_by_its_live_item()
+    {
+        // Base_LootPickup_Generic_Gravity as the game has it: no PickupItem and no inventory in the template (the game
+        // adds the item at the spawn); what resource nodes and broken barrels and pots drop
+        string[] comps = ["AttachToSurface", "CheckPlayerInRange", "ClientInteractionOffer", "DestroyOnLoot", "DoNotSave", "Gravity",
+                          "InteractionOfferRuntime", "InventoryEmptyState", "PickupItemModelSetup", "ModelComponent"];
+        var generic = Facts.T("Base_LootPickup_Generic_Gravity", comps);
+        var node = Facts.T("Prop_Destructible_Resource_Stone_Grassland_01_b", ["Destructible", "MiningNode", "ResourceNodePickupDrops"],
+            drops: [generic.Guid]);
+        var rule = Facts.Rule(Facts.Run([generic, node]), generic);
+        Assert.Equal(Group.Ground, rule?.Group);
+        Assert.Equal(TemplateFlags.Generic, rule?.Flags);
+        Assert.Empty(rule!.Yield);
+        // nobody drops it: a base template, never taken; with a stock of its own it is a container, not a drop
+        Assert.Null(One(Facts.T("Base_LootPickup_Generic_Gravity", comps)));
+        var stocked = Facts.T("Base_LootPickup_Stocked_Gravity", [.. comps, "InventorySetup"]);
+        Assert.Null(Facts.Rule(Facts.Run([stocked, Facts.T("Node", ["MiningNode"], drops: [stocked.Guid])]), stocked));
+        // a dropped pickup that names its item keeps its own rule
+        var stone = Facts.I(12, "Build_TerrainMaterial_T1_Stone", "Materials");
+        var named = Facts.T("LootPickup_Gravity_Stone", ["PickupItem", "DestroyOnLoot", "InteractionOfferRuntime", "Gravity"], yield: [12]);
+        var r2 = Facts.Rule(Facts.Run([named, Facts.T("Node2", ["MiningNode"], drops: [named.Guid])], [stone]), named);
+        Assert.Equal(TemplateFlags.Stone, r2?.Flags);
+    }
+
+    [Fact]
+    public void A_generic_drop_takes_its_group_from_its_live_item()
+    {
+        var rule = new TemplateRule(Guid.NewGuid(), Group.Ground, TemplateFlags.Generic, "Base_LootPickup_Generic_Gravity", []);
+        var items = ItemTable.Parse(new StringReader(Fixtures.ItemsText +
+            "9\tBuild_TerrainMaterial_T1_Stone\tStone\tStein\t1\tMaterials\tMaterials\n" +
+            "10\tCollection_Test_Statue_Piece\tStatue Piece\t\t1\tCollectibles\tCollectibles\n"));
+        var quest = Fixtures.Quest(4, 10);
+        Assert.Null(GenericDrops.Live(rule, 0, items, quest));                     // no item yet
+        Assert.Null(GenericDrops.Live(rule, 4, items, quest));                     // a quest item stays
+        Assert.Equal((Group.Collectible, TemplateFlags.Generic), Of(GenericDrops.Live(rule, 10, items, quest)));
+        Assert.Equal((Group.Ground, TemplateFlags.Generic | TemplateFlags.Stone), Of(GenericDrops.Live(rule, 9, items, quest)));
+        Assert.Equal((Group.Ground, TemplateFlags.Generic), Of(GenericDrops.Live(rule, 7, items, quest)));   // flint: no stone
+        Assert.Equal((Group.Ground, TemplateFlags.Generic), Of(GenericDrops.Live(rule, 999, items, quest))); // unknown item
+        Assert.Equal([7u], GenericDrops.Live(rule, 7, items, quest)!.Yield);
+
+        static (Group, TemplateFlags) Of(TemplateRule? r) => (r!.Group, r.Flags);
+    }
+
+    [Fact]
     public void World_chests_with_random_loot_are_chests_but_locked_and_built_ones_are_not()
     {
         Assert.Equal(Group.Chest, One(Facts.T("LootChest_Random_Cairn_Sarcophagus_Wood", Facts.Chest))?.Group);

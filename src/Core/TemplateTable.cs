@@ -55,6 +55,7 @@ public sealed class TemplateTable
             if (flagText.Contains("elite", StringComparison.Ordinal)) flags |= TemplateFlags.Elite;
             if (flagText.Contains("animal", StringComparison.Ordinal)) flags |= TemplateFlags.Animal;
             if (flagText.Contains("drop", StringComparison.Ordinal)) flags |= TemplateFlags.Drop;
+            if (flagText.Contains("generic", StringComparison.Ordinal)) flags |= TemplateFlags.Generic;
             var yield = new List<uint>();
             foreach (var part in cols[4].Split(','))
             {

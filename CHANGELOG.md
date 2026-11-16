@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+- Loose loot from broken barrels, crates and pots and from some resource nodes is picked up (string, torn cloth, flint
+  and the like were left on the ground). Each piece is judged by the item it carries: the skip and only lists, gather
+  focus, the Stones switch for stone, the Collectibles switch for finds; quest items stay.
+
 ## 0.1.1
 - Pressing or holding E takes anything again, whatever your switches, group ranges and F9 say: with a group switched
   off, a single press of E on a stone, a crop or a plant did nothing (and stones followed you). Switched-off groups are

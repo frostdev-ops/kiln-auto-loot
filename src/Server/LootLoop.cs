@@ -460,6 +460,19 @@ internal sealed class LootLoop
             return;
         }
         var hasPickup = _game.TryPickupItem(e, out var item);
+        if ((rule.Flags & TemplateFlags.Generic) != 0)
+        {
+            // a generic drop (broken barrels, pots, resource nodes): judged by the item the game gave it at the spawn;
+            // without one it stays (a loot-all would take it unseen)
+            Counters.GenericSeen++;
+            if (!hasPickup || GenericDrops.Live(rule, item, _data.Items, _data.Quest) is not { } live)
+            {
+                ProbeTrace.Note(e, $"generic drop: left (pickup {hasPickup}, item {item})");
+                Counters.GenericLeft++;
+                return;
+            }
+            rule = live;
+        }
         var container = Release.IsContainerTarget(rule, hasPickup);
         ProbeTrace.Note(e, $"seen: {rule.Group} {rule.Flags}, {(container ? "container path" : $"pickup path, item {item}")}");
         if (container) Counters.ContainersSeen++;

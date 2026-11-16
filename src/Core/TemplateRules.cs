@@ -13,7 +13,9 @@
 //      harvestable too, but harvesting them early would waste the crop.
 //   4. Pickups (PickupItem): never quest things; collectibles by their item's category; swarms (fireflies and the
 //      like, which the game shows as an effect, not a model) are taken like bushes; the rest is ground loot, stones
-//      flagged.
+//      flagged. The generic drops (what other templates spawn their loot as, with no item of their own: the game sets
+//      it at the spawn) are ground loot flagged generic, judged by their live item (GenericDrops), also the ones that
+//      carry no PickupItem in their template.
 //   5. Things the player empties or harvests (an offer and a default inventory): boss loot is never taken; enemy remains
 //      are corpses; world chests and heaps are chests (the player's own storage, locked chests and the
 //      ones an item places are not); bushes (twig bushes too), reeds and harvest trees are plants; fog-nest resources are ground.
@@ -68,6 +70,7 @@ public static class TemplateRules
         if (t.Has("Actor") && t.Has("Health")) return Creature(t, name);
         if (CropRules.IsGrowthStage(t)) return c.RipeCrops.Contains(t.Guid) ? Rule(t, Group.Farm, TemplateFlags.None) : null;
         if (t.Has("PickupItem")) return Pickup(t, name, c);
+        if (c.Dropped.Contains(t.Guid) && IsGenericDrop(t)) return Rule(t, Group.Ground, TemplateFlags.Generic);
         if (t.Has("InteractionOfferRuntime") && (t.Has("DefaultInventory") || t.Has("RandomLoot"))) return Container(t, name, c);
         return null;
     }
@@ -99,12 +102,21 @@ public static class TemplateRules
         var item = t.Yield.Count > 0 && c.Items.TryGetValue(t.Yield[0], out var it) ? it : null;
         // a quest item lying about is left for the player, except collection pieces: picking those up is the game's own way
         if ((item is not null && c.IsQuestItem(item) && !IsCollectionPiece(item)) || AnyWord(name, StoryWords)) return null;
-        if (item is not null && (item.Category is "Collectibles" or "ColorPalette" || item.Name.StartsWith("Collection_", StringComparison.OrdinalIgnoreCase)))
+        if (item is not null && IsCollectibleItem(item.Category, item.Name))
             return Rule(t, Group.Collectible, TemplateFlags.None);   // finds kept for their own sake (paintings are building pieces)
         if (IsSwarm(t, item)) return Rule(t, Group.Plant, TemplateFlags.Swarm);
         if (t.Has("Health") && !IsStone(item)) return null;                                    // something to fight or break first
+        if (item is null && c.Dropped.Contains(t.Guid)) return Rule(t, Group.Ground, TemplateFlags.Generic);   // its item comes at the spawn
         return Rule(t, Group.Ground, IsStone(item) ? TemplateFlags.Stone : TemplateFlags.None);
     }
+
+    /// <summary>A template other templates spawn their loot as (<see cref="Context.Dropped"/>: a resource node's
+    /// pickupItemReference, a loot slot's genericPickupItem) that is taken like a pickup but names no item: the game
+    /// adds the item when it spawns one. Not a creature or bait, and nothing with a stock of its own.</summary>
+    private static bool IsGenericDrop(TemplateFacts t) =>
+        t.Has("DestroyOnLoot") && t.Has("InteractionOfferRuntime") &&
+        !t.Has("Health") && !t.Has("Actor") && !t.Has("Wildlife") && !t.Has("FoodBait") &&
+        !t.Has("Inventory") && !t.Has("InventorySetup") && !t.Has("DefaultInventory");
 
     private static bool IsCollectionPiece(ItemFacts item) => item.Name.StartsWith("Collection_", StringComparison.OrdinalIgnoreCase);
 
@@ -116,9 +128,16 @@ public static class TemplateRules
 
     /// <summary>Rock of the terrain (the stone, sandstone, limestone or granite each region is made of), as the game's
     /// terrain materials name it; not flint, ore, sand or dirt.</summary>
-    public static bool IsStone(ItemFacts? item) =>
-        item is not null && item.Name.StartsWith("Build_TerrainMaterial_", StringComparison.OrdinalIgnoreCase) &&
-        RockWords.Any(w => item.Name.Contains(w, StringComparison.OrdinalIgnoreCase));
+    public static bool IsStone(ItemFacts? item) => item is not null && IsStoneName(item.Name);
+
+    /// <summary><see cref="IsStone"/> by the item's internal name.</summary>
+    public static bool IsStoneName(string internalName) =>
+        internalName.StartsWith("Build_TerrainMaterial_", StringComparison.OrdinalIgnoreCase) &&
+        RockWords.Any(w => internalName.Contains(w, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>A find kept for its own sake (collectible group), by the item's category and internal name.</summary>
+    public static bool IsCollectibleItem(string category, string internalName) =>
+        category is "Collectibles" or "ColorPalette" || internalName.StartsWith("Collection_", StringComparison.OrdinalIgnoreCase);
 
     private static readonly string[] RockWords = ["stone", "granite", "slate", "basalt", "marble", "rock"];
 
