@@ -1,9 +1,17 @@
 # Changelog
 
+## 0.1.1
+- Pressing or holding E takes anything again, whatever your switches, group ranges and F9 say: with a group switched
+  off, a single press of E on a stone, a crop or a plant did nothing (and stones followed you). Switched-off groups are
+  left by the mod only; holding E pulls them in as in the game without the mod.
+- Bones, bat fur and critter parts that creatures leave are looted (hound bones in the Hollow Halls were always left).
+- Counter log: the settings line names every group switch, the group ranges and the skip and only lists.
+
 ## 0.1.0
 First release.
 - Automatic looting around every player: loose things, finds, plants, ripe crops, fish; corpses, chests and heaps.
-- Quest items and a skip list stay where they are; switched-off groups stay put even when you hold E.
+- Quest items and a skip list stay where they are; switched-off groups stay put even when you hold E (changed in
+  0.1.1).
 - Smashing of barrels, crates and ruins clutter, optional bee hives and tree felling; never inside a base.
 - Bigger stacks and an optional backpack cheat.
 - F8 settings window (English and German), F9 toggle, short notes; settings per player, limits per server.
