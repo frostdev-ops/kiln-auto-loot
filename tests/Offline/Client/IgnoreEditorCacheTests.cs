@@ -70,3 +70,43 @@ public class EnabledSettingTests
     public void The_marker_shows_when_the_saved_value_differs_from_the_running_world(bool saved, bool? running, bool marked) =>
         Assert.Equal(marked, SettingSpec.RestartPending(saved, running));
 }
+
+public class IgnoreEditorUndoTests
+{
+    [Fact]
+    public void A_cleared_list_comes_back_with_undo_even_after_the_window_was_closed()
+    {
+        var editor = new IgnoreEditor(Fixtures.Items());
+        const string list = "=Food_Apple, #Materials, stone";
+        Assert.Equal("", editor.Finish(list, "", undoing: false));          // "Really clear all 3?"
+        editor.Reset();                                                       // the window closed and opened again
+        Assert.Equal(list, editor.Undo.For(""));
+        Assert.Equal(list, editor.Finish("", list, undoing: true));          // Undo
+        Assert.Null(editor.Undo.For(list));                                  // nothing more to undo
+        Assert.Null(editor.Undo.For(""));
+    }
+
+    [Fact]
+    public void Undo_is_offered_only_while_the_list_is_what_the_last_change_made()
+    {
+        var undo = new ListUndo();
+        Assert.Null(undo.For(""));
+        undo.Changed("=a, =b", "=a");
+        Assert.Equal("=a, =b", undo.For("=a"));
+        Assert.Null(undo.For("=c"));          // a profile switch or a hand edit: no undo
+        undo.Changed("=a", "=a");             // no change: the step back stays
+        Assert.Equal("=a, =b", undo.For("=a"));
+        undo.Changed("=a", "");
+        Assert.Equal("=a", undo.For(""));     // one step only
+    }
+
+    [Fact]
+    public void A_refused_change_leaves_the_undo_as_it_was()
+    {
+        var editor = new IgnoreEditor(Fixtures.Items());
+        editor.Finish("=a", "", undoing: false);
+        var full = string.Join(", ", Enumerable.Range(0, SkipListBounds.MaxEntries).Select(i => $"=Item_{i}"));
+        Assert.Null(editor.Finish(full, full + ", =x", undoing: false));
+        Assert.Equal("=a", editor.Undo.For(""));
+    }
+}

@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+- Clearing the skip list or the only list asks once more: "Clear the list" turns into "Keep it" (where you just
+  clicked) and "Really clear all N?" beside it. A stray click while the mouse misbehaves no longer empties a list.
+- Undo next to the list puts it back as it was before your last change in the editor (a clear, an x, a group, a
+  pick), also after the window was closed and opened again, until the list changes some other way (a profile switch,
+  F9, an edit of the file).
+
 ## 0.1.4
 - Old books lying in villages and ruins (the world's furniture that gives Old Books) are no longer picked up: built
   around, they are part of a base's décor, and the mod took them. A new switch, Old books (F8, Looting), takes them

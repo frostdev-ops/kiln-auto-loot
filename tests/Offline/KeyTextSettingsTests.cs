@@ -100,7 +100,7 @@ public class TextsTests
         foreach (var k in new[] { "title", "footer", "restartNote", "close", "default", "statusOn", "statusOff", "statusKey",
                      "statusCapped", "statusWaiting", "statusLoading", "hostNote", "defaultsNote", "readOnlyServer",
                      "searchHint", "ignoreGroup", "pickGroup", "matches", "emptyList", "groupEntry", "unknownEntry", "namePart",
-                     "removeAll", "ignoredCount", "toggleOn", "toggleOff", "fullLine1", "fullLine2", "leftBehindLine1",
+                     "removeAll", "clearKeep", "clearSure", "undo", "undoHelp", "ignoredCount", "toggleOn", "toggleOff", "fullLine1", "fullLine2", "leftBehindLine1",
                      "leftBehindLine2", "serverApplies",
                      "onlyAddGroup", "onlyRemoveGroup", "onlyEmpty", "onlyCount", "gatherOnlyThis", "gatherOnlyThisHelp", "listUnused",
                      "noLimit", "zeroOff", "lineOfSightMissing", "carrySearchHint", "carryAddGroup", "carryEmpty", "carryAmountHelp",

@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
 // The item-list editor (the skip list, and the only list with its own texts): search box and group combo on one line,
 // the whole-group button, the suggestion box (bullet for chosen items, a click toggles, Enter takes the first, "Only
-// this" asks the window to gather nothing but that item), the chosen list with x per entry, "Clear the list" and the
-// count. Both lists keep to the same bounds (SkipListBounds). The rules (matching, chosen, unknown, classify, the new raw value) are Core.IgnoreList's;
+// this" asks the window to gather nothing but that item), the chosen list with x per entry, "Clear the list" (asks once
+// more: "Keep it" takes the place of the first click, the clear goes beside it), "Undo" and the count. Both lists keep to the same bounds (SkipListBounds). The rules (matching, chosen, unknown, classify, the new raw value) are Core.IgnoreList's;
 // this class only draws and keeps the editor's own state. Render thread.
 using Kiln;
 using KilnAutoLoot.Core;
@@ -31,6 +31,8 @@ internal sealed class IgnoreEditor(ItemTable items, ListTexts? texts = null)
     private int _group;
     private bool _showList;
     private bool _refused;   // the last change would have made the list longer than the bounds
+    private bool _clearAsked;   // "Clear the list" was pressed once
+    private readonly ListUndo _undo = new();
 
     // caches: the list for a raw value, the suggestions for a query; both also keyed on the item table's version, so
     // what was built before the table was filled is built again once it is
@@ -48,6 +50,20 @@ internal sealed class IgnoreEditor(ItemTable items, ListTexts? texts = null)
         _group = 0;
         _showList = false;
         _refused = false;
+        _clearAsked = false;   // the undo stays: a list cleared by mistake can still come back after the window was closed
+    }
+
+    /// <summary>The step back the editor offers for <paramref name="raw"/> (tests).</summary>
+    internal ListUndo Undo => _undo;
+
+    /// <summary><see cref="Bounded"/>, and the undo learns the change (an undo itself leaves nothing to undo).</summary>
+    internal string? Finish(string current, string? next, bool undoing)
+    {
+        var taken = Bounded(current, next);
+        if (taken is null) return null;
+        if (undoing) _undo.Taken();
+        else _undo.Changed(current, taken);
+        return taken;
     }
 
     /// <summary>The change the window makes, or null when it would take the list over the bounds the server takes
@@ -181,8 +197,10 @@ internal sealed class IgnoreEditor(ItemTable items, ListTexts? texts = null)
         var entries = current.Entries;
         if (entries.Count == 0)
         {
+            _clearAsked = false;
             ui.TextDisabled(T(_texts.Empty));
-            return Bounded(raw, result);
+            var back = DrawUndo(ui, raw, german, sameLine: false);
+            return Finish(raw, back ?? result, undoing: back is not null);
         }
         var shown = Math.Min(entries.Count, 8);
         var remove = -1;
@@ -200,7 +218,19 @@ internal sealed class IgnoreEditor(ItemTable items, ListTexts? texts = null)
         }
         ui.EndChild();
         if (remove >= 0) result = current.WithoutAt(remove);
-        if (ui.SmallButton(T("removeAll"))) result = "";
+        if (_clearAsked)
+        {
+            if (ui.SmallButton(T("clearKeep") + "###clear")) _clearAsked = false;
+            ui.SameLine();
+            using (ui.PushColor(UiColorSlot.Text, UnknownRed))
+                if (ui.SmallButton(string.Format(T("clearSure"), entries.Count) + "###clearSure"))
+                {
+                    _clearAsked = false;
+                    result = "";
+                }
+        }
+        else if (ui.SmallButton(T("removeAll") + "###clear")) _clearAsked = true;
+        var undo = DrawUndo(ui, raw, german, sameLine: true);
         ui.SameLine();
         ui.TextDisabled(string.Format(T(_texts.Count), entries.Count));
         if (!SkipListBounds.Within(raw))
@@ -208,7 +238,17 @@ internal sealed class IgnoreEditor(ItemTable items, ListTexts? texts = null)
                 SkipListBounds.MaxNameParts));
         else if (_refused)
             ui.TextDisabled(string.Format(T("listFull"), SkipListBounds.MaxEntries));
-        return Bounded(raw, result);
+        return Finish(raw, undo ?? result, undoing: undo is not null);
+    }
+
+    /// <summary>"Undo" while the list is what the editor's last change made; returns the list before it when pressed.</summary>
+    private string? DrawUndo(UiDraw ui, string raw, bool german, bool sameLine)
+    {
+        if (_undo.For(raw) is not { } before) return null;
+        if (sameLine) ui.SameLine();
+        var pressed = ui.SmallButton(Texts.Get("undo", german) + "###undo");
+        ui.Tooltip(Texts.Get("undoHelp", german));
+        return pressed ? before : null;
     }
 
     private static void DrawEntry(UiDraw ui, IgnoreEntryInfo e, bool german)
@@ -241,4 +281,22 @@ internal sealed class IgnoreEditor(ItemTable items, ListTexts? texts = null)
                 break;
         }
     }
+}
+
+/// <summary>One step back for a list editor: the list as it was before the editor's last change, offered while the list
+/// is still what that change made (a profile switch, F9 or a hand edit of the file drops it). It outlives the window
+/// being closed and opened again, for this run of the game. Pure.</summary>
+internal sealed class ListUndo
+{
+    private (string Before, string After)? _last;
+
+    public void Changed(string before, string after)
+    {
+        if (before != after) _last = (before, after);
+    }
+
+    /// <summary>The list to go back to while the list is <paramref name="raw"/>, else null.</summary>
+    public string? For(string raw) => _last is { } l && l.After == raw ? l.Before : null;
+
+    public void Taken() => _last = null;
 }
