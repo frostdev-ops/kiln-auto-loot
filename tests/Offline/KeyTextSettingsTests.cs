@@ -99,6 +99,7 @@ public class TextsTests
         Assert.Equal("nope", Texts.Section("nope", false));
         foreach (var k in new[] { "title", "footer", "restartNote", "close", "default", "statusOn", "statusOff", "statusKey",
                      "statusCapped", "statusWaiting", "statusLoading", "hostNote", "defaultsNote", "readOnlyServer",
+                     "menuNote",
                      "searchHint", "ignoreGroup", "pickGroup", "matches", "emptyList", "groupEntry", "unknownEntry", "namePart",
                      "removeAll", "clearKeep", "clearSure", "undo", "undoHelp", "ignoredCount", "toggleOn", "toggleOff", "fullLine1", "fullLine2", "leftBehindLine1",
                      "leftBehindLine2", "serverApplies",

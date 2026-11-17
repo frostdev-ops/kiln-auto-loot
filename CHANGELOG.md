@@ -6,6 +6,9 @@
   update (the first start reads the game's data instead of the cache). Only the item names are still looked up on the
   game's thread, after such an update. The item list in F8 fills a moment after loading.
 - The classification dump (counterLog) is written in the background as well.
+- The World tab (stack size, backpack cheat, the limits) can be changed in the main menu: F8 there edits the settings
+  the next world you host starts with, so a save loads with the stack size you want instead of you fixing it inside.
+  Inside a world you host it works as before; on a server you joined it shows the server's values.
 
 ## 0.1.5
 - Clearing the skip list or the only list asks once more: "Clear the list" turns into "Keep it" (where you just

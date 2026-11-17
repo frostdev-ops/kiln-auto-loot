@@ -269,6 +269,10 @@ public static class Texts
         ["hostNote"] = ("You host this world: these settings count for everyone in it.", "Du hostest diese Welt: diese Einstellungen gelten für alle darin."),
         ["defaultsNote"] = ("Players without the mod get the defaults from kiln-auto-loot-server.json.", "Spieler ohne die Mod bekommen die Vorgaben aus kiln-auto-loot-server.json."),
         ["readOnlyServer"] = ("Set by the server you play on.", "Legt der Server fest, auf dem du spielst."),
+        ["menuNote"] = ("No world is running: these settings are saved for the worlds you host and count from their " +
+                        "next start, so a save loads with the stack size you set here.",
+                        "Keine Welt läuft: Diese Einstellungen gelten für Welten, die du hostest, ab ihrem nächsten " +
+                        "Start; ein Spielstand lädt also mit der Stapelgröße, die du hier einstellst."),
         // the skip-list editor
         ["searchHint"] = ("Search items (3+ letters)", "Gegenstand suchen (ab 3 Zeichen)"),
         ["ignoreGroup"] = ("Skip this group", "Gruppe auslassen"),

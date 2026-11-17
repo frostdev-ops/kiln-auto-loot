@@ -181,7 +181,7 @@ internal sealed class SettingsWindow(Data data, SettingsLink link, WindowKeys ke
 
     private void DrawWorldNotes(UiDraw ui)
     {
-        ui.TextWrapped(link.World is null ? T("readOnlyServer") : T("hostNote"));
+        ui.TextWrapped(link.World is null ? T("readOnlyServer") : link.WorldFromMenu ? T("menuNote") : T("hostNote"));
         ui.TextDisabled(T("defaultsNote"));
     }
 

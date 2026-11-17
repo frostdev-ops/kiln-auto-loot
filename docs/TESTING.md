@@ -75,6 +75,8 @@ rules and what a dedicated server can show without a player. Everything below ne
 - [ ] Chandeliers, telescopes, showcases, doors, ladders and anything of a quest stay whole.
 
 ## 7. World tab (hosting)
+- [ ] In the main menu, before loading a save: F8, World tab says no world is running; change the stack size there,
+      then load a save: `world up ... maxStack=<the new value>` in kiln.log and the World tab shows it in the world.
 - [ ] Stack size 9999 (default): wood and stone stack to 9999; 0 brings back the game's sizes; the number field and the
       -/+ buttons work.
 - [ ] Backpack cheat on: every backpack recipe gives the best backpack for 1 of each ingredient; off restores them.

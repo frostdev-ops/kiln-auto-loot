@@ -115,7 +115,10 @@ internal sealed class ClientPart(Data data, Server.LootServer server)
         if (_window is null || !Pressed(MenuKeyId)) return;
         switch (KeyActions.MenuKey(_window.IsOpen, Ui.MenuOpen))
         {
-            case MenuKeyAction.Open: _window.Open(); break;
+            case MenuKeyAction.Open:
+                if (!KClient.InGame) _link.Post(server.EnsureMenuConfig);   // the World tab edits the next world's file
+                _window.Open();
+                break;
             case MenuKeyAction.Close: _window.Close(); break;
         }
     }

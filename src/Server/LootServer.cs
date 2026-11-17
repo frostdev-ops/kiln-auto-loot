@@ -21,6 +21,12 @@ internal sealed class LootServer(Data data)
     /// the window edits it on the server thread and calls Save; the change comes back through Changed.</summary>
     public ModConfig<ServerSettings>? ServerConfig => _running ? _config : null;
 
+    /// <summary>The server settings while this player's game runs no world (the main menu): the window edits the file
+    /// there, and the next world this game hosts starts with it. A player asked to set the stack size before loading a
+    /// save, not only inside it. Null in a world, and until <see cref="EnsureMenuConfig"/> registered the
+    /// file.</summary>
+    public ModConfig<ServerSettings>? MenuConfig => !_running && !Kiln.Client.InGame ? _config : null;
+
     /// <summary>`enabled` as the running world started with it (the value in effect until the next world); null outside a
     /// running server world. Any thread.</summary>
     public bool? EnabledInWorld => _running ? _enabled : null;
@@ -119,16 +125,28 @@ internal sealed class LootServer(Data data)
 
     // ---------------------------------------------------------------- world lifecycle
 
-    private void StartWorld(string why)
+    /// <summary>The window opened outside a world in a player's game: registers the server settings so the window can
+    /// edit them (once per process; a world start registers them otherwise). Tick thread.</summary>
+    public void EnsureMenuConfig()
     {
-        if (_running || !IsServerWorld) return;
+        if (!Kiln.Client.IsDedicatedServer && !Kiln.Client.InGame) RegisterConfig();
+    }
+
+    private ModConfig<ServerSettings> RegisterConfig()
+    {
         _config ??= Config.Register<ServerSettings>(ConfigKind.Server);
         if (!_subscribedConfig)
         {
-            _config.Changed += OnConfigChanged;
+            _config.Changed += OnConfigChanged;   // ignored while no world runs
             _subscribedConfig = true;
         }
-        var s = _config.Value;
+        return _config;
+    }
+
+    private void StartWorld(string why)
+    {
+        if (_running || !IsServerWorld) return;
+        var s = RegisterConfig().Value;
         _enabled = s.Enabled;   // the file's value now; kept for this world, a change applies to the next one
         _running = true;
         _clock.Advance(0);

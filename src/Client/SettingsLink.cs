@@ -70,8 +70,12 @@ internal sealed class SettingsLink(Server.LootServer server)
 
     public PersonalSettings Personal => _cfg?.Value ?? new PersonalSettings();
 
-    /// <summary>The world's settings when this game hosts the world and the server part runs, else null.</summary>
-    public ModConfig<ServerSettings>? World => KClient.IsHosting ? server.ServerConfig : null;
+    /// <summary>The world's settings when this game hosts the world and the server part runs; outside any world (the
+    /// main menu) the file the next hosted world starts with; else null (a server you joined decides).</summary>
+    public ModConfig<ServerSettings>? World => KClient.IsHosting ? server.ServerConfig : server.MenuConfig;
+
+    /// <summary>The World tab edits the file for the next hosted world (no world runs now).</summary>
+    public bool WorldFromMenu => !KClient.IsHosting && server.MenuConfig is not null;
 
     /// <summary>Hosted: `enabled` as the running world started with it, else null.</summary>
     public bool? WorldEnabledInEffect => KClient.IsHosting ? server.EnabledInWorld : null;
@@ -305,12 +309,21 @@ internal sealed class SettingsLink(Server.LootServer server)
     });
 
     /// <summary>Hosted: sets one entry of the world's file (a world setting or a limit), then hands the settings over
-    /// again so the server clamps them to the new limits.</summary>
+    /// again so the server clamps them to the new limits. Outside any world: sets it in the file the next hosted world
+    /// starts with.</summary>
     public void CommitWorld(string path, object value)
     {
         var session = KClient.ServerWorldSession;
+        var hosting = KClient.IsHosting;
         Post(() =>
         {
+            if (!hosting)
+            {
+                // the main menu: dropped when a world started meanwhile (it read the file already)
+                if (server.MenuConfig is not { } next) return;
+                SaveError = next.TrySet(path, value, out var failed) ? null : failed;
+                return;
+            }
             if (!KClient.IsHosting || session != KClient.ServerWorldSession || server.ServerConfig is not { } world) return;
             SaveError = world.TrySet(path, value, out var error) ? null : error;
             _sentJson = null;
