@@ -69,12 +69,14 @@ internal sealed class ClientPart(Data data, Server.LootServer server)
         Network.ServerReady += OnServerReady;
         Network.Disconnected += OnDisconnected;
         KClient.Tick += OnClientTick;
+        Ui.Screens.UiTick += OnUiFrame;
     }
 
     public void Stop()
     {
         if (!_started) return;
         _started = false;
+        Ui.Screens.UiTick -= OnUiFrame;
         KClient.Tick -= OnClientTick;
         Network.ServerReady -= OnServerReady;
         Network.Disconnected -= OnDisconnected;
@@ -95,6 +97,13 @@ internal sealed class ClientPart(Data data, Server.LootServer server)
         _window?.Dispose();
         _window = null;
         _link.Stop();
+    }
+
+    /// <summary>The game's UI frame, menus included (the game's UI thread). On the title screen no world steps, so Kiln
+    /// runs no mod tick there and drives its tick thread from this frame instead: the window's work runs here.</summary>
+    private void OnUiFrame(GameScreen _)
+    {
+        if (_link.MenuWorkPending && !KClient.InGame && Kiln.Game.IsTickThread) _link.RunMenuWork();
     }
 
     // ---------------------------------------------------------------- keys (main thread)

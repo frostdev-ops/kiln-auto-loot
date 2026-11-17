@@ -46,27 +46,38 @@ public sealed class AutoLootMod : Mod
             // the game serves its resources; this frame does not wait for it (on a hard disk it took seconds)
             if (!PollData(data))
             {
-                _retryFill = (in TickInfo _) =>
-                {
-                    // each tick while a worker runs; every 2 s until the game serves its resources
-                    if (!Server.GameData.GameDataLoader.Busy && Environment.TickCount64 < _nextFillTry) return;
-                    _nextFillTry = Environment.TickCount64 + 2000;
-                    if (PollData(data)) StopRetry();
-                };
+                _retryFill = (in TickInfo _) => RetryFill(data);
                 Kiln.Client.Tick += _retryFill;
+                // the title screen: no world steps, so Kiln.Client.Tick waits for one; the game's UI frame drives Kiln's
+                // tick thread there and moves the load on (the F8 item list fills in the main menu)
+                _menuFill = _ =>
+                {
+                    if (!Kiln.Client.InGame && Game.IsTickThread) RetryFill(data);
+                };
+                Ui.Screens.UiTick += _menuFill;
             }
         }
     }
 
     private readonly List<EventSubscription> _subscriptions = [];
     private TickHandler? _retryFill;
+    private Action<GameScreen>? _menuFill;
     private long _nextFillTry;
+
+    /// <summary>Each tick (or UI frame) while a worker runs; every 2 s until the game serves its resources.</summary>
+    private void RetryFill(Data data)
+    {
+        if (!Server.GameData.GameDataLoader.Busy && Environment.TickCount64 < _nextFillTry) return;
+        _nextFillTry = Environment.TickCount64 + 2000;
+        if (PollData(data)) StopRetry();
+    }
 
     private void StopRetry()
     {
-        if (_retryFill is null) return;
-        Kiln.Client.Tick -= _retryFill;
+        if (_retryFill is not null) Kiln.Client.Tick -= _retryFill;
+        if (_menuFill is not null) Ui.Screens.UiTick -= _menuFill;
         _retryFill = null;
+        _menuFill = null;
     }
 
     /// <summary>Moves the game data load on (GameDataLoader: once per process) and fills Data when it is in; never

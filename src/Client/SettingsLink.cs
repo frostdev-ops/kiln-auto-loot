@@ -10,7 +10,8 @@
 // nothing: the destination is checked first, the copy into the profile is held off while its settings are written, and
 // the active profile changes only once every entry is saved; a failed write puts the previous settings back and leaves
 // both profiles as they were. Settings too large for one message to the server are refused (TooLarge).
-// Threads: every config call runs on the tick thread (Post); the window calls in from the render thread.
+// Threads: every config call runs on the tick thread (Post; on the title screen, where no world steps, the UI frame:
+// MenuWork); the window calls in from the render thread.
 using Kiln;
 using KilnAutoLoot.Core;
 using KilnAutoLoot.Net;
@@ -27,6 +28,15 @@ internal sealed class SettingsLink(Server.LootServer server)
     private int _sentItemsVersion = -1;        // the item table the skip ids of that send came from
     private uint _sentSession = uint.MaxValue; // the hosted world it went to
     private bool _warnedNoScheduler;
+    private readonly MenuWork _menuWork = new(w => AutoLootMod.Scheduler?.Post(w),
+        e => AutoLootMod.ModContext?.Log.Error(e, "Kiln Auto Loot: a change from the settings window failed"));
+
+    /// <summary>Work the window posted on the title screen waits.</summary>
+    public bool MenuWorkPending => _menuWork.Pending;
+
+    /// <summary>Runs the work the window posted on the title screen. Kiln's tick thread there (the UI frame,
+    /// ClientPart.OnUiFrame).</summary>
+    public void RunMenuWork() => _menuWork.Run();
 
     /// <summary>Raised on the tick thread after the personal settings changed (window, F9, file edit).</summary>
     public event Action? PersonalChanged;
@@ -248,12 +258,14 @@ internal sealed class SettingsLink(Server.LootServer server)
     });
 
 
-    /// <summary>Runs <paramref name="work"/> on the tick thread.</summary>
+    /// <summary>Runs <paramref name="work"/> on the tick thread: at a world's step, or on the title screen (no world
+    /// steps there) at the next UI frame (<see cref="RunMenuWork"/>).</summary>
     public bool Post(Action work)
     {
         if (AutoLootMod.Scheduler is { } s)
         {
-            s.Post(work);
+            if (!KClient.InGame && !KClient.IsDedicatedServer) _menuWork.Post(work);
+            else s.Post(work);
             return true;
         }
         if (!_warnedNoScheduler)

@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.7
+- The World tab can really be changed in the main menu now: in 0.1.6 it stayed read-only there ("Set by the server you
+  play on."). Kiln runs a mod's queued work only while a world runs, and the step that opens the tab for editing was
+  queued; on the title screen the mod now runs it itself, each frame.
+- Changes in the F8 window in the main menu (switches, lists, profiles) are saved at once. Before, they waited for the
+  next world, and quitting from the main menu lost them.
+- The F8 item list fills in the main menu again (0.1.6 waited for a world to start).
+
 ## 0.1.6
 - The game no longer waits for Kiln Auto Loot while it starts: the mod reads the game's data, sorts it and writes its
   cache in the background. On a hard disk this held the main menu's first frame for over 5 s after a Kiln or game
