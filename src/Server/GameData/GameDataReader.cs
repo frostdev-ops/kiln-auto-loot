@@ -11,7 +11,7 @@ using KilnAutoLoot.Core;
 namespace KilnAutoLoot.Server.GameData;
 
 /// <summary>How a read went, for the log.</summary>
-internal sealed record ReadReport(int Templates, int Items, double TemplateMs, double ItemMs, double NamesMs, string Names);
+internal sealed record ReadReport(int Templates, int Items, double TemplateMs, double ItemMs);
 
 internal static class GameDataReader
 {
@@ -67,6 +67,8 @@ internal static class GameDataReader
         return $"{n}-{h:x16}";
     }
 
+    /// <summary>The templates and items, without names (ItemNames adds them on the game's thread). Any thread:
+    /// kiln.assets' resource reads and kiln.types answer on any thread.</summary>
     public static GameFacts Read(out ReadReport report)
     {
         var sw = Stopwatch.StartNew();
@@ -75,11 +77,8 @@ internal static class GameDataReader
         sw.Restart();
         var items = ReadItems(templates.Select(t => t.Guid).ToHashSet());
         templates = Yields.Add(templates, items);
-        var ims = sw.Elapsed.TotalMilliseconds;
-        sw.Restart();
-        var (named, how) = ItemNames.Add(items);
-        report = new ReadReport(templates.Count, named.Count, tms, ims, sw.Elapsed.TotalMilliseconds, how);
-        return new GameFacts(templates, named);
+        report = new ReadReport(templates.Count, items.Count, tms, sw.Elapsed.TotalMilliseconds);
+        return new GameFacts(templates, items);
     }
 
     private static List<TemplateFacts> ReadTemplates()

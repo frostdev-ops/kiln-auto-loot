@@ -13,7 +13,7 @@ namespace KilnAutoLoot.Server.GameData;
 internal static class ItemNames
 {
     /// <summary>The items with names filled in, and a line on where the names came from.</summary>
-    public static (List<ItemFacts> Items, string How) Add(List<ItemFacts> items)
+    public static (List<ItemFacts> Items, string How) Add(IReadOnlyList<ItemFacts> items)
     {
         var texts = GameTexts.Load(["En_Us", "De_De"], out var why);
         if (texts is not null)

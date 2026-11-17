@@ -23,6 +23,9 @@ rules and what a dedicated server can show without a player. Everything below ne
       updates the open window.
 - [ ] With the game in German: the window, the notes and the item names are German and nothing is cut off.
 - [ ] The Filters tab right after loading: the item list fills by itself (no "still loading" that stays).
+- [ ] Start-up: in `kiln/logs/kiln.log`, `mod kiln-auto-loot <version> loaded in` takes well under a second, and the
+      `game data:` line comes a moment later. After a Kiln or game update it says `read from the game ... on a worker`,
+      followed by `cache ... written on a worker`; on later starts it says `cache`.
 
 ## 2. Loose things
 - [ ] Rocks, sticks, ore, mushrooms and dropped items within the radius are picked up without pressing E; each thing

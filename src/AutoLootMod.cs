@@ -42,15 +42,16 @@ public sealed class AutoLootMod : Mod
         {
             _client = new Client.ClientPart(data, _server);
             _client.Start();
-            // the player's game: the window and the notices need the item names; read them now or as soon as the game
-            // serves its resources
-            if (!FillData(data))
+            // the player's game: the window and the notices need the item names. A worker reads them now, or as soon as
+            // the game serves its resources; this frame does not wait for it (on a hard disk it took seconds)
+            if (!PollData(data))
             {
                 _retryFill = (in TickInfo _) =>
                 {
-                    if (Environment.TickCount64 < _nextFillTry) return;
-                    _nextFillTry = Environment.TickCount64 + 2000;   // every 2 s until the game serves its resources
-                    if (FillData(data)) StopRetry();
+                    // each tick while a worker runs; every 2 s until the game serves its resources
+                    if (!Server.GameData.GameDataLoader.Busy && Environment.TickCount64 < _nextFillTry) return;
+                    _nextFillTry = Environment.TickCount64 + 2000;
+                    if (PollData(data)) StopRetry();
                 };
                 Kiln.Client.Tick += _retryFill;
             }
@@ -68,27 +69,42 @@ public sealed class AutoLootMod : Mod
         _retryFill = null;
     }
 
-    /// <summary>Fills Data from the game (once per process; later calls only classify again). Tick thread.</summary>
-    private bool FillData(Data data)
+    /// <summary>Moves the game data load on (GameDataLoader: once per process) and fills Data when it is in; never
+    /// waits. Tick thread.</summary>
+    private bool PollData(Data data)
     {
         if (data.Ready) return true;
         try
         {
-            return Server.GameData.GameDataLoader.TryFill(data, Context.DataDirectory, Log.Info);
+            return Server.GameData.GameDataLoader.Poll(data, Context.DataDirectory, Log.Info, LoadError);
         }
         catch (Exception e)
         {
-            Log.Error(e, "Kiln Auto Loot: the game data could not be read; nothing is taken automatically");
+            LoadError(e);
             return false;
         }
     }
 
+    /// <summary>A server world's start: its handlers expect the data, so this waits for the load (started at load in a
+    /// player's game, so usually done by then).</summary>
     private void FillServerData(Data data)
     {
-        if (!FillData(data))
-            Log.Warn("Kiln Auto Loot: the game's data cannot be read in this world (kiln.assets or kiln.types is off): " +
-                     "nothing is taken or smashed automatically");
+        if (data.Ready) return;
+        try
+        {
+            if (Server.GameData.GameDataLoader.Finish(data, Context.DataDirectory, Log.Info, LoadError)) return;
+        }
+        catch (Exception e)
+        {
+            LoadError(e);
+            return;
+        }
+        Log.Warn("Kiln Auto Loot: the game's data cannot be read in this world (kiln.assets or kiln.types is off): " +
+                 "nothing is taken or smashed automatically");
     }
+
+    private void LoadError(Exception e) =>
+        Log.Error(e, "Kiln Auto Loot: the game data could not be read; nothing is taken automatically");
 
     private void DumpData(Data data)
     {

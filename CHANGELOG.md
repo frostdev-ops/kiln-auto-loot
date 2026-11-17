@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.6
+- The game no longer waits for Kiln Auto Loot while it starts: the mod reads the game's data, sorts it and writes its
+  cache in the background. On a hard disk this held the main menu's first frame for over 5 s after a Kiln or game
+  update (the first start reads the game's data instead of the cache). Only the item names are still looked up on the
+  game's thread, after such an update. The item list in F8 fills a moment after loading.
+- The classification dump (counterLog) is written in the background as well.
+
 ## 0.1.5
 - Clearing the skip list or the only list asks once more: "Clear the list" turns into "Keep it" (where you just
   clicked) and "Really clear all N?" beside it. A stray click while the mouse misbehaves no longer empties a list.
