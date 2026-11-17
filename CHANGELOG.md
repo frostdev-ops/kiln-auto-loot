@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.1.5
 - Clearing the skip list or the only list asks once more: "Clear the list" turns into "Keep it" (where you just
   clicked) and "Really clear all N?" beside it. A stray click while the mouse misbehaves no longer empties a list.
 - Undo next to the list puts it back as it was before your last change in the editor (a clear, an x, a group, a

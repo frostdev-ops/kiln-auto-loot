@@ -57,7 +57,9 @@ rules and what a dedicated server can show without a player. Everything below ne
 
 ## 5. Skip list
 - [ ] Type 3 letters: suggestions in the window's language; Enter takes the first; a group can be skipped whole and
-      taken again; entries show their x; "Clear the list" works; an unknown "=Name" is marked.
+      taken again; entries show their x; "Clear the list" asks once more ("Keep it" in its place, "Really clear all
+      N?" beside it) and then clears; Undo brings the list back, also after closing and opening the window; an unknown
+      "=Name" is marked.
 - [ ] A skipped item stays on the ground and in chests and corpses, with a short note (at most 3 times per item); a
       bush that would give a skipped item is not harvested; pressing or holding E on it takes it.
 

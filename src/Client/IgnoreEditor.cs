@@ -2,8 +2,9 @@
 // The item-list editor (the skip list, and the only list with its own texts): search box and group combo on one line,
 // the whole-group button, the suggestion box (bullet for chosen items, a click toggles, Enter takes the first, "Only
 // this" asks the window to gather nothing but that item), the chosen list with x per entry, "Clear the list" (asks once
-// more: "Keep it" takes the place of the first click, the clear goes beside it), "Undo" and the count. Both lists keep to the same bounds (SkipListBounds). The rules (matching, chosen, unknown, classify, the new raw value) are Core.IgnoreList's;
-// this class only draws and keeps the editor's own state. Render thread.
+// more: "Keep it" takes the place of the first click, the clear goes beside it), "Undo" and the count. Both lists keep
+// to the same bounds (SkipListBounds). The rules (matching, chosen, unknown, classify, the new raw value) are
+// Core.IgnoreList's; this class only draws and keeps the editor's own state. Render thread.
 using Kiln;
 using KilnAutoLoot.Core;
 using Texts = KilnAutoLoot.Core.Texts;
@@ -50,13 +51,14 @@ internal sealed class IgnoreEditor(ItemTable items, ListTexts? texts = null)
         _group = 0;
         _showList = false;
         _refused = false;
-        _clearAsked = false;   // the undo stays: a list cleared by mistake can still come back after the window was closed
+        _clearAsked = false;   // the undo stays: a list cleared by mistake comes back after the window was closed
     }
 
     /// <summary>The step back the editor offers for <paramref name="raw"/> (tests).</summary>
     internal ListUndo Undo => _undo;
 
-    /// <summary><see cref="Bounded"/>, and the undo learns the change (an undo itself leaves nothing to undo).</summary>
+    /// <summary><see cref="Bounded"/>, and the undo learns the change (after an undo nothing is left to undo).
+    /// </summary>
     internal string? Finish(string current, string? next, bool undoing)
     {
         var taken = Bounded(current, next);
@@ -241,7 +243,8 @@ internal sealed class IgnoreEditor(ItemTable items, ListTexts? texts = null)
         return Finish(raw, undo ?? result, undoing: undo is not null);
     }
 
-    /// <summary>"Undo" while the list is what the editor's last change made; returns the list before it when pressed.</summary>
+    /// <summary>"Undo" while the list is what the editor's last change made; returns the list before it when
+    /// pressed.</summary>
     private string? DrawUndo(UiDraw ui, string raw, bool german, bool sameLine)
     {
         if (_undo.For(raw) is not { } before) return null;
