@@ -72,7 +72,7 @@ internal sealed class Smash
         _tries.Clear();
     }
 
-    /// <summary>Once per second per player, tick thread. Does nothing when s.Smash is off or the limits forbid it. Only
+    /// <summary>Once per second per player, tick thread. Does nothing when auto loot (s.Looting, F9) or s.Smash is off or the limits forbid it. Only
     /// targets inside the player's height window (heightAbove / heightBelow) are hit.</summary>
     public void Run(EntityId player, WorldPosition position, PersonalSettings s, ServerLimits limits)
     {

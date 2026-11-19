@@ -72,8 +72,8 @@ public static class Texts
     {
         // Looting
         new("looting", "looting", "Auto loot", "Auto-Loot",
-            "Picks up what is around you as you move, no need to hold E. Off: only what you take yourself.",
-            "Sammelt auf, was um dich herum liegt, ganz ohne E zu halten. Aus: nur, was du selbst nimmst."),
+            "Picks up what is around you as you move, no need to hold E. Off: only what you take yourself, and nothing is smashed.",
+            "Sammelt auf, was um dich herum liegt, ganz ohne E zu halten. Aus: nur, was du selbst nimmst, und nichts wird zertrümmert."),
         new("radius", "looting", "Radius", "Radius",
             "How far the mod reaches around you, in meters. Smashing uses the same distance. A group can get its own range on the Ranges page.",
             "Wie weit die Mod um dich herum greift, in Metern. Beim Zertrümmern gilt derselbe Abstand. Eigene Reichweiten je Gruppe stellst du unter „Reichweiten“ ein."),

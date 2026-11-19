@@ -15,7 +15,7 @@ namespace KilnAutoLoot.Core;
 public sealed class PersonalSettings
 {
     // Looting
-    [Comment("Pick things up by walking past them. false = only what you take yourself with E.")] public bool Looting { get; set; } = true;
+    [Comment("Pick things up by walking past them (F9). false = only what you take yourself with E, and nothing is smashed.")] public bool Looting { get; set; } = true;
     [Comment("How far around you the mod reaches, in meters (also how far smashing reaches)."), Range(1, 50)] public float Radius { get; set; } = 15f;
     [Comment("Take things where they lie. false = the game's short pull range; mushrooms and other fixed pickups need to be within reach.")] public bool TakeInPlace { get; set; } = true;
     [Comment("Only take what is in plain view from where you stand.")] public bool VisibleOnly { get; set; }

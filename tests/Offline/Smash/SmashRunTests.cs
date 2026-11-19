@@ -91,6 +91,20 @@ public sealed class SmashRunTests
         Assert.Empty(_world.Hits);
     }
 
+    [Fact] public void Auto_loot_off_F9_hits_nothing_trees_and_hives_included()
+    {
+        // F9 is the master switch: with auto loot off nothing is smashed, though "Smash things" stays on
+        var s = S(x => { x.Looting = false; x.FellTrees = true; x.SmashHives = true; });
+        _world.Add(TSmash, 2); _world.Add(TTree, 3); _world.Add(THive, 4); _world.Add(TStone, 5); _world.Add(TShared, 6);
+        Run(s);
+        Assert.Empty(_world.Hits);
+        Assert.True(SmashSwitches.Of(s, new ServerLimits()).Off);
+        // on again: smashing comes back with the same switches
+        s.Looting = true;
+        Run(s);
+        Assert.NotEmpty(_world.Hits);
+    }
+
     [Fact] public void Server_forbids_smashing() =>
         Assert.False(HitOnce(TSmash, S(), new ServerLimits { AllowSmash = false }));
 

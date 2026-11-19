@@ -7,12 +7,13 @@ namespace KilnAutoLoot.Server;
 /// <summary>One player's smash switches after the server's limits.</summary>
 internal readonly record struct SmashSwitches(bool On, float Radius, bool Buildables, bool Stones, bool Trees, bool Hives)
 {
-    /// <summary>The player's settings capped by the server: allowSmash off turns smashing off as a whole (trees and
+    /// <summary>The player's settings capped by the server: auto loot off (looting, the F9 switch) turns smashing off as a
+    /// whole, as it stops the pickups; allowSmash off turns smashing off as a whole (trees and
     /// hives included); allowFelling / allowHives turn their own switch off; the radius is at most maxRadius. Stones count
     /// only with groundLoot on, as for the pickups: with "things on the ground" off a boulder's stone would only be left
     /// lying (seen in a hosted game: boulders kept breaking with ground loot off).</summary>
     public static SmashSwitches Of(PersonalSettings s, ServerLimits limits) => new(
-        On: s.Smash && limits.AllowSmash,
+        On: s.Looting && s.Smash && limits.AllowSmash,
         Radius: Math.Min(s.Radius, limits.MaxRadius),
         Buildables: s.SmashBuildables,
         Stones: s.Stones && s.GroundLoot,
