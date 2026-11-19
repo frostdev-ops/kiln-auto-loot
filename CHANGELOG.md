@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.8
+- F9 stops smashing too: with auto loot off, barrels, crates, pots, trees and hives around you are left alone, whatever
+  the smashing switches in F8 say. Before, F9 only stopped the pickups and things kept breaking around you. F9 again
+  brings smashing back as you had it.
+
 ## 0.1.7
 - The World tab can really be changed in the main menu now: in 0.1.6 it stayed read-only there ("Set by the server you
   play on."). Kiln runs a mod's queued work only while a world runs, and the step that opens the tab for editing was

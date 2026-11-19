@@ -72,6 +72,8 @@ rules and what a dedicated server can show without a player. Everything below ne
 - [ ] "Fell trees" on (test world!): trees, stumps and logs come down and drop wood; harvest trees (hazelnut, coffee)
       stay. "Smash bee hives": hives break, honey is picked up.
 - [ ] "Stones" off: rock boulders stay whole.
+- [ ] F9 (auto loot off) with "Smash things around me" still on: nothing breaks around you (0.1.7 kept smashing);
+      F9 again: smashing comes back.
 - [ ] Chandeliers, telescopes, showcases, doors, ladders and anything of a quest stay whole.
 
 ## 7. World tab (hosting)
