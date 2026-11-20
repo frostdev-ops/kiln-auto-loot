@@ -183,6 +183,7 @@ internal static class SalvageRuleEditor
 {
     private static readonly SalvageKind[] Kinds = Enum.GetValues<SalvageKind>();
     private static readonly GearRarity[] Rarities = Enum.GetValues<GearRarity>();
+    private static readonly Dictionary<int, int> Dragging = new();   // render thread only
 
     public static string? Draw(UiDraw ui, float fs, bool german, string raw, string label, string help)
     {
@@ -211,9 +212,15 @@ internal static class SalvageRuleEditor
                 ui.NextItemWidth(fs * 7f);
                 if (ui.Combo("###rarity", ref q, rarityNames) && q >= 0) { rules[i] = r = r with { UpTo = Rarities[q] }; changed = true; }
                 ui.SameLine();
-                var level = r.MaxLevel;
+                // the level is saved when the slider is let go, not at every step of the drag
+                var level = Dragging.TryGetValue(i, out var d) ? d : r.MaxLevel;
                 ui.NextItemWidth(fs * 5f);
-                if (ui.Slider("###level", ref level, 0, SalvageRules.MaxLevelCap)) { rules[i] = r = r with { MaxLevel = level }; changed = true; }
+                if (ui.Slider("###level", ref level, 0, SalvageRules.MaxLevelCap)) Dragging[i] = level;
+                if (ui.LastItem.Deactivated && Dragging.Remove(i, out var done))
+                {
+                    rules[i] = r = r with { MaxLevel = done };
+                    changed = true;
+                }
                 ui.Tooltip(Texts.Get("salvageMaxLevel", german));
                 ui.SameLine();
                 if (ui.SmallButton("x###x"))

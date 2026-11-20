@@ -174,6 +174,18 @@ internal sealed class KilnSalvageWorld(Data data, IClock clock, InstanceKey<Salv
         return rows.OrderByDescending(r => (r.Flags & SalvageRowFlags.Marked) != 0).ToArray();
     }
 
+    /// <summary>The gear item entities of the player's backpack proper.</summary>
+    public IReadOnlyList<EntityId> BackpackEntities(EntityId player)
+    {
+        if (Inv(player) is not { } inv) return [];
+        var bar = ActionBar(player);
+        return BackpackGear(inv).Where(s => InBackpack(s, bar)).Select(s => s.ItemEntity).ToList();
+    }
+
+    /// <summary>The gear item entities in a container.</summary>
+    public IReadOnlyList<EntityId> GearIn(EntityId container) =>
+        Inv(container) is { } inv ? BackpackGear(inv).Select(s => s.ItemEntity).ToList() : [];
+
     public int RuneCount(EntityId player) => RuneItem != 0 && Inv(player) is { } inv ? inv.Count(new ItemId(RuneItem)) : 0;
 
     /// <summary>Changes the marks of these items (only ones in the player's own backpack).</summary>

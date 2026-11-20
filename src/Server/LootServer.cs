@@ -84,6 +84,11 @@ internal sealed class LootServer(Data data)
         _subscriptions.Add(Events.On<LootEvent>(OnLoot));
         _subscriptions.Add(Events.On<ItemPickupEvent>(OnItemPickup));
         _subscriptions.Add(Events.On<ItemTossEvent>(e => Salvage(s => s.Tossed(e))));
+        // a player opening a chest's screen: gear taken out of world loot by hand comes with no pickup note
+        _subscriptions.Add(Events.On<InteractEvent>(e =>
+        {
+            if (_enabled && e.ByPlayer && !e.Canceled && !e.Injected) Salvage(s => s.Opened(e.Guest, e.Host));
+        }));
         try { _subscriptions.Add(Events.On<ItemPickingUpEvent>(e => Salvage(s => s.Looted(e.Receiver, e.GroundEntity)))); }
         catch (Exception e) { Log?.Info($"Kiln Auto Loot: no walk-over pickup events ({e.Message}); salvage rules see loot interactions only"); }
         AutoLootMod.Hub.SalvageCmdReceived += OnSalvageCmd;

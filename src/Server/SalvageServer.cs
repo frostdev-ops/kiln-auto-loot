@@ -29,6 +29,9 @@ internal sealed class SalvageServer
     private readonly Action<EntityId, SalvageStateMsg> _send;
     private readonly Action<string> _log;
     private readonly SalvageSources _sources;
+    private readonly SalvageHandTakes _hand;
+    private readonly HashSet<EntityId> _ruled = [];   // item entities the rules already handled this world
+    private long _nextHandMs;
     private readonly IClock _clock;
     private readonly Dictionary<EntityId, SalvageOutcome> _last = new();
     private readonly List<(EntityId Player, EntityId Item, int Predicted, int Before, long DueMs, string Name)> _checks = [];
@@ -48,6 +51,7 @@ internal sealed class SalvageServer
         _send = send;
         _log = log;
         _sources = new SalvageSources(clock);
+        _hand = new SalvageHandTakes(clock);
     }
 
     /// <summary>At the world's start. The key is declared once per process.</summary>
@@ -60,6 +64,7 @@ internal sealed class SalvageServer
         _ledgerLoaded = _resolved = _mismatch = _ledgerBad = false;
         _checks.Clear();
         _last.Clear();
+        _ruled.Clear();
         var b = _world.Balancing;
         _log(b is null ? "salvage: the game's BalancingTable could not be read: salvage is off in this world"
             : $"salvage: yield data seed {b.Seed}, creep {b.Creep}, trash {b.TrashStart}..{b.TrashEnd}, factors {b.WeaponsShield}/{b.Armor}/{b.Rings}, rune item {_world.RuneItem}");
@@ -127,6 +132,31 @@ internal sealed class SalvageServer
                 if (p.State == PlayerState.InGame) _jobs.PayOwed(p.Entity);
         }
         RunChecks();
+        HandTakes();
+    }
+
+    /// <summary>A player opened something (a chest's screen): a world chest's gear is watched for 2 minutes, so what
+    /// the player takes out by hand meets the rules (no pickup note comes for a drag or Take all).</summary>
+    public void Opened(EntityId player, EntityId host)
+    {
+        if (_world is null || !player.IsPlayer || host.IsNone || Ready() != SalvageReady.Ready) return;
+        if (SalvageRules.Parse(_settingsOf(player).SalvageRules).Count == 0 || !IsWorldSource(host)) return;
+        _hand.Backpack(player, _world.BackpackEntities(player));   // what the player carries now is never "taken"
+        var gear = _world.GearIn(host);
+        _hand.Opened(player, host, gear);
+        if (gear.Count > 0) _log($"salvage: player {player} opened world loot {host} with {gear.Count} gear; watching what they take by hand");
+    }
+
+    private void HandTakes()
+    {
+        if (_world is null || _clock.NowMs < _nextHandMs) return;
+        _nextHandMs = _clock.NowMs + 500;
+        foreach (var p in Kiln.Players.All)
+        {
+            if (!_hand.Watching(p.Entity)) continue;
+            foreach (var entity in _hand.Backpack(p.Entity, _world.BackpackEntities(p.Entity)))
+                if (_world.Read(p.Entity, entity) is { } item) ApplyRules(p.Entity, item, "by hand");
+        }
     }
 
     private bool TicketExists(string ticket)
@@ -167,6 +197,8 @@ internal sealed class SalvageServer
                     _jobs.Enqueue(player, items, outcome =>
                     {
                         _last[player] = outcome;
+                        _log($"salvage: player {player} asked for {items.Count}: salvaged {outcome.Salvaged} (+{outcome.Runes} runes), " +
+                             $"skipped {outcome.Skipped}{(outcome.Skipped > 0 ? $" ({outcome.Reason})" : "")}");
                         SendState(player);
                     });
                     break;
@@ -226,7 +258,7 @@ internal sealed class SalvageServer
 
     private void ApplyRules(EntityId player, SalvageItem item, string how)
     {
-        if (_world is null || _jobs is null) return;
+        if (_world is null || _jobs is null || !_ruled.Add(item.ItemEntity)) return;   // once per item
         if (item.Block != SalvageBlock.None)
         {
             _log($"salvage: rules skip {item.Name} for player {player} ({how}): {item.Block}");
@@ -255,6 +287,7 @@ internal sealed class SalvageServer
     public void Left(EntityId player)
     {
         _sources.Forget(player);
+        _hand.Forget(player);
         _last.Remove(player);
     }
 

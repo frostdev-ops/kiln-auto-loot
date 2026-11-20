@@ -302,3 +302,55 @@ public sealed class SalvageSources(IClock clock)
             if (now - at > WindowMs) _seen.Remove(k);
     }
 }
+
+/// <summary>Gear a player takes by hand out of a world chest's screen (a drag, Take all, a quick stack) arrives with no
+/// pickup note. When the player opens a world chest the server notes the chest's gear (its item entities, which stay
+/// the same through every move) and, while the watch lasts, finds them in the backpack. Item entities the player has
+/// carried are never one (their own gear put into the chest and taken back).</summary>
+public sealed class SalvageHandTakes(IClock clock)
+{
+    public const long WindowMs = 120_000;
+
+    private sealed class Watch
+    {
+        public readonly HashSet<EntityId> Gear = [];
+        public long UntilMs;
+    }
+
+    private readonly Dictionary<EntityId, Watch> _watch = new();
+    private readonly Dictionary<EntityId, HashSet<EntityId>> _carried = new();
+
+    public bool Watching(EntityId player) =>
+        _watch.TryGetValue(player, out var w) && clock.NowMs <= w.UntilMs && w.Gear.Count > 0;
+
+    public void Opened(EntityId player, EntityId chest, IEnumerable<EntityId> chestGear)
+    {
+        if (!_watch.TryGetValue(player, out var w)) _watch[player] = w = new Watch();
+        var carried = _carried.GetValueOrDefault(player);
+        foreach (var e in chestGear)
+            if (!e.IsNone && carried?.Contains(e) != true) w.Gear.Add(e);
+        w.UntilMs = clock.NowMs + WindowMs;
+    }
+
+    /// <summary>The player's backpack gear now: the watched entities that arrived (each once); every entity is noted as
+    /// carried.</summary>
+    public IReadOnlyList<EntityId> Backpack(EntityId player, IEnumerable<EntityId> backpackGear)
+    {
+        if (!_carried.TryGetValue(player, out var carried)) _carried[player] = carried = [];
+        var arrived = new List<EntityId>();
+        var live = _watch.TryGetValue(player, out var w) && clock.NowMs <= w.UntilMs;
+        if (w is not null && !live) _watch.Remove(player);
+        foreach (var e in backpackGear)
+        {
+            if (live && w!.Gear.Remove(e)) arrived.Add(e);
+            carried.Add(e);
+        }
+        return arrived;
+    }
+
+    public void Forget(EntityId player)
+    {
+        _watch.Remove(player);
+        _carried.Remove(player);
+    }
+}

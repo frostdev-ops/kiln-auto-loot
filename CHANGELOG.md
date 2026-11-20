@@ -8,6 +8,12 @@
 - Rules for new gear now see what Auto Loot itself takes out of corpses and chests. In 0.2.0 they only saw gear that
   came with the game's pickup note (a loot-all, a take by hand), and most gear arrives through Auto Loot's own slot
   moves, which bring no such note. kiln.log now also says why a rule left a piece of gear ("no rule takes ...").
+- Rules also see gear you take out of a world chest yourself, in its screen (dragging an item, Take all): that comes
+  with no pickup note either. When you open a world chest or other world loot, the mod notes the gear in it and finds
+  it in your backpack afterwards (for 2 minutes). Gear from your own chests, a tombstone, crafting or trades is still
+  never touched, nor gear you carried before and put into the chest yourself.
+- The level slider of a rule saves when you let it go, not at every step of the drag.
+- kiln.log has one line per salvage request: how many were salvaged and skipped, and why.
 
 ## 0.2.0
 - **Salvage**: turn gear into runes from F8's new Salvage tab (ideas by netjunk and HadToRegister). Mark items (their
