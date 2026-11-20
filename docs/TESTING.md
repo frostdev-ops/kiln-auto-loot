@@ -29,10 +29,10 @@ rules and what a dedicated server can show without a player. Everything below ne
 
 ## 2. Loose things
 - [ ] Rocks, sticks, ore, mushrooms and dropped items within the radius are picked up without pressing E; each thing
-      once (no doubled amounts on stones, mushrooms, fireflies).
-- [ ] Each group switch (ground loot, stones, collectibles, plants, crops, fish) stops its group at once; pressing or
-      holding E still takes a switched-off thing, also beyond its group radius and with auto loot off (F9); the radius
-      slider and a group radius larger than the general one both work.
+      once (no doubled amounts on stones, mushrooms, fireflies, frogs).
+- [ ] Each group switch (ground loot, stones, collectibles, plants, critters, crops in the world, crops in a base, fish)
+      stops its group at once; pressing or holding E still takes a switched-off thing, also beyond its group radius and
+      with auto loot off (F9); the radius slider and a group radius larger than the general one both work.
 - [ ] Old books the world placed (village and ruin furniture that gives Old Books) stay where they are with "Old
       books" off (the default). With it on they are picked up away from any base but stay while you stand in or near
       one, also with a base built around them. E takes them either way.
@@ -54,7 +54,14 @@ rules and what a dedicated server can show without a player. Everything below ne
 - [ ] "Pause near enemies": nothing is taken while an enemy is close, it carries on about 2 s after the last one.
 
 ## 4. Plants and crops
-- [ ] Berry bushes, herbs, fibre, reeds and fireflies are harvested, each once per visit.
+- [ ] Berry bushes, herbs, fibre and reeds are harvested, each once per visit.
+- [ ] Critters (fishing bait): fireflies at night, frogs in the wetlands, maggots, moths, grasshoppers, scarabs and
+      pillbugs are picked up as you walk past (no need to stand still), with "Plants" off too; "Critters" off leaves
+      them. Animals and pets around you are never touched.
+- [ ] "Ripe crops in a base" off: ripe beds in your base stay while you stand in or near it; ripe crops out in the
+      world are still harvested. "Ripe crops in the world" off and "in a base" on: the other way round.
+- [ ] Settings from 0.2.2 carry over: with "Ripe crops" off before, both crop switches are off after the update; with
+      "Plants" off before, "Critters" is off too (kiln.log: "carried over from the setting it replaces").
 - [ ] Farm beds: only ripe crops; a bed in an early stage (Nettle, Rooibos, sugar cane, plant fibre at stage 1) is left
       to grow.
 

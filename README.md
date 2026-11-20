@@ -12,8 +12,10 @@ notes run in each player's game.
 ## What it does
 - **Picks things up around you** (radius 1-50 m, 15 m by default): loose things in the open (rocks, sticks, ore,
   mushrooms, dropped potions and arrows), finds you collect (fossils, urns, gnomes ...), what grows on plants
-  (berries, herbs, fibre, reeds, fireflies), ripe crops from farm beds, and fish if you want them. Each group has its
-  own switch and, if you like, its own radius.
+  (berries, herbs, fibre, reeds), the critters you use as fishing bait (fireflies, moths, grasshoppers, scarabs,
+  pillbugs, frogs, maggots; never animals or pets), ripe crops from farm beds, and fish if you want them. Each group
+  has its own switch and, if you like, its own radius. Ripe crops have two switches: out in the world, and in or near
+  a base, so the fields in your base can stay as decoration.
 - **Empties containers**: corpses of defeated enemies (bosses and elites too, or leave those to you), chests, coffins,
   cupboards and heaps out in the world. A fresh container waits a moment before it is opened (1 s by default), so the
   game has time to fill in its special loot.

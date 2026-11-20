@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.2.3
+- **Critters**: fireflies, moths, grasshoppers, scarabs, pillbugs, frogs and maggots (the fishing bait you catch) are
+  picked up as you walk past, with their own switch "Critters (fishing bait)", on by default (asked by Tyrion67). The
+  mod knew them before but treated them like bushes: it pressed "accept" first and waited up to 3 seconds per try
+  before taking them, so you had walked on before they came. They are now taken at once, like mushrooms, which they
+  are built like. Only the bait swarms count: animals, pets, farm animals, thrown animal bait and quest things never.
+  They use the main radius, and the skip list, only list and gather focus see them as the bait they give.
+- **Ripe crops** has two switches now (asked by netjunk and ramabbott): "Ripe crops in the world" and "Ripe crops in
+  a base" (while you are in or near a base, where fields may be decoration). Both are on by default; switch the base
+  one off to leave your fields to you and E. The Ranges page's crop radius is for both.
+- Your settings carry over: whatever "Ripe crops" was before goes to both crop switches, and "Critters" starts as
+  "Plants" was (they were part of plants before). This goes for your settings file, your profiles, the server's
+  defaults for players without the mod, and a player's game that is still on 0.2.2.
+- "Plants and bushes" no longer lists fireflies: they are critters now.
+
 ## 0.2.2
 - Rules for new gear see what you loot from the world, whatever way it comes. 0.2.1 only took gear whose source the
   mod had watched being opened in the last 3 seconds, so most loot was left ("its source ... is no world loot the mod
