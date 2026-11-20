@@ -10,6 +10,7 @@ public sealed class TemplateTable
     {
         public readonly List<TemplateRule> All = new();
         public readonly Dictionary<Guid, TemplateRule> ByGuid = new();
+        public readonly HashSet<Guid> WorldLootOnly = new();
     }
 
     private volatile State _state = new();
@@ -25,10 +26,19 @@ public sealed class TemplateTable
         return t;
     }
 
-    /// <summary>Replaces the whole content; the first rule of a GUID wins.</summary>
-    public void Fill(IEnumerable<TemplateRule> rules)
+    /// <summary>Replaces the whole content, with the world loot the mod leaves (salvage only).</summary>
+    public void Fill(IEnumerable<TemplateRule> rules, IEnumerable<Guid> worldLootOnly)
     {
         var s = new State();
+        foreach (var g in worldLootOnly) s.WorldLootOnly.Add(g);
+        Fill(rules, s);
+    }
+
+    /// <summary>Replaces the whole content; the first rule of a GUID wins.</summary>
+    public void Fill(IEnumerable<TemplateRule> rules) => Fill(rules, new State());
+
+    private void Fill(IEnumerable<TemplateRule> rules, State s)
+    {
         foreach (var r in rules)
         {
             s.All.Add(r);
@@ -75,6 +85,14 @@ public sealed class TemplateTable
     public IReadOnlyList<TemplateRule> All => _state.All;
 
     public bool TryGet(Guid template, out TemplateRule rule) => _state.ByGuid.TryGetValue(template, out rule!);
+
+    /// <summary>World loot for the salvage rules: a template the mod takes, or world loot it leaves to the player (a locked
+    /// chest, a camp's heap: <see cref="TemplateRules.IsWorldLootOnly"/>).</summary>
+    public bool IsWorldLoot(Guid template)
+    {
+        var s = _state;
+        return s.ByGuid.ContainsKey(template) || s.WorldLootOnly.Contains(template);
+    }
 
     /// <summary>A group word as <see cref="WordOf"/> writes it, case-sensitive; any other word is <see cref="Group.Unknown"/>.</summary>
     public static Group GroupOf(string word) => word switch

@@ -104,6 +104,55 @@ public class TemplateRulesTests
         Assert.Null(One(own, Facts.I(1, "Build_Storage_Chest", "BuildTools", [own.Guid])));
     }
 
+    // netjunk 2026-11-20: a Pine Shortbow from a locked world chest (lockpicks) and a Metalstar Mace from a searchable
+    // junk pile in an enemy camp were left by the salvage rules as "not world loot"
+    private static readonly string[] LockedChest = ["DefaultInventory", "InventorySetup", "InteractionOfferRuntime", "Destructible",
+        "RandomLootSlotCount", "InteractionLock", "ClientInteractionLock"];
+    private static readonly string[] LockedRandomChest = [.. LockedChest, "RandomLoot", "RandomLootContainer"];
+    private static readonly string[] CampHeap = ["DefaultInventory", "InventorySetup", "InteractionOfferRuntime", "Destructible",
+        "DestroyOnLoot", "RandomLootSlotCount"];
+
+    [Fact]
+    public void Locked_world_chests_and_the_heaps_of_camps_and_mines_are_world_loot_for_salvage_but_never_taken()
+    {
+        var world = new[]
+        {
+            Facts.T("LootChest_Random_Wood_Locked_Pickable_T0-T4", LockedRandomChest),
+            Facts.T("LootChest_Random_gold_water_locked_T5-T6_trigger", LockedRandomChest),
+            Facts.T("LootChest_Locked_Armor_lvl05_Set2_Legs", LockedChest),
+            Facts.T("LootChest_Locked_Materials_Early_Game", LockedChest),
+            Facts.T("Prop_Vukah_Camp_Drywood_TrashHeap01a_DONOTPLACE", CampHeap),
+            Facts.T("Prop_Scavenger_Camp_TrashHeap01c_bomb_DONOTPLACE", CampHeap),
+            Facts.T("Prop_Mines_oldTools_free_4m_02_earlyGame_DONOTPLACE", CampHeap),
+            Facts.T("Prop_Ancients_TrashhHeap_01_b_DONOTPLACE", CampHeap),
+        };
+        var own = Facts.T("Prop_Decoration_T2_Storage_32_Chest", LockedChest);
+        var notWorld = new[]
+        {
+            own,                                                                              // the player's own storage
+            Facts.T("Base_LootChest_Locked_Equipment", LockedChest),                          // a base template
+            Facts.T("Base_TrashHeap", CampHeap),
+            Facts.T("LootChest_Random_gold_fog_trigger_locked_trigger_test", LockedRandomChest),   // development
+            Facts.T("Prop_Chest01_Player_Storage_Wood_Large_DEPRECATED", LockedChest),
+            Facts.T("QUEST_Model_Static_Lore_Object_Tools_searchable", ["InventorySetup", "InteractionOfferRuntime", "RandomLoot", "InteractionKnowledgeLock"]),
+            Facts.T("_DONOTPLACE_Prop_Furniture_Crate_01_crafted", CampHeap),                  // a built piece
+            Facts.T("Prop_Destructible_Barrel_01", Facts.Prop),                                // nothing to open
+        };
+        var c = Facts.Run([.. world, .. notWorld], [Facts.I(1, "Build_Storage_32", "BuildTools", [own.Guid])]);
+        foreach (var t in world)
+        {
+            Assert.Null(Facts.Rule(c, t));                                     // auto loot never opens them
+            Assert.Contains(t.Guid, c.WorldLootOnly);
+        }
+        foreach (var t in notWorld) Assert.DoesNotContain(t.Guid, c.WorldLootOnly);
+
+        var table = TemplateTable.Empty();
+        table.Fill(c.Templates, c.WorldLootOnly);
+        Assert.True(table.IsWorldLoot(world[0].Guid));
+        Assert.False(table.TryGet(world[0].Guid, out _));
+        Assert.False(table.IsWorldLoot(own.Guid));
+    }
+
     [Fact]
     public void Heaps_and_ruin_containers_are_chests()
     {

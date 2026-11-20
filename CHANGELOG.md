@@ -11,6 +11,11 @@
   which part took it (finding things around you, reading a new thing's type from the game, the loot rules) and the
   counts. Please send kiln.log if you see one.
 - The timing line of counterLog says how many server steps the slowest scan was spread over (steps=).
+- **Rules for new gear see locked chests and camp junk piles as world loot** (reported by netjunk): gear from a
+  locked world chest you open with a key or lockpicks, and from the searchable heaps in camps and mines (scavenger and
+  Vukah trash heaps, wooden junk piles, old tools), was left as "came from a tombstone or a chest that is not world
+  loot". Auto Loot itself still leaves these to you (it never opens a locked chest or a heap); only the rules now count
+  what you take from them.
 - **"Ripe crops in a base" now covers everything you plant there** (reported by netjunk): planted algae was still
   harvested in a base with the switch off. Algae, wheat, pumpkins, papyrus, daylilies, cattails, reeds, taro, ginger,
   shiitake, beans, thyme, pomegranates and the bushes you can plant grow into the same plants the world has, so the

@@ -230,8 +230,9 @@ internal sealed class SalvageServer
         _sources.Looted(player, host, world);
     }
 
+    // world loot: what Auto Loot's tables take, and world loot it leaves to the player (locked chests, camp heaps)
     private bool IsWorldSource(EntityId entity) =>
-        Spawn.Inspect(entity) is { Template: { } t } && _data.Templates.TryGet(t, out _);
+        Spawn.Inspect(entity) is { Template: { } t } && _data.Templates.IsWorldLoot(t);
 
     /// <summary>Items arrived with the game's pickup note (a loot-all, a take from a chest's screen, a hand take, a
     /// walk-over pickup): gear from the world a player's rules may mark or salvage. The source is judged by
@@ -262,7 +263,7 @@ internal sealed class SalvageServer
     private bool? LiveWorld(EntityId source)
     {
         if (source.IsNone || Spawn.Inspect(source) is not { Template: { } t }) return null;
-        if (_data.Templates.TryGet(t, out _)) return true;
+        if (_data.Templates.IsWorldLoot(t)) return true;
         return HasInventory(source) ? false : null;   // storage the tables do not know; else a pickup of some kind
     }
 

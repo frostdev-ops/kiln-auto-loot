@@ -7,7 +7,12 @@ namespace KilnAutoLoot.Core;
 
 /// <summary>The result of <see cref="GameRules.Classify"/>.</summary>
 internal sealed record Classification(IReadOnlyList<TemplateRule> Templates, IReadOnlyList<ItemRow> Items,
-    IReadOnlyList<uint> QuestItems, IReadOnlyDictionary<Guid, SmashKind> Smash);
+    IReadOnlyList<uint> QuestItems, IReadOnlyDictionary<Guid, SmashKind> Smash)
+{
+    /// <summary>World loot the mod never opens or takes, whose contents count as "picked up from the world" for the
+    /// salvage rules (<see cref="TemplateRules.IsWorldLootOnly"/>): locked world chests, the heaps of camps and mines.</summary>
+    public IReadOnlyList<Guid> WorldLootOnly { get; init; } = [];
+}
 
 internal static class GameRules
 {
@@ -39,10 +44,12 @@ internal static class GameRules
         };
 
         var rules = new List<TemplateRule>();
+        var worldOnly = new List<Guid>();
         var smash = new Dictionary<Guid, SmashKind>();
         foreach (var t in facts.Templates)
         {
             if (TemplateRules.Classify(t, context) is { } r) rules.Add(r);
+            else if (TemplateRules.IsWorldLootOnly(t, context)) worldOnly.Add(t.Guid);
             if (SmashTargets.KindOf(t, buildable) is { } k) smash[t.Guid] = k;
         }
 
@@ -50,6 +57,6 @@ internal static class GameRules
         foreach (var r in rules) foreach (var id in r.Yield) given.Add(id);
         var rows = facts.Items.Select(i => ItemRules.RowOf(i, given)).ToList();
         var quest = facts.Items.Where(ItemRules.IsQuestItem).Select(i => i.Id).Distinct().ToList();
-        return new Classification(rules, rows, quest, smash);
+        return new Classification(rules, rows, quest, smash) { WorldLootOnly = worldOnly };
     }
 }

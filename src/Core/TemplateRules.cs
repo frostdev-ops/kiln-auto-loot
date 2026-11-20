@@ -87,6 +87,23 @@ public static class TemplateRules
     /// <summary>A base template ("Base_...", "_Base_..."): the others copy it, the world does not place it.</summary>
     public static bool IsBase(string lowerName) => lowerName.TrimStart('_').StartsWith("base_", StringComparison.Ordinal);
 
+    /// <summary>World loot the mod never opens or takes (no rule above takes it), whose contents still come from the world
+    /// for the salvage rules: locked world chests (a key or lockpicks, the player's own step) and the heaps of camps and
+    /// mines the world places under "_DONOTPLACE" names (scavenger and Vukah trash heaps, old tools, the ancients' trash
+    /// heaps), which rule 1 leaves as development names. Never the player's own storage, a built piece, a base template,
+    /// a quest object or another development template.</summary>
+    public static bool IsWorldLootOnly(TemplateFacts t, Context c)
+    {
+        var name = t.Name.ToLowerInvariant();
+        if (!t.Has("InteractionOfferRuntime") || !t.Has("InventorySetup") || t.Has("Actor") || t.Has("PickupItem")) return false;
+        if (IsBase(name) || IsBuiltPiece(t.Name) || c.Buildable.Contains(t.Guid) || AnyWord(name, StoryWords)) return false;
+        if (AnyWord(name.Replace("donotplace", "", StringComparison.Ordinal), DevelopmentWords)) return false;
+        // locked world chests: random loot, or a set of loot slots
+        if (name.Contains("locked") && (t.Has("RandomLoot") || t.Has("RandomLootSlotCount"))) return true;
+        // heaps searched once, then gone (the world chest rule's heaps)
+        return t.Has("DefaultInventory") && t.Has("DestroyOnLoot") && t.Has("Destructible");
+    }
+
     /// <summary>Not a development template (rule 1).</summary>
     public static bool IsWorkable(string name) => !AnyWord(name.ToLowerInvariant(), DevelopmentWords);
 
