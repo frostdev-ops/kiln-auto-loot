@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.2.0
+- **Salvage**: turn gear into runes from F8's new Salvage tab (ideas by netjunk and HadToRegister). Mark items (their
+  rows turn red), then "Salvage marked" with a confirm that lists the items and the runes ("Ask before salvaging", on by
+  default). Keep protects an item from salvage and rules. The runes are what the game's own Trash gives (its formula,
+  read from the game's data and settings); the first Trash you do by hand is compared with it in kiln.log, and salvage
+  switches itself off in that world if they differ.
+- **Rules for new gear** (none by default): weapons, shields, armor, rings or all gear up to a rarity and level are
+  marked, or salvaged at once, when you pick them up from the world (corpses, world chests, the ground). Never what you
+  already carry, gear from your own chests, tombstones, crafting, worn gear, kept or quest items, or gear with a gem.
+- A salvage stays whole across a save: a ledger saved with the world settles an item taken just before a save (no item
+  back, no runes twice; runes that did not fit are given once there is room).
+- New key "Salvage marked gear" with no key by default; new world limit "Salvage allowed".
+- Needs Kiln 0.2.0-dev.29.18 or later. The channel version is 3: a game with 0.1.x on a 0.2.0 server (or the other way
+  round) gets the server's defaults, as without the mod.
+- Not yet: red slots in the game's own inventory, a Salvage button in the chest screen, and the Salvage chest; they
+  need Kiln changes.
+
 ## 0.1.8
 - F9 stops smashing too: with auto loot off, barrels, crates, pots, trees and hives around you are left alone, whatever
   the smashing switches in F8 say. Before, F9 only stopped the pickups and things kept breaking around you. F9 again

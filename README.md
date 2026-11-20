@@ -37,6 +37,12 @@ notes run in each player's game.
 - **Rarity**: weapons, armor, rings and shields below a rarity you choose stay where they are.
 - **Height window**: only what is within a few meters above or below you (4 m each by default), so a cave's loot stays
   in the cave and the cave doesn't empty the hill above it.
+- **Salvage** (new in 0.2.0): turn gear into runes, as many as the game's own Trash gives. In F8's Salvage tab, mark
+  what can go (marked rows are red) and salvage it in one go, with a confirm that lists the items and the runes. Keep
+  protects an item for good. Rules for new gear (off until you add one): weapons, shields, armor, rings or all gear up to
+  a rarity and level, marked or salvaged at once, only for gear you pick up from the world from then on. Worn gear, the
+  action bar, kept and quest items, gear with a gem and everything in chests are never touched. Give "Salvage marked
+  gear" a key in Kiln's Keys page if you like (no key by default).
 - **Bag-aware**: top up only the stacks you already carry, keep some bag slots free, or stop at a set amount of an item
   or a whole category ("500 wood logs").
 
@@ -52,6 +58,8 @@ notes run in each player's game.
 - Players who join without the mod get the server's default settings.
 
 ## Good to know
+- **Salvage** cannot be undone. Each salvaged item gets a line in `kiln/logs/kiln.log`. The runes follow the game's own
+  Trash formula; the mod checks it against a Trash by hand and switches salvage off in that world if they differ.
 - **Stacks**: if you remove the mod or lower the stack size, the game cuts every stack above its own size back the next
   time it handles it, and the rest is lost. Split big stacks first.
 - **Felled trees** may not grow back. Try tree felling in a test world, or back up your save.
@@ -61,7 +69,7 @@ notes run in each player's game.
   yet in 0.2.0-dev.28; the window says so. The height window covers caves meanwhile.
 
 ## Requirements
-Kiln 0.2.0-dev.28 or later, on the server and (for the window, the keys and the notes) in each player's game.
+Kiln 0.2.0-dev.29.18 or later, on the server and (for the window, the keys and the notes) in each player's game.
 
 ## Building
 ```sh
@@ -73,6 +81,9 @@ dotnet build -c Release -t:KilnPack -p:KilnPackageOutputPath=dist/   # the zip t
 `tests/LabTest` and `tests/LabSmash` are test mods for a Kiln lab server (`kiln test`).
 
 ## Credits
+Salvage: ideas by **netjunk** (rules for new pickups, mark and salvage in bulk, the confirm) and **HadToRegister**
+(marked items shown in red, the optional "Are you sure?", the Salvage chest still to come).
+
 Inspired by **Auto Loot Plus** by cw (Nexus Mods, Enshrouded mod 170), whose open source showed how automatic looting
 can work in Enshrouded and served as our guide for its behaviour.
 

@@ -6,7 +6,7 @@ rules and what a dedicated server can show without a player. Everything below ne
 ## Setup
 1. Back up your save (stack sizes and felled trees change it).
 2. `dotnet build -c Release -t:KilnPack -p:KilnPackageOutputPath=dist/`, then import `dist/kiln-auto-loot-<version>.zip`
-   in the Kiln Launcher's Library and switch it on in your profile (Kiln 0.2.0-dev.28 or later).
+   in the Kiln Launcher's Library and switch it on in your profile (Kiln 0.2.0-dev.29.18 or later).
 3. Set `"counterLog": true` in `kiln-auto-loot-server.json` (it is not in the F8 window): in the Kiln Launcher, Kiln
    Auto Loot > Configs > kiln-auto-loot-server, or by hand in your profile's config folder (`kiln/config/` without a
    profile). The mod then writes its counters every 5 s to `kiln/data/kiln-auto-loot/kiln-auto-loot.log`, from the
@@ -15,7 +15,7 @@ rules and what a dedicated server can show without a player. Everything below ne
 4. Host a world (a test world, or a copy) and walk somewhere with loot: a ruin with barrels, a camp, bushes, a farm.
 
 ## 1. Window and keys
-- [ ] F8 opens "Kiln Auto Loot <version>" with six tabs; switching tabs keeps the width; F8, Esc, the X and Close all
+- [ ] F8 opens "Kiln Auto Loot <version>" with eight tabs (Salvage is new); switching tabs keeps the width; F8, Esc, the X and Close all
       close it; Esc does not also open the pause menu; while it is open the camera and movement don't react.
 - [ ] The status line says whether auto loot is on and names the F9 key; F9 flips it with a short note, also with the
       window open. Rebinding F8/F9 in Kiln's Keys page works and the texts name the new key.
@@ -110,6 +110,41 @@ rules and what a dedicated server can show without a player. Everything below ne
 - [ ] Join a server with the mod: your settings apply there, the World tab is read-only with the server's values, a
       skip list with English or German names works, opening a chest pauses only you.
 - [ ] A player without the mod gets the server's defaults.
+
+## 10. Salvage (0.2.0)
+Use a test world or a copy: salvaged gear is gone. Grep `kiln/logs/kiln.log` for `salvage`.
+- [ ] World start: `salvage: yield data seed 8, creep 0.15, trash 5..20, factors 1/0.75/0.5, rune item <id>`.
+- [ ] **Calibration first:** trash one upgradeable piece of gear by hand (the game's item menu). kiln.log:
+      `salvage check: <name> trashed by hand gave N runes, the formula said N: match`. Try a few: a common level-1
+      weapon, an epic armour piece, a ring, one with an upgrade unlocked. Any `MISMATCH` line: salvage turns itself off
+      in that world (the tab says so); send the line.
+- [ ] F8, Salvage tab: the backpack's gear is listed with rarity, level and runes; worn gear and the action bar are not
+      listed; gear with a gem shows "has a gem" and has no Mark button.
+- [ ] Mark two items: their rows turn red and go to the top; "Salvage marked (2, N runes)" appears; Unmark works;
+      "Clear marks" clears all.
+- [ ] Keep an item: it shows "kept", has no Mark button, and a rule never touches it. Click Kept again to free it.
+- [ ] "Salvage marked": the confirm lists the items and the runes, "No" sits where the button was and cancels; "Yes":
+      the items are gone, the runes are in the backpack (with the game's "+N" note), the tab says
+      "Salvaged 2: +N runes", and kiln.log has one `salvage: player ... salvaged <name> ... -> N runes` line per item.
+- [ ] Switch "Ask before salvaging" off: the button salvages at once. Switch it back on.
+- [ ] Full backpack with no room for runes: nothing is taken ("no room for the runes").
+- [ ] Rules: add "Weapons up to Uncommon" (action Mark): kill an enemy or open a world chest that drops a common
+      weapon: it is marked (red) in the tab; kiln.log `salvage: rule marks ...`. Gear moved in from your own chest,
+      a crafted weapon and what you already carried stay unmarked. Action "Salvage it at once": the next such drop is
+      salvaged straight away (`rule salvages`).
+- [ ] Key: give "Salvage marked gear" a key in Kiln's Keys page (no default): it opens the confirm.
+- [ ] Save and quit right after a salvage, load again: no item back, no runes twice; kiln.log shows no "open salvage"
+      or says how they were settled.
+- [ ] World tab, "Salvage allowed" off: the tab says the server switched it off.
+- [ ] Joined (dedicated server with 0.2.0): the same list and buttons work; a server on 0.1.x: the tab says the server
+      does not run this version.
+
+### For netjunk and HadToRegister (test build)
+1. Back up your save. Import the zip in the Kiln Launcher (needs Kiln 0.2.0-dev.29.18 or later on both sides).
+2. Trash one piece of gear by hand first, then send the `salvage check` line from `kiln/logs/kiln.log`.
+3. F8 > Salvage: mark a few pieces, salvage them, check the runes. Try a rule for new pickups (Mark first).
+4. Not in this build: red slots in the game's own inventory, a Salvage button in the chest screen, the Salvage chest
+   (they need Kiln changes or come next); the tab's list stands in for them.
 
 ## What to send back
 `kiln/logs/kiln.log`, `kiln/data/kiln-auto-loot/kiln-auto-loot.log` and the classification dump, plus a note of which

@@ -76,7 +76,7 @@ internal sealed class SalvageServer
     {
         if (_limits() is { AllowSalvage: false }) return SalvageReady.Off;
         if (_key is null || _world is null || !Saves.WorldDataReady || !Capabilities.Is("kiln.items") ||
-            !Capabilities.Is("saves.instance_data") || !Capabilities.Is("items.instances")) return SalvageReady.NoItemData;
+            !Capabilities.Is("saves.instance_data")) return SalvageReady.NoItemData;   // instance data implies items.instances
         if (_world.Balancing is null || _world.RuneItem == 0) return SalvageReady.NoGameData;
         if (_mismatch) return SalvageReady.Mismatch;
         return SalvageReady.Ready;
