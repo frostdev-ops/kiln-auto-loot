@@ -252,9 +252,9 @@ internal sealed class SalvageServer
             var delta = _world.RuneCount(c.Player) - c.Before;
             if (delta == c.Predicted)
                 _log($"salvage check: {c.Name} trashed by hand gave {delta} runes, the formula said {c.Predicted}: match");
-            else if (delta > c.Predicted)
+            else if (delta > c.Predicted || delta <= 0)
                 _log($"salvage check: {c.Name} trashed by hand: {delta} runes came in, the formula said {c.Predicted}: unclear " +
-                     "(other runes arrived at the same time?)");
+                     "(other runes moved at the same time, or the bag was full?)");
             else
             {
                 _log($"salvage check: {c.Name} trashed by hand gave {delta} runes, the formula said {c.Predicted}: MISMATCH; " +

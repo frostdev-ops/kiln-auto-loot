@@ -21,7 +21,9 @@ internal sealed class FakeSalvageWorld : ISalvageWorld
     public readonly List<string> Lines = [];
     public uint RuneItem { get; set; } = 77;
 
-    public SalvageItem? Read(EntityId player, EntityId itemEntity) => Bag.TryGetValue(itemEntity, out var i) ? i : null;
+    public EntityId ReadThrowsFor = EntityId.None;
+    public SalvageItem? Read(EntityId player, EntityId itemEntity) =>
+        itemEntity == ReadThrowsFor ? throw new InvalidOperationException("read") : Bag.TryGetValue(itemEntity, out var i) ? i : null;
     public ulong SteamIdOf(EntityId player) => Steam == 0 ? 0 : Steam + player.Value;
     public bool SetTicket(EntityId itemEntity, string? ticket)
     {
@@ -161,6 +163,20 @@ public sealed class SalvageJobsTests
         w.GiveThrows = false;
         j.PayOwed(Player);
         Assert.Equal(14, w.Runes);
+    }
+
+    [Fact]
+    public void A_read_that_throws_for_the_next_item_skips_only_that_one()
+    {
+        var (w, j, outs) = Rig();
+        var a = w.Add(10, 9);
+        var bad = w.Add(11, 5);
+        var c = w.Add(12, 7);
+        w.ReadThrowsFor = bad;
+        j.Enqueue(Player, [a, bad, c], outs.Add);
+        Assert.Equal(new SalvageOutcome(2, 16, 1, SalvageBlock.Changed), Assert.Single(outs));
+        Assert.True(w.Bag.ContainsKey(bad));
+        Assert.Empty(j.Ledger.Entries);
     }
 
     [Fact]

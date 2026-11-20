@@ -51,6 +51,7 @@ internal sealed class SalvageJobs(ISalvageWorld world, SalvageLedger ledger)
     private Batch? _current;
     private bool _inFlight;
     private readonly HashSet<ulong> _paying = [];
+    private readonly Dictionary<ulong, int> _payingSteam = new();
 
     public SalvageLedger Ledger => ledger;
 
@@ -121,14 +122,26 @@ internal sealed class SalvageJobs(ISalvageWorld world, SalvageLedger ledger)
     /// as usual: Taking after a load, Owed by PayOwed) and the next one starts.</summary>
     private void Guard(Batch b, Action body)
     {
+        var step = _step;
         try { body(); }
         catch (Exception e)
         {
+            if (step != _step)
+            {
+                // the item was done and a later one failed while it started: that one is gone from the queue
+                world.Log($"salvage: starting the next item failed ({e.GetType().Name}: {e.Message}); it is skipped");
+                if (_current is { } now) now.Skip(SalvageBlock.Changed);
+                if (_inFlight) return;
+                Next();
+                return;
+            }
             world.Log($"salvage: a step failed ({e.GetType().Name}: {e.Message}); the item is skipped");
             b.Skip(SalvageBlock.Changed);
             Next();
         }
     }
+
+    private int _step;
 
     private void TakeAndGive(Batch b, SalvageItem item, uint rune)
     {
@@ -181,14 +194,15 @@ internal sealed class SalvageJobs(ISalvageWorld world, SalvageLedger ledger)
 
     private void Next()
     {
+        _step++;
         _inFlight = false;
         Pump();
     }
 
-    /// <summary>Runes owed to this (online) player: given now, entry by entry; each runs once at a time.</summary>
     /// <summary>A payment of owed runes is running for this player (the Trash check waits for it).</summary>
-    public bool Paying(EntityId player) => _paying.Count > 0 && ledger.OwedTo(world.SteamIdOf(player)).Any();
+    public bool Paying(EntityId player) => _payingSteam.TryGetValue(world.SteamIdOf(player), out var n) && n > 0;
 
+    /// <summary>Runes owed to this (online) player: given now, entry by entry; each runs once at a time.</summary>
     public void PayOwed(EntityId player)
     {
         var steam = world.SteamIdOf(player);
@@ -197,10 +211,12 @@ internal sealed class SalvageJobs(ISalvageWorld world, SalvageLedger ledger)
         {
             var key = (ulong)e.Ticket.GetHashCode() ^ steam;
             if (!_paying.Add(key)) continue;
+            _payingSteam[steam] = _payingSteam.GetValueOrDefault(steam) + 1;
             var ticket = e.Ticket;
             world.Give(player, e.RuneItem, e.Runes, given =>
             {
                 _paying.Remove(key);
+                _payingSteam[steam]--;
                 if (!given || ledger.Find(ticket) is not { State: LedgerState.Owed } now) return;
                 ledger.Paid(ticket);
                 world.SaveLedger(ledger);
@@ -218,5 +234,6 @@ internal sealed class SalvageJobs(ISalvageWorld world, SalvageLedger ledger)
         _current = null;
         _inFlight = false;
         _paying.Clear();
+        _payingSteam.Clear();
     }
 }

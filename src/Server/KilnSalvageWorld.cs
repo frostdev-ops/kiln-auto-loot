@@ -55,7 +55,7 @@ internal sealed class KilnSalvageWorld(Data data, IClock clock, InstanceKey<Salv
             var fields = t.Resolved.AllFields.Where(x => x.Name == "actionbarEntityIds").ToList();
             if (fields.Count != 1 || World.ReadBytes(player, "SlotSelection") is not { } bytes) return null;
             var f = fields[0];
-            if (f.Offset + 8 > bytes.Length) return null;
+            if (f.Type.Size != 8 || f.Offset + 8 > bytes.Length) return null;
             return [BitConverter.ToUInt32(bytes, f.Offset), BitConverter.ToUInt32(bytes, f.Offset + 4)];
         }
         catch (Exception) { return null; }
@@ -102,11 +102,12 @@ internal sealed class KilnSalvageWorld(Data data, IClock clock, InstanceKey<Salv
         }
         catch (Exception e)
         {
-            if (hasSocket) gem = null;
+            gem = null;   // a mod may have put a socket on any gear: unknown = kept
+            hasSocket = true;
             if (!_gemsLogged)
             {
                 _gemsLogged = true;
-                log($"salvage: gem sockets cannot be read ({e.Message}): gear with a weapon socket is kept");
+                log($"salvage: gem sockets cannot be read ({e.Message}): no gear is salvaged");
             }
         }
         var runes = 0;
@@ -195,7 +196,7 @@ internal sealed class KilnSalvageWorld(Data data, IClock clock, InstanceKey<Salv
 
     private void Store(InventorySlot s, SalvageMark m)
     {
-        if (key is null) return;
+        if (key is null || Stopped) return;
         try
         {
             if (!m.Marked && !m.Kept && m.Ticket is null) s.Ref.Remove(key);
@@ -206,7 +207,7 @@ internal sealed class KilnSalvageWorld(Data data, IClock clock, InstanceKey<Salv
 
     public bool SetTicket(EntityId itemEntity, string? ticket)
     {
-        if (key is null) return false;
+        if (key is null || Stopped) return false;
         foreach (var p in AllPlayers())
         {
             if (Inv(p.Entity) is not { } inv) continue;
