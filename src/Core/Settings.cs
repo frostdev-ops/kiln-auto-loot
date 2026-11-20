@@ -74,6 +74,13 @@ public sealed class PersonalSettings
     [Comment("Experimental: bring down trees, stumps and logs around you. They may not grow back.")] public bool FellTrees { get; set; }
     [Comment("Break wild bee hives around you (some let wasps out).")] public bool SmashHives { get; set; }
 
+    // Salvage (gear into runes, the game's own Trash yield)
+    [Comment("Rules for gear you pick up from the world from now on, comma separated: kind:rarity[:level], kind = all, weapons, shields, armor or rings, rarity = the highest that counts, level = the highest (0 or none = any); a ! at the end switches a rule off. Empty = no rules. Never touches what you already carry, chests, or worn gear.")]
+    public string SalvageRules { get; set; } = "";
+    [Comment("What a rule does with new gear: mark (you salvage it from the Salvage tab) or salvage (at once, no question).")]
+    public SalvageAction SalvageRuleAction { get; set; } = SalvageAction.Mark;
+    [Comment("Ask before salvaging marked gear, with the count, the runes and the list.")] public bool SalvageConfirm { get; set; } = true;
+
     // The window
     [Comment("Language of the window and the notes: auto, en or de.")] public string Language { get; set; } = "auto";
 
@@ -102,7 +109,11 @@ public sealed class ServerLimits
     [Comment("false = no smashing for anyone.")] public bool AllowSmash { get; set; } = true;
     [Comment("false = no tree felling for anyone.")] public bool AllowFelling { get; set; } = true;
     [Comment("false = no bee hive smashing for anyone.")] public bool AllowHives { get; set; } = true;
+    [Comment("false = no salvaging through the mod for anyone (the game's own Trash still works).")] public bool AllowSalvage { get; set; } = true;
 }
+
+/// <summary>What a salvage rule does with new gear.</summary>
+public enum SalvageAction { Mark, Salvage }
 
 /// <summary>Which list decides what is taken.</summary>
 public enum FilterMode { Skip, Only }

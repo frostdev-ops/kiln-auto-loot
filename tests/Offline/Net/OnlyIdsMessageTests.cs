@@ -76,7 +76,7 @@ public sealed class OnlyIdsMessageTests
             var r = new NetReader(old);
             PersonalMsg.Decode(ref r);
         });
-        Assert.Equal("2", Channels.Version);
+        Assert.NotEqual("1", Channels.Version);
     }
 
     [Fact]

@@ -252,7 +252,7 @@ public class CatalogTests
     [Fact]
     public void Pages_in_order_with_their_settings()
     {
-        Assert.Equal(["looting", "containers", "smashing", "filters", "where", "ranges", "world"], SettingCatalog.Pages.Select(p => p.Key));
+        Assert.Equal(["looting", "containers", "smashing", "filters", "where", "ranges", "salvage", "world"], SettingCatalog.Pages.Select(p => p.Key));
         string[] On(string page) => SettingCatalog.Pages.Single(p => p.Key == page).Settings.Select(s => s.Key).ToArray();
         Assert.Equal(["looting", "radius", "takeInPlace", "groundLoot", "stones", "oldBooks", "collectibles", "plants",
                       "crops", "fish"], On("looting"));
@@ -262,7 +262,8 @@ public class CatalogTests
         Assert.Equal(["heightAbove", "heightBelow", "visibleOnly", "fillCarriedStacks", "keepFreeSlots", "carryLimits"], On("where"));
         Assert.Equal(["groundRadius", "collectiblesRadius", "plantsRadius", "cropsRadius", "corpsesRadius", "chestsRadius",
                       "enemyPause", "enemyDistance"], On("ranges"));
-        Assert.Equal(["maxStack", "backpackCheat", "enabled", "maxRadius", "allowSmash", "allowFelling", "allowHives"], On("world"));
+        Assert.Equal(["salvageConfirm", "salvageRuleAction", "salvageRules"], On("salvage"));
+        Assert.Equal(["maxStack", "backpackCheat", "enabled", "maxRadius", "allowSmash", "allowFelling", "allowHives", "allowSalvage"], On("world"));
     }
 
     [Fact]

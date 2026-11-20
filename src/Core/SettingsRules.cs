@@ -34,6 +34,9 @@ public static class SettingsRules
         if (!Enum.IsDefined(c.ItemFilter)) c.ItemFilter = FilterMode.Skip;
         if (!Enum.IsDefined(c.MinGearRarity)) c.MinGearRarity = GearRarity.Common;
         if (c.Language is not ("auto" or "en" or "de")) c.Language = "auto";
+        // the rules as the server reads them, at most six; off for everyone when the server allows no salvage
+        c.SalvageRules = limits.AllowSalvage ? KilnAutoLoot.Core.SalvageRules.Format(KilnAutoLoot.Core.SalvageRules.Parse(c.SalvageRules)) : "";
+        if (!Enum.IsDefined(c.SalvageRuleAction)) c.SalvageRuleAction = SalvageAction.Mark;
         return c;
     }
 

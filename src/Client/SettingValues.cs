@@ -80,6 +80,7 @@ internal static class SettingValues
     public static ServerLimits Copy(ServerLimits l) => new()
     {
         MaxRadius = l.MaxRadius, AllowSmash = l.AllowSmash, AllowFelling = l.AllowFelling, AllowHives = l.AllowHives,
+        AllowSalvage = l.AllowSalvage,
     };
 
     // meters "%.0f m" and saved as whole meters, openDelay "%.1f s" saved in 0.1 steps

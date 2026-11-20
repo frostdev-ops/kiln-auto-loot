@@ -5,7 +5,7 @@ namespace KilnAutoLoot.Client;
 
 /// <summary>Choice: a combo over an enum's values (texts "key.Value"). Count: a whole-number slider. CarryLimits: the
 /// carry-limit rows editor.</summary>
-internal enum WidgetKind { Bool, Meters, Seconds, Stack, ItemList, Choice, Count, CarryLimits }
+internal enum WidgetKind { Bool, Meters, Seconds, Stack, ItemList, Choice, Count, CarryLimits, SalvageRules }
 
 /// <summary>Where a setting lives: the player's own file, the world's file (ServerSettings), or the world's limits
 /// (ServerSettings.Limits).</summary>
@@ -86,6 +86,11 @@ internal static class SettingCatalog
             ]),
             new("enemies", [B("enemyPause"), M("enemyDistance", 1, 50)]),
         ]),
+        // the gear list and its buttons come first (SettingsWindow draws SalvagePanel at the page's top)
+        new("salvage", [
+            new(null, [B("salvageConfirm")]),
+            new("salvageRulesHeading", [C("salvageRuleAction"), new("salvageRules", WidgetKind.SalvageRules, SettingOwner.Personal)]),
+        ]),
         // the world's owner sets these when hosting; a joined player reads what the server says
         new("world", [
             new(null, [
@@ -94,7 +99,7 @@ internal static class SettingCatalog
             ]),
             new("limits", [
                 M("maxRadius", 1, 50, SettingOwner.Limit), B("allowSmash", SettingOwner.Limit),
-                B("allowFelling", SettingOwner.Limit), B("allowHives", SettingOwner.Limit),
+                B("allowFelling", SettingOwner.Limit), B("allowHives", SettingOwner.Limit), B("allowSalvage", SettingOwner.Limit),
             ]),
         ]),
     ];

@@ -156,7 +156,7 @@ public static class SalvageRules
 public enum SalvagePlace { Backpack, SalvageChest, Elsewhere }
 
 /// <summary>Why an item may not be salvaged; None = it may.</summary>
-public enum SalvageBlock : byte { None, Equipped, Kept, Quest, Gem, NoPerks, Elsewhere, NoYield, Changed }
+public enum SalvageBlock : byte { None, Equipped, Kept, Quest, Gem, NoPerks, Elsewhere, NoYield, Changed, NoRoom }
 
 /// <summary>What the check needs to know about one item. GemInSocket null: the socket could not be read.</summary>
 public readonly record struct SalvageFacts(SalvagePlace Place, bool Equipped, bool Kept, bool Quest, bool HasPerks,
