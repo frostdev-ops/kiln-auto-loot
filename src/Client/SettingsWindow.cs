@@ -20,7 +20,7 @@ internal sealed record WindowKeys(Func<string> Menu, Func<string> Toggle, Func<s
     Func<IEnumerable<string>> Fixed);
 
 internal sealed class SettingsWindow(Data data, SettingsLink link, WindowKeys keys, FocusNotes focus,
-    Action<Net.CommandKind> command)
+    Action<Net.CommandKind> command, SalvagePanel salvage)
 {
     private static readonly Color Orange = new(255, 166, 77);
     private static readonly Color OnGreen = new(140, 220, 150);
@@ -77,6 +77,13 @@ internal sealed class SettingsWindow(Data data, SettingsLink link, WindowKeys ke
 
     public void Close() => _window?.Hide();
 
+    /// <summary>Opens the window (if closed) for the Salvage tab's confirm of the marked gear.</summary>
+    public void OpenSalvageConfirm()
+    {
+        salvage.ConfirmAsked = true;
+        if (!IsOpen) Open();
+    }
+
     public void Dispose()
     {
         _window?.Dispose();
@@ -125,6 +132,7 @@ internal sealed class SettingsWindow(Data data, SettingsLink link, WindowKeys ke
                 using (ui.Id(page.Key))
                 {
                     if (page.Key == "world") DrawWorldNotes(ui);
+                    if (page.Key == "salvage") salvage.Draw(ui, fs, _german, (effective ?? _edit).SalvageConfirm);
                     foreach (var group in page.Groups)
                     {
                         ui.Spacing();
@@ -264,6 +272,14 @@ internal sealed class SettingsWindow(Data data, SettingsLink link, WindowKeys ke
                 break;
             case WidgetKind.ItemList:
                 DrawItemList(ui, spec, fs, line, label, help);
+                break;
+            case WidgetKind.SalvageRules:
+                var rules = SalvageRuleEditor.Draw(ui, fs, _german, _edit.SalvageRules ?? "", label, help);
+                if (rules is not null)
+                {
+                    _edit.SalvageRules = rules;
+                    link.Commit(_edit);
+                }
                 break;
             case WidgetKind.CarryLimits:
                 var carry = _carry.Draw(ui, fs, line, _german, _edit.CarryLimits ?? "", label, help);

@@ -84,13 +84,14 @@ public sealed class StagedLoadTests
     }
 
     [Fact]
-    public async Task A_fresh_read_is_named_on_the_polling_thread_classified_and_saved_on_workers()
+    public void A_fresh_read_is_named_on_the_polling_thread_classified_and_saved_on_workers()
     {
         var rig = new Rig();
         var me = Environment.CurrentManagedThreadId;
         Assert.Equal(LoadState.Ready, rig.PollUntilSettled());
         Assert.Equal("Twig", rig.Load.Result);   // classified after naming
-        await rig.Load.Saving!.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
+        // a blocking wait: an await frees this thread, and the pool could then run the save on it
+        Assert.True(rig.Load.Saving!.Wait(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken));
         Assert.Equal((1, 1, 1, 1), (rig.Reads, rig.Names, rig.Classifies, rig.Saves));
         Assert.Equal(me, rig.NameThread);
         Assert.NotEqual(me, rig.ReadThread);

@@ -37,6 +37,11 @@ internal sealed class LootServer(Data data)
     /// <summary>What the server applies for the hosting game's own player. Tick thread.</summary>
     public event Action<ServerInfoMsg>? LocalServerInfo;
 
+    /// <summary>The salvage state for the hosting game's own player. Tick thread.</summary>
+    public event Action<SalvageStateMsg>? LocalSalvageState;
+
+    private SalvageServer? _salvage;
+
     private readonly TickClock _clock = new();
     private readonly Smash _smash = new(data);
     private readonly List<EventSubscription> _subscriptions = [];
@@ -78,6 +83,10 @@ internal sealed class LootServer(Data data)
         _subscriptions.Add(Events.On<ServerStoppingEvent>(e => StopWorld($"ServerStopping ({e.Reason})")));
         _subscriptions.Add(Events.On<LootEvent>(OnLoot));
         _subscriptions.Add(Events.On<ItemPickupEvent>(OnItemPickup));
+        _subscriptions.Add(Events.On<ItemTossEvent>(e => Salvage(s => s.Tossed(e))));
+        try { _subscriptions.Add(Events.On<ItemPickingUpEvent>(e => Salvage(s => s.Looted(e.Receiver, e.GroundEntity)))); }
+        catch (Exception e) { Log?.Info($"Kiln Auto Loot: no walk-over pickup events ({e.Message}); salvage rules see loot interactions only"); }
+        AutoLootMod.Hub.SalvageCmdReceived += OnSalvageCmd;
         AutoLootMod.Hub.PersonalReceived += OnPersonal;
         AutoLootMod.Hub.ClientStateReceived += OnClientState;
         AutoLootMod.Hub.CommandReceived += OnCommand;
@@ -94,6 +103,7 @@ internal sealed class LootServer(Data data)
         AutoLootMod.Hub.PersonalReceived -= OnPersonal;
         AutoLootMod.Hub.ClientStateReceived -= OnClientState;
         AutoLootMod.Hub.CommandReceived -= OnCommand;
+        AutoLootMod.Hub.SalvageCmdReceived -= OnSalvageCmd;
         if (_context is not null) _context.Tick.Pre -= OnTick;
         _diag?.Dispose();
         _diag = null;
@@ -115,6 +125,46 @@ internal sealed class LootServer(Data data)
     /// <summary>The host's own command (the gather focus key), from the client part in the same process. Tick thread.
     /// Answers with LocalServerInfo.</summary>
     public void SetLocalCommand(EntityId player, Net.CommandKind kind) => RunCommand(player, kind);
+
+    /// <summary>The host's own salvage command, from the client part in the same process. Tick thread.</summary>
+    public void SetLocalSalvage(EntityId player, SalvageCmd kind, ulong[] tokens)
+    {
+        if (_salvage is null) LocalSalvageState?.Invoke(NoSalvage);
+        else Salvage(s => s.Command(player, kind, tokens));
+    }
+
+    /// <summary>The answer while this world has no salvage (the mod off, looting off for a missing service).</summary>
+    private static readonly SalvageStateMsg NoSalvage = new(SalvageReady.Off, 0, 0, [], default, false);
+
+    private void OnSalvageCmd(SalvageCmdMsg m, EntityId player)
+    {
+        if (!_running) return;
+        if (_salvage is null) AutoLootMod.Hub.SendTo(player, NoSalvage);
+        else Salvage(s => s.Command(player, m.Kind, m.Tokens));
+    }
+
+    /// <summary>Runs salvage work; a failure is logged at most once a minute and never faults the tick.</summary>
+    private void Salvage(Action<SalvageServer> work)
+    {
+        if (_salvage is not { } s) return;
+        try { work(s); }
+        catch (Exception e)
+        {
+            if (_clock.NowMs >= _nextSalvageError)
+            {
+                _nextSalvageError = _clock.NowMs + 60_000;
+                Log?.Error(e, "Kiln Auto Loot: salvage failed this step");
+            }
+        }
+    }
+
+    private long _nextSalvageError;
+
+    private void SendSalvage(EntityId player, SalvageStateMsg m)
+    {
+        if (IsHostPlayer(player)) LocalSalvageState?.Invoke(m);
+        else if (ChannelHub.HasMod(player)) AutoLootMod.Hub.SendTo(player, m);
+    }
 
     /// <summary>The local player's window state, from the client part in a hosted game. Tick thread.</summary>
     public void SetLocalWindowOpen(EntityId player, bool open)
@@ -184,6 +234,9 @@ internal sealed class LootServer(Data data)
 #pragma warning restore KILN121
         if (_hostPersonal is { } lp) _loop.SetPersonal(lp.Player, lp.Settings.Clone());
         if (_hostWindow is { } lw) _loop.SetWindowOpen(lw.Player, lw.Open);
+        var loop = _loop;
+        _salvage = new SalvageServer(Data, _clock, p => loop.SettingsOf(p), () => _config?.Value.Limits, SendSalvage, KeyLine);
+        Salvage(s => s.StartWorld());
         foreach (var p in _loop.Players.Keys) SendInfo(p);
         try { StatusLines.Add(Status, StatusId); }
         catch (Exception e) { Log?.Warn($"Kiln Auto Loot: no status line ({e.Message})"); }
@@ -208,6 +261,8 @@ internal sealed class LootServer(Data data)
         }
         try { StatusLines.Remove(StatusId); }
         catch (Exception) { }
+        _salvage?.StopWorld();
+        _salvage = null;
         ProbeTrace.WorldDown();   // the probe build only
         if (_loop is not null) KeyLine($"world stops ({why}): {_loop.Counters.Summary()}");
         _loop?.Reset();
@@ -244,6 +299,7 @@ internal sealed class LootServer(Data data)
     private void OnLeft(Player p)
     {
         _badJsonLogged.Remove(p.Entity);
+        Salvage(s => s.Left(p.Entity));
         if (_loop is null) return;
         _loop.Leave(p.Entity);
         if (_enabled) _smash.PlayerLeft(p.Entity);
@@ -327,6 +383,7 @@ internal sealed class LootServer(Data data)
         try
         {
             if (_looting) _loop.Step();
+            Salvage(s => s.Tick());
             SmashStep();
             CounterLine();
         }
@@ -346,7 +403,9 @@ internal sealed class LootServer(Data data)
     /// Noted for gather focus only. Pre, tick thread.</summary>
     private void OnLoot(LootEvent e)
     {
-        if (!_running || !_enabled || !_looting || _loop is null || e.Injected || !e.ByPlayer || e.Canceled) return;
+        if (!_running || !_enabled || !_looting || _loop is null || !e.ByPlayer || e.Canceled) return;
+        Salvage(s => s.Looted(e.Guest, e.Host));   // the player's own and Auto Loot's: gear from it may meet a rule
+        if (e.Injected) return;
         try
         {
             _loop.HandLoot(e.Guest, e.Host, e.LootAll);   // a single pickup by hand: confirmed when the item arrives
@@ -366,6 +425,7 @@ internal sealed class LootServer(Data data)
     {
         if (!_running || !_looting || _loop is null) return;
         _loop.ItemReceived(e.Receiver, e.ItemId);
+        if (_enabled) Salvage(s => s.Arrived(e));
     }
 
     /// <summary>Smash.Run once per second per player (the smash rhythm).</summary>

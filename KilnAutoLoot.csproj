@@ -16,7 +16,7 @@
     <RootNamespace>KilnAutoLoot</RootNamespace>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <KilnSide>both</KilnSide>
-    <KilnServices>Players;World;Spawn;Gameplay;Items;Combat;Creatures;Queries;Abilities;Content;Assets;Ui;Network;Client;Saves;Game</KilnServices>
+    <KilnServices>Players;World;Spawn;Gameplay;Items;Combat;Creatures;Queries;Abilities;Content;Assets;Ui;Network;Client;Saves;Game;Settings;Abilities</KilnServices>
     <KilnGameIds>None</KilnGameIds>
     <!-- update checks (the launcher, `kiln updates check`): releases on GitHub tagged v<version> with this zip -->
     <KilnUpdatesRepository>frostdev-ops/kiln-auto-loot</KilnUpdatesRepository>

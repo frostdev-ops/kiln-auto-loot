@@ -20,7 +20,9 @@ internal sealed class ClientPart(Data data, Server.LootServer server)
     private readonly WindowSignalSender _signal = new();
     private readonly ToastBook _toasts = new(new WallClock());
     private SettingsWindow? _window;
-    private KeyBinding? _menuKey, _toggleKey, _nextProfileKey, _focusKey;
+    private KeyBinding? _menuKey, _toggleKey, _nextProfileKey, _focusKey, _salvageKey;
+    private const string SalvageKeyId = "kiln-auto-loot.salvage";
+    private SalvagePanel? _salvage;
     private readonly Dictionary<string, (KeyBinding Binding, string Key)> _profileKeys = new();   // tick thread
     private readonly FocusNotes _focus = new();
     private readonly KeyDebounce _debounce = new(new WallClock());
@@ -37,7 +39,8 @@ internal sealed class ClientPart(Data data, Server.LootServer server)
     private string FocusKeyName => _focusKey?.Key.ToString() ?? ProfileKeys.DefaultFocusKey;
 
     /// <summary>The mod's own keys as bound now (a profile's key may not be one of them).</summary>
-    private IEnumerable<string> FixedKeyNames => [MenuKeyName, ToggleKeyName, NextProfileKeyName, FocusKeyName];
+    private IEnumerable<string> FixedKeyNames => [MenuKeyName, ToggleKeyName, NextProfileKeyName, FocusKeyName,
+        _salvageKey?.Key.ToString() ?? ProfileKeys.DefaultNextProfileKey];
 
     /// <summary>From OnLoad (tick thread).</summary>
     public void Start()
@@ -45,8 +48,9 @@ internal sealed class ClientPart(Data data, Server.LootServer server)
         if (_started) return;
         _started = true;
         _link.Start(AutoLootMod.ModContext?.DataDirectory ?? ".", () => Texts.Get("profileMine", German));
+        _salvage = new SalvagePanel(data, SendSalvage, ServerHasSalvage);
         _window = new SettingsWindow(data, _link, new WindowKeys(() => MenuKeyName, () => ToggleKeyName,
-            () => NextProfileKeyName, () => FocusKeyName, () => FixedKeyNames), _focus, SendCommand);
+            () => NextProfileKeyName, () => FocusKeyName, () => FixedKeyNames), _focus, SendCommand, _salvage);
         _link.PersonalChanged += _window.Reload;
         _link.ProfilesChanged += SyncProfileKeys;
         _link.ProfileSwitched += ToastProfile;
@@ -60,9 +64,14 @@ internal sealed class ClientPart(Data data, Server.LootServer server)
             "Next profile", Category);
         _focusKey = KeyBindings.Register(ProfileKeys.FocusId, ProfileKeys.DefaultFocusKey, OnFocusKey,
             "Gather only the item last taken by hand (again: everything)", Category);
+        // no key by default (a free key cannot be promised): give it one in Kiln's Keys page
+        _salvageKey = KeyBindings.Register(SalvageKeyId, ProfileKeys.DefaultNextProfileKey, OnSalvageKey,
+            "Salvage marked gear (asks first)", Category);
         SyncProfileKeys();
 
         AutoLootMod.Hub.NoticeReceived += OnNotice;
+        AutoLootMod.Hub.SalvageStateReceived += _salvage.SetState;
+        server.LocalSalvageState += _salvage.SetState;
         AutoLootMod.Hub.ServerInfoReceived += OnServerInfo;
         server.LocalNotice += OnLocalNotice;
         server.LocalServerInfo += OnServerInfo;
@@ -84,6 +93,13 @@ internal sealed class ClientPart(Data data, Server.LootServer server)
         server.LocalServerInfo -= OnServerInfo;
         AutoLootMod.Hub.NoticeReceived -= OnNotice;
         AutoLootMod.Hub.ServerInfoReceived -= OnServerInfo;
+        if (_salvage is not null)
+        {
+            AutoLootMod.Hub.SalvageStateReceived -= _salvage.SetState;
+            server.LocalSalvageState -= _salvage.SetState;
+        }
+        _salvageKey?.Dispose();
+        _salvageKey = null;
         _menuKey?.Dispose();
         _toggleKey?.Dispose();
         _nextProfileKey?.Dispose();
@@ -198,6 +214,38 @@ internal sealed class ClientPart(Data data, Server.LootServer server)
         }
     }
 
+    // ---------------------------------------------------------------- salvage
+
+    private void OnSalvageKey()
+    {
+        if (_window is null || !Pressed(SalvageKeyId) || !KeyActions.ToggleActs(Ui.MenuOpen) || !KClient.InGame) return;
+        _window.OpenSalvageConfirm();
+    }
+
+    /// <summary>The server's world runs this mod's salvage: hosted, our own server part; joined, a server whose channel
+    /// is this version's.</summary>
+    private bool ServerHasSalvage() =>
+        KClient.IsHosting ? server.ServerConfig is not null
+        : KClient.IsRemote && Network.Server is { } peer && peer.HasChannel(Channels.Name);
+
+    /// <summary>A salvage command (render or main thread): hosted in-process on the tick thread, joined a message.</summary>
+    private void SendSalvage(SalvageCmd kind, ulong[] tokens)
+    {
+        if (KClient.IsHosting)
+        {
+            var player = KClient.LocalPlayer;
+            var session = KClient.ServerWorldSession;
+            if (player.IsNone || server.ServerConfig is null) return;
+            _link.Post(() =>
+            {
+                if (KClient.IsHosting && player == KClient.LocalPlayer && session == KClient.ServerWorldSession)
+                    server.SetLocalSalvage(player, kind, tokens);
+            });
+            return;
+        }
+        if (ServerHasSalvage()) AutoLootMod.Hub.SendToServer(new SalvageCmdMsg(kind, tokens));
+    }
+
     // ---------------------------------------------------------------- gather focus
 
     private void OnFocusKey()
@@ -285,6 +333,7 @@ internal sealed class ClientPart(Data data, Server.LootServer server)
     {
         _signal.Reset();
         _focus.Forget();
+        _salvage?.Forget();
         _link.Forget();
     }
 
@@ -299,6 +348,7 @@ internal sealed class ClientPart(Data data, Server.LootServer server)
             // joined: the handshake (ServerReady) may come before the client world's first step, so keep the server's
             // answer and send again; hosted: the handoff below sends to the new world
             _focus.Forget();
+            _salvage?.Forget();
             if (KClient.IsRemote) _link.Resend();
             else _link.Forget();
         }
