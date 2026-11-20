@@ -105,6 +105,15 @@ internal sealed class SalvagePanel(Data data, Action<SalvageCmd, ulong[]> send, 
             if (ui.Button(T("salvageClear") + "###salvageClear")) Ask(SalvageCmd.ClearMarks);
             ui.SameLine();
         }
+        var markable = s.Rows.Where(r => r.Block == SalvageBlock.None && (r.Flags & SalvageRowFlags.Marked) == 0)
+            .Select(r => r.Token).ToArray();
+        if (ready && markable.Length > 0)
+        {
+            if (ui.SmallButton(Texts.Format("salvageMarkAll", german, markable.Length) + "###salvageMarkAll"))
+                Ask(SalvageCmd.Mark, markable);
+            ui.Tooltip(T("salvageMarkAllHelp"));
+            ui.SameLine();
+        }
         if (ui.SmallButton(T("salvageRefresh") + "###salvageRefresh")) Ask(SalvageCmd.List);
         ui.SameLine();
         ui.Checkbox(T("salvageOnlyMarked") + "###onlyMarked", ref _onlyMarked);
@@ -130,10 +139,28 @@ internal sealed class SalvagePanel(Data data, Action<SalvageCmd, ulong[]> send, 
         return $"{name}  ({rarity}, {Texts.Format("salvageLevel", german, r.Level)})";
     }
 
+    /// <summary>One row: the buttons first (a long name never pushes them out of the list), then the name, rarity and
+    /// level, then the runes or why it cannot be salvaged.</summary>
     private void DrawRow(UiDraw ui, bool german, SalvageRow r, bool ready)
     {
         var markedRow = (r.Flags & SalvageRowFlags.Marked) != 0;
         var kept = (r.Flags & SalvageRowFlags.Kept) != 0;
+        if (ready)
+        {
+            if (r.Block == SalvageBlock.None)
+            {
+                if (ui.SmallButton(Texts.Get(markedRow ? "salvageUnmark" : "salvageMark", german) + "###m"))
+                    Ask(markedRow ? SalvageCmd.Unmark : SalvageCmd.Mark, [r.Token]);
+                ui.SameLine();
+            }
+            if (r.Block is SalvageBlock.None or SalvageBlock.Kept)
+            {
+                if (ui.SmallButton(Texts.Get(kept ? "salvageUnkeep" : "salvageKeep", german) + "###k"))
+                    Ask(kept ? SalvageCmd.Unkeep : SalvageCmd.Keep, [r.Token]);
+                ui.Tooltip(Texts.Get("salvageKeepHelp", german));
+                ui.SameLine();
+            }
+        }
         var line = Line(r, german);
         if (markedRow) ui.Text(MarkedRed, line);
         else if (r.Block != SalvageBlock.None) ui.Text(Muted, line);
@@ -142,20 +169,6 @@ internal sealed class SalvagePanel(Data data, Action<SalvageCmd, ulong[]> send, 
         if (r.Block is SalvageBlock.None or SalvageBlock.Kept)
             ui.TextDisabled(Texts.Format("salvageRunes", german, r.Runes));
         else ui.TextDisabled(Texts.Get("salvageBlock." + r.Block, german));
-        if (!ready) return;
-        ui.SameLine();
-        if (r.Block == SalvageBlock.None)
-        {
-            if (ui.SmallButton(Texts.Get(markedRow ? "salvageUnmark" : "salvageMark", german) + "###m"))
-                Ask(markedRow ? SalvageCmd.Unmark : SalvageCmd.Mark, [r.Token]);
-            ui.SameLine();
-        }
-        if (r.Block is SalvageBlock.None or SalvageBlock.Kept)
-        {
-            if (ui.SmallButton(Texts.Get(kept ? "salvageUnkeep" : "salvageKeep", german) + "###k"))
-                Ask(kept ? SalvageCmd.Unkeep : SalvageCmd.Keep, [r.Token]);
-            ui.Tooltip(Texts.Get("salvageKeepHelp", german));
-        }
     }
 
     private void DrawConfirm(UiDraw ui, float fs, bool german, SalvageRow[] rows)

@@ -272,19 +272,46 @@ public sealed class SalvageLedger
     }
 }
 
+public enum SourceVerdict { World, Private, Crafted, Player }
+
 /// <summary>Which world sources a player looted in the last moments (their own E, Auto Loot's own takes, walk-over
 /// pickups), so the gear that arrives from one counts as "picked up from the world": what a rule may touch. A source
 /// Auto Loot's tables do not know (a tombstone, a built chest) is never one.</summary>
 public sealed class SalvageSources(IClock clock)
 {
     public const long WindowMs = 3000;
+    private const int MaxPrivate = 4096;
     private readonly Dictionary<(EntityId Player, EntityId Source), long> _seen = new();
+    private readonly Dictionary<EntityId, long> _private = new();   // hosts any player opened that are not world loot
 
     public void Looted(EntityId player, EntityId source, bool world)
     {
-        if (!world || source.IsNone) return;
+        if (source.IsNone) return;
+        if (!world)
+        {
+            // a tombstone, a built chest, a station: remembered for the whole world, so its loot stays out even once
+            // the tombstone is gone
+            if (_private.Count >= MaxPrivate) _private.Remove(_private.MinBy(kv => kv.Value).Key);
+            _private[source] = clock.NowMs;
+            return;
+        }
         if (_seen.Count > 512) Prune();
         _seen[(player, source)] = clock.NowMs;
+    }
+
+    /// <summary>Where gear that arrived with the game's pickup note came from. None = crafting output; the receiver
+    /// itself = a drop or pickup it took; another player = a trade; a host any player opened that is not world loot
+    /// (tombstone, built chest) = private, also once it is gone; a host the mod saw as world loot = world; otherwise
+    /// <paramref name="liveWorld"/>: the source still exists and Auto Loot's tables know its template (true) or not
+    /// (false: private), or it is gone (null: a spilled pickup or an emptied loot bag: world).</summary>
+    public SourceVerdict Judge(EntityId player, EntityId source, bool sourceIsOtherPlayer, bool? liveWorld)
+    {
+        if (source.IsNone) return SourceVerdict.Crafted;
+        if (source == player) return SourceVerdict.World;
+        if (sourceIsOtherPlayer) return SourceVerdict.Player;
+        if (_private.ContainsKey(source)) return SourceVerdict.Private;
+        if (FromWorld(player, source)) return SourceVerdict.World;
+        return liveWorld == false ? SourceVerdict.Private : SourceVerdict.World;
     }
 
     public bool FromWorld(EntityId player, EntityId source) =>

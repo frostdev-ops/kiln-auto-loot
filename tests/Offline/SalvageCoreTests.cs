@@ -285,3 +285,61 @@ public sealed class SalvageOwnerTests
     [Fact]
     public void Nobody_known_is_no_owner() => Assert.Equal(0UL, SalvageOwner.Of(0, 0, isHost: false));
 }
+
+public sealed class SalvageSourceJudgeTests
+{
+    private static readonly Kiln.EntityId Player = new(1), Other = new(2);
+
+    private static SalvageSources Book(out FakeClock clock)
+    {
+        clock = new FakeClock();
+        return new SalvageSources(clock);
+    }
+
+    [Fact]
+    public void Crafting_output_has_no_source_and_never_counts() =>
+        Assert.Equal(SourceVerdict.Crafted, Book(out _).Judge(Player, Kiln.EntityId.None, sourceIsOtherPlayer: false, liveWorld: null));
+
+    [Fact]
+    public void A_drop_the_player_picked_up_names_the_player_as_source_and_counts() =>
+        Assert.Equal(SourceVerdict.World, Book(out _).Judge(Player, Player, false, liveWorld: null));
+
+    [Fact]
+    public void Another_player_as_source_is_a_trade() =>
+        Assert.Equal(SourceVerdict.Player, Book(out _).Judge(Player, Other, sourceIsOtherPlayer: true, liveWorld: null));
+
+    [Fact]
+    public void A_source_the_mod_never_saw_counts_when_it_is_gone_or_world_loot()
+    {
+        // 0.2.1 left these: world chests and loot bags whose loot came over before the mod saw them, spilled pickups
+        var b = Book(out _);
+        Assert.Equal(SourceVerdict.World, b.Judge(Player, new Kiln.EntityId(2593391188), false, liveWorld: null));
+        Assert.Equal(SourceVerdict.World, b.Judge(Player, new Kiln.EntityId(2593391189), false, liveWorld: true));
+    }
+
+    [Fact]
+    public void A_live_source_the_tables_do_not_know_is_private_storage()
+    {
+        // a chest the player built, a station: still there, and not world loot
+        Assert.Equal(SourceVerdict.Private, Book(out _).Judge(Player, new Kiln.EntityId(900), false, liveWorld: false));
+    }
+
+    [Fact]
+    public void A_tombstone_or_built_chest_opened_earlier_stays_private_after_it_is_gone()
+    {
+        var b = Book(out var clock);
+        var tomb = new Kiln.EntityId(901);
+        b.Looted(Other, tomb, world: false);                    // any player opened it
+        clock.NowMs += 60_000;
+        Assert.Equal(SourceVerdict.Private, b.Judge(Player, tomb, false, liveWorld: null));
+    }
+
+    [Fact]
+    public void A_world_chest_opened_earlier_counts()
+    {
+        var b = Book(out _);
+        var chest = new Kiln.EntityId(902);
+        b.Looted(Player, chest, world: true);
+        Assert.Equal(SourceVerdict.World, b.Judge(Player, chest, false, liveWorld: false));
+    }
+}

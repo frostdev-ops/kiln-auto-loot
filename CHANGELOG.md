@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.2.2
+- Rules for new gear see what you loot from the world, whatever way it comes. 0.2.1 only took gear whose source the
+  mod had watched being opened in the last 3 seconds, so most loot was left ("its source ... is no world loot the mod
+  saw"): chests in ruins and dungeons emptied by hand, loot bags, items that spill out as pickups, enemy drops. Now
+  every source counts except crafting, another player (trades and gifts), and any tombstone or chest that is not world
+  loot (a chest you built, a station): those stay out, also after a tombstone is gone.
+- New gear that lands on the action bar is marked by a rule too (it stays there unsalvaged; the mark shows once you
+  move it into the backpack). Before, the rule skipped it.
+- Grenades and other gear without upgrades no longer fill kiln.log with "rules leave" lines.
+- Salvage tab: the Mark and Keep buttons come first in each row, so a long name no longer pushes them out of reach.
+  New "Mark all" marks every listed piece that may be salvaged (never kept, worn or quest items, nor gear with a gem);
+  the confirm still lists everything before anything is salvaged.
+
 ## 0.2.1
 - Salvage works for the player who hosts the world. In 0.2.0 "Salvage marked" did nothing there and said "1 skipped
   (moved or changed)": the game records no Steam id for the hosting player (only for players who join over the

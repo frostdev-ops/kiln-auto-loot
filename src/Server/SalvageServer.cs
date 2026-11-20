@@ -139,8 +139,10 @@ internal sealed class SalvageServer
     /// the player takes out by hand meets the rules (no pickup note comes for a drag or Take all).</summary>
     public void Opened(EntityId player, EntityId host)
     {
-        if (_world is null || !player.IsPlayer || host.IsNone || Ready() != SalvageReady.Ready) return;
-        if (SalvageRules.Parse(_settingsOf(player).SalvageRules).Count == 0 || !IsWorldSource(host)) return;
+        if (_world is null || !player.IsPlayer || host.IsNone) return;
+        var world = IsWorldSource(host);
+        if (world || HasInventory(host)) _sources.Looted(player, host, world);   // also a tombstone or a built chest
+        if (Ready() != SalvageReady.Ready || SalvageRules.Parse(_settingsOf(player).SalvageRules).Count == 0 || !world) return;
         _hand.Backpack(player, _world.BackpackEntities(player));   // what the player carries now is never "taken"
         var gear = _world.GearIn(host);
         _hand.Opened(player, host, gear);
@@ -223,27 +225,51 @@ internal sealed class SalvageServer
     public void Looted(EntityId player, EntityId host)
     {
         if (!player.IsPlayer || host.IsNone) return;
-        _sources.Looted(player, host, IsWorldSource(host));
+        var world = IsWorldSource(host);
+        if (!world && !HasInventory(host)) return;   // a pickup the tables do not know: neither world nor private storage
+        _sources.Looted(player, host, world);
     }
 
     private bool IsWorldSource(EntityId entity) =>
         Spawn.Inspect(entity) is { Template: { } t } && _data.Templates.TryGet(t, out _);
 
-    /// <summary>Items arrived with the game's pickup note (loot-all, a hand take, a walk-over pickup): gear from a world
-    /// source a player's rules may mark or salvage.</summary>
+    /// <summary>Items arrived with the game's pickup note (a loot-all, a take from a chest's screen, a hand take, a
+    /// walk-over pickup): gear from the world a player's rules may mark or salvage. The source is judged by
+    /// SalvageSources.Judge: never crafting output, a trade, a tombstone or a built chest.</summary>
     public void Arrived(ItemPickupEvent e)
     {
         if (_world is null || _jobs is null || !e.Receiver.IsPlayer || Ready() != SalvageReady.Ready) return;
         if (!_data.Items.TryGet(e.ItemId, out var row) || !GearRules.IsGear(row)) return;
         if (SalvageRules.Parse(_settingsOf(e.Receiver).SalvageRules).Count == 0) return;
-        if (!_sources.FromWorld(e.Receiver, e.Source))
+        if (_world.AtSlot(e.Receiver, e.SlotInventory, e.SlotIndex) is not { } item || item.Item != e.ItemId) return;
+        if (item.Block == SalvageBlock.NoPerks) return;   // grenades and other "weapons" without upgrades: nothing to say
+        var verdict = _sources.Judge(e.Receiver, e.Source, e.Source.IsPlayer && e.Source != e.Receiver, LiveWorld(e.Source));
+        if (verdict != SourceVerdict.World)
         {
-            if (!e.Source.IsNone)
-                _log($"salvage: rules leave {row.Internal} for player {e.Receiver}: its source {e.Source} is no world loot the mod saw");
+            _log($"salvage: rules leave {item.Name} for player {e.Receiver}: it came from {verdict switch
+            {
+                SourceVerdict.Crafted => "crafting",
+                SourceVerdict.Player => "another player",
+                _ => "a tombstone or a chest that is not world loot",
+            }} ({e.Source})");
             return;
         }
-        if (_world.AtSlot(e.Receiver, e.SlotInventory, e.SlotIndex) is not { } item || item.Item != e.ItemId) return;
         ApplyRules(e.Receiver, item, "pickup");
+    }
+
+    /// <summary>The source still exists: is it world loot Auto Loot's tables know (true) or something else (false)?
+    /// Null when it is gone (a pickup taken, a loot bag emptied).</summary>
+    private bool? LiveWorld(EntityId source)
+    {
+        if (source.IsNone || Spawn.Inspect(source) is not { Template: { } t }) return null;
+        if (_data.Templates.TryGet(t, out _)) return true;
+        return HasInventory(source) ? false : null;   // storage the tables do not know; else a pickup of some kind
+    }
+
+    private static bool HasInventory(EntityId e)
+    {
+        try { return World.Has(e, "InventorySetup"); }
+        catch (Exception) { return false; }
     }
 
     /// <summary>Auto Loot's own slot moves out of a corpse or chest: no pickup note comes for them (0.2.0 missed every
@@ -259,7 +285,10 @@ internal sealed class SalvageServer
     private void ApplyRules(EntityId player, SalvageItem item, string how)
     {
         if (_world is null || _jobs is null || !_ruled.Add(item.ItemEntity)) return;   // once per item
-        if (item.Block != SalvageBlock.None)
+        // the action bar (Elsewhere): new weapons land there when a bar slot is free. Marked, never salvaged there: the
+        // mark shows once the player moves it into the backpack
+        var onBar = item.Block == SalvageBlock.Elsewhere;
+        if (item.Block != SalvageBlock.None && !onBar)
         {
             _log($"salvage: rules skip {item.Name} for player {player} ({how}): {item.Block}");
             return;
@@ -272,7 +301,7 @@ internal sealed class SalvageServer
             _log($"salvage: no rule takes {item.Name} for player {player} ({how}; {kind}, rarity {item.Rarity}, level {item.Level})");
             return;
         }
-        if (s.SalvageRuleAction == SalvageAction.Salvage)
+        if (s.SalvageRuleAction == SalvageAction.Salvage && !onBar)
         {
             _log($"salvage: rule salvages {item.Name} (level {item.Level}, rarity {item.Rarity}) for player {player} ({how})");
             _jobs.Enqueue(player, [item.ItemEntity], outcome => _last[player] = outcome);
@@ -280,7 +309,8 @@ internal sealed class SalvageServer
         else
         {
             _world.Change(player, [item.ItemEntity], m => { if (!m.Kept) m.Marked = true; });
-            _log($"salvage: rule marks {item.Name} (level {item.Level}, rarity {item.Rarity}) for player {player} ({how})");
+            _log($"salvage: rule marks {item.Name} (level {item.Level}, rarity {item.Rarity}) for player {player} ({how})" +
+                 (onBar ? "; it is on the action bar, salvage it once it is in the backpack" : ""));
         }
     }
 
