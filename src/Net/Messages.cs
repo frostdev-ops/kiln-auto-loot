@@ -177,6 +177,8 @@ public enum SalvageReady : byte
     NoGameData = 3,
     /// <summary>A Trash by hand gave other runes than the formula: salvage stays off in this world (kiln.log).</summary>
     Mismatch = 4,
+    /// <summary>The world just loaded: the saved salvages are settled first (about 10 s).</summary>
+    Starting = 5,
 }
 
 [Flags]

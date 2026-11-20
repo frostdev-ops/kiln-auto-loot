@@ -15,13 +15,14 @@ internal sealed class FakeSalvageWorld : ISalvageWorld
     public readonly Dictionary<EntityId, SalvageItem> Bag = new();
     public readonly Dictionary<EntityId, string?> Tickets = new();
     public int Runes;
-    public bool Room = true, TakeWorks = true, GiveWorks = true, TicketWorks = true;
+    public bool Room = true, TakeWorks = true, GiveWorks = true, TicketWorks = true, GiveThrows;
+    public ulong Steam = 1000;
     public int Saves;
     public readonly List<string> Lines = [];
     public uint RuneItem { get; set; } = 77;
 
     public SalvageItem? Read(EntityId player, EntityId itemEntity) => Bag.TryGetValue(itemEntity, out var i) ? i : null;
-    public ulong SteamIdOf(EntityId player) => 1000UL + player.Value;
+    public ulong SteamIdOf(EntityId player) => Steam == 0 ? 0 : Steam + player.Value;
     public bool SetTicket(EntityId itemEntity, string? ticket)
     {
         if (!TicketWorks) return false;
@@ -36,6 +37,7 @@ internal sealed class FakeSalvageWorld : ISalvageWorld
     }
     public void Give(EntityId holder, uint item, int count, Action<bool> done)
     {
+        if (GiveThrows) throw new InvalidOperationException("boom");
         if (GiveWorks) Runes += count;
         done(GiveWorks);
     }
@@ -145,6 +147,31 @@ public sealed class SalvageJobsTests
         var (w, j, _) = Rig();
         j.Enqueue(Player, [w.Add(10, 9)], null);
         Assert.Equal(3, w.Saves);   // taking, owed, paid
+    }
+
+    [Fact]
+    public void A_step_that_throws_skips_the_item_and_the_queue_goes_on_with_the_runes_owed()
+    {
+        var (w, j, outs) = Rig();
+        w.GiveThrows = true;
+        j.Enqueue(Player, [w.Add(10, 9), w.Add(11, 5)], outs.Add);
+        Assert.Single(outs);                                   // the request ended
+        Assert.Empty(w.Bag);                                   // both taken
+        Assert.Equal(14, j.OwedRunes(Player));                 // and both owed, paid by PayOwed
+        w.GiveThrows = false;
+        j.PayOwed(Player);
+        Assert.Equal(14, w.Runes);
+    }
+
+    [Fact]
+    public void A_player_whose_account_is_not_known_salvages_nothing()
+    {
+        var (w, j, outs) = Rig();
+        w.Steam = 0;
+        var a = w.Add(10, 9);
+        j.Enqueue(Player, [a], outs.Add);
+        Assert.True(w.Bag.ContainsKey(a));
+        Assert.Empty(j.Ledger.Entries);
     }
 
     [Fact]

@@ -35,7 +35,7 @@ internal sealed class SalvageServer
     private InstanceKey<SalvageMark>? _key;
     private KilnSalvageWorld? _world;
     private SalvageJobs? _jobs;
-    private bool _ledgerLoaded, _resolved, _mismatch;
+    private bool _ledgerLoaded, _resolved, _mismatch, _ledgerBad;
     private long _loadedAtMs, _nextOwedMs;
 
     public SalvageServer(Data data, IClock clock, Func<EntityId, PersonalSettings> settingsOf, Func<ServerLimits?> limits,
@@ -57,7 +57,7 @@ internal sealed class SalvageServer
         catch (Exception e) { _log($"salvage: no item data ({e.Message}): salvage is off in this world"); }
         _world = new KilnSalvageWorld(_data, _clock, _key, _log);
         _jobs = new SalvageJobs(_world, new SalvageLedger());
-        _ledgerLoaded = _resolved = _mismatch = false;
+        _ledgerLoaded = _resolved = _mismatch = _ledgerBad = false;
         _checks.Clear();
         _last.Clear();
         var b = _world.Balancing;
@@ -67,6 +67,7 @@ internal sealed class SalvageServer
 
     public void StopWorld()
     {
+        if (_world is not null) _world.Stopped = true;
         _jobs?.Reset();
         _jobs = null;
         _world = null;
@@ -77,6 +78,8 @@ internal sealed class SalvageServer
         if (_limits() is { AllowSalvage: false }) return SalvageReady.Off;
         if (_key is null || _world is null || !Saves.WorldDataReady || !Capabilities.Is("kiln.items") ||
             !Capabilities.Is("saves.instance_data")) return SalvageReady.NoItemData;   // instance data implies items.instances
+        if (_ledgerBad) return SalvageReady.NoItemData;
+        if (!_resolved) return SalvageReady.Starting;   // the saved ledger is loaded and settled first
         if (_world.Balancing is null || _world.RuneItem == 0) return SalvageReady.NoGameData;
         if (_mismatch) return SalvageReady.Mismatch;
         return SalvageReady.Ready;
@@ -93,7 +96,12 @@ internal sealed class SalvageServer
             _loadedAtMs = _clock.NowMs;
             SalvageLedger? saved = null;
             try { saved = Kiln.WorldData.TryGet<SalvageLedger>(LedgerKey, out var l) ? l : null; }
-            catch (Exception e) { _log($"salvage: the saved ledger does not read ({e.Message})"); }
+            catch (Exception e)
+            {
+                // never overwrite it with an empty one: its owed runes would be lost
+                _ledgerBad = true;
+                _log($"salvage: the saved ledger does not read ({e.Message}); salvage stays off in this world");
+            }
             if (saved is not null && saved.Entries.Count > 0)
             {
                 _jobs = new SalvageJobs(_world, saved);
@@ -198,7 +206,8 @@ internal sealed class SalvageServer
         var s = _settingsOf(e.Receiver);
         var rules = SalvageRules.Parse(s.SalvageRules);
         if (rules.Count == 0) return;
-        if (_world.AtSlot(e.Receiver, e.SlotInventory, e.SlotIndex) is not { } item || item.Block != SalvageBlock.None) return;
+        if (_world.AtSlot(e.Receiver, e.SlotInventory, e.SlotIndex) is not { } item || item.Item != e.ItemId ||
+            item.Block != SalvageBlock.None) return;
         var kind = SalvageFormula.KindOf(_world.SlotTypeOf(item.Item));
         if (SalvageRules.FirstMatch(rules, kind, item.Rarity, item.Level) is null) return;
         if (s.SalvageRuleAction == SalvageAction.Salvage)
@@ -239,14 +248,18 @@ internal sealed class SalvageServer
             if (now < c.DueMs) continue;
             _checks.RemoveAt(i);
             if (_world.Read(c.Player, c.Item) is not null) continue;   // still there: the trash did not run
+            if (_jobs is not null && (_jobs.Busy(c.Player) || _jobs.Paying(c.Player))) continue;   // our own runes in the count
             var delta = _world.RuneCount(c.Player) - c.Before;
             if (delta == c.Predicted)
                 _log($"salvage check: {c.Name} trashed by hand gave {delta} runes, the formula said {c.Predicted}: match");
+            else if (delta > c.Predicted)
+                _log($"salvage check: {c.Name} trashed by hand: {delta} runes came in, the formula said {c.Predicted}: unclear " +
+                     "(other runes arrived at the same time?)");
             else
             {
                 _log($"salvage check: {c.Name} trashed by hand gave {delta} runes, the formula said {c.Predicted}: MISMATCH; " +
                      "salvage stays off in this world. Please report this line.");
-                if (delta > 0) _mismatch = true;
+                _mismatch = true;
             }
         }
     }

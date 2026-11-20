@@ -411,6 +411,7 @@ public static class Texts
         ["salvageNoGameData"] = ("The game's rune numbers could not be read, so nothing is salvaged.", "Die Runenwerte des Spiels ließen sich nicht lesen, darum wird nichts verwertet."),
         ["salvageMismatch"] = ("Off in this world: the game gave other runes than the mod expected (see kiln.log). Please report it.", "In dieser Welt aus: das Spiel gab andere Runen als die Mod erwartet hat (siehe kiln.log). Bitte melde das."),
         ["salvageRefresh"] = ("Refresh", "Neu laden"),
+        ["salvageStarting"] = ("The world just loaded: salvage starts in a few seconds.", "Die Welt ist gerade geladen: Verwerten geht in ein paar Sekunden los."),
         ["salvageGear"] = ("Gear in your backpack: {0}", "Ausrüstung im Rucksack: {0}"),
         ["salvageNoGear"] = ("No gear in your backpack.", "Keine Ausrüstung im Rucksack."),
         ["salvageOnlyMarked"] = ("Only marked", "Nur markierte"),

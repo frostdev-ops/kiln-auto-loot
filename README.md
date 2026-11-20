@@ -60,6 +60,8 @@ notes run in each player's game.
 ## Good to know
 - **Salvage** cannot be undone. Each salvaged item gets a line in `kiln/logs/kiln.log`. The runes follow the game's own
   Trash formula; the mod checks it against a Trash by hand and switches salvage off in that world if they differ.
+  A player who leaves or crashes in the moment between an item's take and its runes may, on a server, come back with
+  both (the character file and the world are saved apart); the item is never lost.
 - **Stacks**: if you remove the mod or lower the stack size, the game cuts every stack above its own size back the next
   time it handles it, and the rest is lost. Split big stacks first.
 - **Felled trees** may not grow back. Try tree felling in a test world, or back up your save.

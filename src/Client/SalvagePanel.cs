@@ -61,6 +61,7 @@ internal sealed class SalvagePanel(Data data, Action<SalvageCmd, ulong[]> send, 
             SalvageReady.NoItemData => "salvageNoItemData",
             SalvageReady.NoGameData => "salvageNoGameData",
             SalvageReady.Mismatch => "salvageMismatch",
+            SalvageReady.Starting => "salvageStarting",
             _ => null,
         };
         if (why is not null)

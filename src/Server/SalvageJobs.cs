@@ -103,7 +103,7 @@ internal sealed class SalvageJobs(ISalvageWorld world, SalvageLedger ledger)
             return;
         }
         _inFlight = true;
-        world.FitsGive(b.Player, rune, item.Runes, fits =>
+        world.FitsGive(b.Player, rune, item.Runes, fits => Guard(b, () =>
         {
             if (!fits)
             {
@@ -114,12 +114,32 @@ internal sealed class SalvageJobs(ISalvageWorld world, SalvageLedger ledger)
                 return;
             }
             TakeAndGive(b, item, rune);
-        });
+        }));
+    }
+
+    /// <summary>A callback that throws must not stop the queue: the item is skipped (a ledger entry it left is settled
+    /// as usual: Taking after a load, Owed by PayOwed) and the next one starts.</summary>
+    private void Guard(Batch b, Action body)
+    {
+        try { body(); }
+        catch (Exception e)
+        {
+            world.Log($"salvage: a step failed ({e.GetType().Name}: {e.Message}); the item is skipped");
+            b.Skip(SalvageBlock.Changed);
+            Next();
+        }
     }
 
     private void TakeAndGive(Batch b, SalvageItem item, uint rune)
     {
         var steam = world.SteamIdOf(b.Player);
+        if (steam == 0)
+        {
+            // owed runes could not find their player again
+            b.Skip(SalvageBlock.Changed);
+            Next();
+            return;
+        }
         var ticket = ledger.Begin(steam, item.Name, rune, item.Runes, world.NowMs);
         if (!world.SetTicket(item.ItemEntity, ticket))
         {
@@ -129,7 +149,7 @@ internal sealed class SalvageJobs(ISalvageWorld world, SalvageLedger ledger)
             return;
         }
         world.SaveLedger(ledger);
-        world.Take(item, taken =>
+        world.Take(item, taken => Guard(b, () =>
         {
             if (!taken)
             {
@@ -143,7 +163,7 @@ internal sealed class SalvageJobs(ISalvageWorld world, SalvageLedger ledger)
             ledger.Taken(ticket);
             world.SaveLedger(ledger);
             b.Salvaged++;
-            world.Give(b.Player, rune, item.Runes, given =>
+            world.Give(b.Player, rune, item.Runes, given => Guard(b, () =>
             {
                 if (given)
                 {
@@ -155,8 +175,8 @@ internal sealed class SalvageJobs(ISalvageWorld world, SalvageLedger ledger)
                 else world.Log($"salvage: player {b.Player} salvaged {item.Name} (level {item.Level}, rarity {item.Rarity}); " +
                                $"{item.Runes} runes did not fit and are owed (ticket {ticket})");
                 Next();
-            });
-        });
+            }));
+        }));
     }
 
     private void Next()
@@ -166,9 +186,13 @@ internal sealed class SalvageJobs(ISalvageWorld world, SalvageLedger ledger)
     }
 
     /// <summary>Runes owed to this (online) player: given now, entry by entry; each runs once at a time.</summary>
+    /// <summary>A payment of owed runes is running for this player (the Trash check waits for it).</summary>
+    public bool Paying(EntityId player) => _paying.Count > 0 && ledger.OwedTo(world.SteamIdOf(player)).Any();
+
     public void PayOwed(EntityId player)
     {
         var steam = world.SteamIdOf(player);
+        if (steam == 0) return;
         foreach (var e in ledger.OwedTo(steam).ToList())
         {
             var key = (ulong)e.Ticket.GetHashCode() ^ steam;
