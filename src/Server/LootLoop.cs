@@ -44,7 +44,8 @@ internal sealed class LootLoop
     private readonly Action<EntityId, NoticeMsg> _notice;
     private readonly Action<string> _keyLine;
     private readonly Dictionary<EntityId, PlayerLoot> _players = new();
-    private readonly Dictionary<EntityId, (ulong Serial, TemplateRule? Rule, long Scan)> _templates = new();
+    private readonly Dictionary<EntityId, (ulong Serial, TemplateRule? Rule, long Scan, Guid? Template)> _templates = new();
+    private readonly CritterWatch _critters = new();
     private readonly HashSet<EntityId> _playerIds = [];
     private readonly Dictionary<string, IgnoreList> _ignoreCache = new(StringComparer.Ordinal);
     private readonly HashSet<string> _ignoreReported = new(StringComparer.Ordinal);
@@ -284,6 +285,7 @@ internal sealed class LootLoop
     {
         _players.Clear();
         _templates.Clear();
+        _critters.Reset();
         _lastScan = long.MinValue;
     }
 
@@ -457,17 +459,33 @@ internal sealed class LootLoop
     private void Target(PlayerLoot p, GamePlayer gp, EntityId e)
     {
         if (_game.PositionOf(e) is not { } at) return;
-        if (!HeightWindow.Allows(at.Y - gp.Position.Y, p.Settings))
+        var dy = at.Y - gp.Position.Y;
+        var d2 = DistanceSquared(gp.Position, at);
+        var classified = Classify(e);
+        // critters (fishing bait swarms): one kiln.log line each, taken or why not (CritterWatch)
+        if (classified is { Rule: { Group: Group.Critter } cr, Key: var ck })
         {
-            ProbeTrace.Note(e, $"height: outside the height window (dy {at.Y - gp.Position.Y:0.0} m)");
+            if (_critters.Seen(ck)) Counters.CrittersSeen++;
+            if (_critters.Again(ck, _clock.NowMs, ms => CritterLine(p, cr, d2, dy,
+                    $"still there {ms} ms after its take was sent: the game did not hand the bait over ({LiveState(e)})")) is { } still)
+            {
+                Counters.CrittersStuck++;
+                _keyLine(still);
+            }
+        }
+        if (!HeightWindow.Allows(dy, p.Settings))
+        {
+            ProbeTrace.Note(e, $"height: outside the height window (dy {dy:0.0} m)");
             Counters.HeightOut++;   // above or below the player's height window: as if out of range
+            if (classified is { Rule: { Group: Group.Critter } hr, Key: var hk })
+                CritterLeft(p, hk, hr, d2, dy, $"outside the height window ({p.Settings.HeightAbove:0} m above, {p.Settings.HeightBelow:0} m below you)");
             return;
         }
-        var d2 = DistanceSquared(gp.Position, at);
-        if (Classify(e) is not { Rule: { } rule, Key: var key })
+        if (classified is not { Rule: { } rule, Key: var key })
         {
             ProbeTrace.Note(e, "table: not in the template table (never taken)");
             Counters.UnknownTemplates++;   // a template not in templates.txt: never
+            if (TemplateOf(e) is { } g && _critters.Unknown(g, () => _game.TemplateName(g)) is { } unknown) _keyLine(unknown);
             return;
         }
         if ((rule.Flags & TemplateFlags.Decor) != 0 && p.Settings.OldBooks && gp.NearBase)
@@ -480,6 +498,7 @@ internal sealed class LootLoop
             return;
         }
         var hasPickup = _game.TryPickupItem(e, out var item);
+        var liveItem = item;
         if (rule.Group == Group.Critter)
         {
             // a critter's pickup names no item (the bait is its default inventory): judged by the bait it gives
@@ -487,6 +506,7 @@ internal sealed class LootLoop
             if (item == 0)
             {
                 ProbeTrace.Note(e, "critter: left, no known bait");
+                CritterLeft(p, key, rule, d2, dy, "no known bait in the game data");
                 return;
             }
         }
@@ -508,8 +528,40 @@ internal sealed class LootLoop
         if (container) Counters.ContainersSeen++;
         else Counters.PickupsSeen++;
         if (container) ContainerTarget(p, gp, e, key, rule, d2);
-        else PickupTarget(p, gp, e, key, rule, d2, item);
+        else PickupTarget(p, gp, e, key, rule, d2, item, liveItem, dy);
     }
+
+    // ---------------------------------------------------------------- critter lines
+
+    private string CritterLine(PlayerLoot p, TemplateRule rule, float d2, double dy, string outcome) =>
+        $"critter: player {p.Entity} {rule.Name} {Math.Sqrt(d2):0.0} m away (dy {dy:+0.0;-0.0;0.0} m): {outcome}";
+
+    private void CritterLeft(PlayerLoot p, ulong key, TemplateRule rule, float d2, double dy, string why)
+    {
+        if (_critters.Left(key, CritterLine(p, rule, d2, dy, "left: " + why)) is { } line) _keyLine(line);
+    }
+
+    private string ItemText(uint item) =>
+        _data.Items.TryGet(item, out var row) ? $"{item} {row.Internal}" : item.ToString(System.Globalization.CultureInfo.InvariantCulture);
+
+    /// <summary>What the game shows of a target now (critter lines).</summary>
+    private string LiveState(EntityId e)
+    {
+        var pickup = _game.TryPickupItem(e, out var live) ? $"pickup item {live}" : "no pickup";
+        var offer = _game.OfferOf(e);
+        var o = offer.Present ? $"offer {offer.OfferId}{(offer.Disabled ? " disabled" : "")}" : "no offer";
+        return $"{pickup}, own inventory {(_game.HasInventory(e) ? "yes" : "no")}, {o}";
+    }
+
+    private static string RefusalText(Verdict v, PersonalSettings s) => v switch
+    {
+        Verdict.GroupOff => "Critters is off",
+        Verdict.RadiusOut => $"beyond the main radius ({s.Radius:0} m)",
+        Verdict.YieldIgnored => "the bait is on the skip list",
+        Verdict.NotListed => "the bait is not on the only list",
+        Verdict.NotFocus => "the gather focus is on another item",
+        _ => v.ToString(),
+    };
 
     // ---------------------------------------------------------------- container path
 
@@ -798,15 +850,19 @@ internal sealed class LootLoop
 
     // ---------------------------------------------------------------- pickup path
 
-    private void PickupTarget(PlayerLoot p, GamePlayer gp, EntityId e, ulong key, TemplateRule rule, float d2, uint item)
+    private void PickupTarget(PlayerLoot p, GamePlayer gp, EntityId e, ulong key, TemplateRule rule, float d2, uint item,
+        uint liveItem = 0, double dy = 0)
     {
         var s = p.Settings;
+        var critter = rule.Group == Group.Critter;
+        string? why = null;   // a critter's lasting reason to stay (its kiln.log line)
         var verdict = LootRules.Decide(rule, released: false, d2, s, p.Filter, out var noticeItem, gp.NearBase);
         var wanted = verdict == Verdict.Allowed;
         if (!wanted)
         {
             ProbeTrace.Note(e, $"pickup: refused ({verdict})");
             CountRefusal(p, verdict, noticeItem);
+            why = RefusalText(verdict, s);
         }
         var details = _game.PickupDetails(e) ?? new GroundItem(1, GearRules.UnknownRarity);
         if (wanted)   // the pickup's own item: the item filter, then the rarity rule
@@ -816,14 +872,17 @@ internal sealed class LootLoop
                     wanted = false;
                     Counters.SkippedPickups++;
                     LeftBehind(p, item);
+                    why = RefusalText(Verdict.YieldIgnored, s);
                     break;
                 case ItemRefusal.NotListed:
                     wanted = false;
                     Counters.NotListed++;
+                    why = RefusalText(Verdict.NotListed, s);
                     break;
                 case ItemRefusal.NotFocus:
                     wanted = false;
                     Counters.NotFocus++;
+                    why = RefusalText(Verdict.NotFocus, s);
                     break;
                 default:
                     if (GearRules.BelowMin(item, details.Rarity, s.MinGearRarity, _data.Items))
@@ -835,13 +894,26 @@ internal sealed class LootLoop
             }
         // the bag: a pickup is taken whole, so its whole amount has to fit
         if (wanted && BagRules.NeedsBag(s, p.Limits) &&
-            CountBag(BagRules.Pickup(item, details.Amount, s, BagOf(p, gp), p.Limits))) wanted = false;
+            CountBag(BagRules.Pickup(item, details.Amount, s, BagOf(p, gp), p.Limits)))
+        {
+            wanted = false;
+            why = "a bag rule (no room for it, or a carry limit)";
+        }
         var withInventory = _game.HasInventory(e);
         ProbeTrace.Note(e, $"pickup: wanted after the item, rarity and bag rules: {wanted} (amount {details.Amount}, " +
                            $"rarity {details.Rarity}, own inventory {withInventory})");
         // takeInPlace off: static pickups (with an inventory) cannot be pulled: only within 0.75 m.
-        if (wanted && withInventory && !s.TakeInPlace && d2 > StaticPickupNearSquared) wanted = false;
-        if (wanted && !InSight(p, gp, e, key)) wanted = false;
+        if (wanted && withInventory && !s.TakeInPlace && d2 > StaticPickupNearSquared)
+        {
+            wanted = false;
+            why = "Take where it lies is off and it is more than 0.75 m away";
+        }
+        if (wanted && !InSight(p, gp, e, key))
+        {
+            wanted = false;
+            why = "not in plain view (Only what I can see)";
+        }
+        if (critter && why is not null) CritterLeft(p, key, rule, d2, dy, why);
         if (_budget <= 0)
         {
             if (wanted) Counters.CapReached++;
@@ -879,6 +951,13 @@ internal sealed class LootLoop
         ProbeTrace.Note(e, $"send: pickup loot ({item} x{details.Amount})");
         _game.Loot(gp.Entity, e);
         p.Pickups.Taken(key);
+        if (critter)
+        {
+            var line = _critters.Sent(key, _clock.NowMs, CritterLine(p, rule, d2, dy,
+                $"loot sent (bait {ItemText(item)}; the game shows {LiveState(e)}, live pickup item {liveItem})"), out var first);
+            if (first) Counters.CrittersSent++;
+            if (line is not null) _keyLine(line);
+        }
     }
 
     // ---------------------------------------------------------------- helpers
@@ -993,14 +1072,17 @@ internal sealed class LootLoop
     {
         if (_templates.TryGetValue(e, out var c))
         {
-            _templates[e] = (c.Serial, c.Rule, _scanNumber);
+            _templates[e] = (c.Serial, c.Rule, _scanNumber, c.Template);
             return (KeyOf(e, c.Serial), c.Rule);
         }
         if (_game.Inspect(e) is not { } info) return null;
         TemplateRule? rule = info.Template is { } g && _data.Templates.TryGet(g, out var r) ? r : null;
-        _templates[e] = (info.Serial, rule, _scanNumber);
+        _templates[e] = (info.Serial, rule, _scanNumber, info.Template);
         return (KeyOf(e, info.Serial), rule);
     }
+
+    /// <summary>The template behind an entity <see cref="Classify"/> looked at in this scan, or null.</summary>
+    private Guid? TemplateOf(EntityId e) => _templates.TryGetValue(e, out var c) ? c.Template : null;
 
     /// <summary>Entities no player saw in this scan are inspected again when they come back (their id may be reused).</summary>
     private void ForgetUnseenTemplates()

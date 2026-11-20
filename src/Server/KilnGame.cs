@@ -40,6 +40,8 @@ internal sealed class KilnGame(Action<string> logOnce) : IGame
     public Inspected? Inspect(EntityId entity) =>
         Spawn.Inspect(entity) is { } info ? new Inspected(info.Template, info.Serial) : null;
 
+    public string? TemplateName(Guid template) => Spawn.Template(template)?.Name;
+
     public bool TryPickupItem(EntityId entity, out uint itemId)
     {
         if (Ecs.TryGet<Ecs.PickupItem>(entity, out var pi))

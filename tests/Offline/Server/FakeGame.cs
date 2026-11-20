@@ -38,6 +38,7 @@ internal sealed class FakeGame : IGame
     public int StackWish;
     public bool SightOn = true;
     public readonly Dictionary<string, int> FindCalls = new();
+    public readonly Dictionary<Guid, string> TemplateNames = new();
     public int FreeSlotCount = 10;
     private uint _next = 100;
 
@@ -82,6 +83,8 @@ internal sealed class FakeGame : IGame
     public WorldPosition? PositionOf(EntityId entity) =>
         Entities.TryGetValue(entity, out var e) ? e.Position
         : PlayerList.FirstOrDefault(p => p.Entity == entity) is { Entity.IsNone: false } gp ? gp.Position : null;
+
+    public string? TemplateName(Guid template) => TemplateNames.TryGetValue(template, out var n) ? n : null;
 
     public Inspected? Inspect(EntityId entity) =>
         Entities.TryGetValue(entity, out var e) ? new Inspected(e.Template, e.Serial) : null;

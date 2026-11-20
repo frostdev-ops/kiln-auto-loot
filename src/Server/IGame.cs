@@ -64,6 +64,9 @@ internal interface IGame
     /// <summary>Spawn.Inspect.</summary>
     Inspected? Inspect(EntityId entity);
 
+    /// <summary>Spawn.Template(guid).Name: a template's name (diagnostics only), null when unknown.</summary>
+    string? TemplateName(Guid template);
+
     /// <summary>Ecs.PickupItem: the item id of a ground pickup.</summary>
     bool TryPickupItem(EntityId entity, out uint itemId);
 
