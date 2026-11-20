@@ -107,6 +107,8 @@ internal interface IGame
     void Loot(EntityId guest, EntityId host);
 
     /// <summary>Items.Move of a slot into the player's inventory, <paramref name="count"/> of it (0 = the whole slot);
-    /// <paramref name="done"/> runs on the tick thread when the game answered.</summary>
-    void Move(EntityId from, ulong slot, EntityId to, int count, Action<MoveOutcome> done);
+    /// <paramref name="done"/> runs on the tick thread when the game answered; <paramref name="moved"/> (optional) gets
+    /// the item entities the move brought (gear), before done.</summary>
+    void Move(EntityId from, ulong slot, EntityId to, int count, Action<MoveOutcome> done,
+        Action<IReadOnlyList<EntityId>>? moved = null);
 }

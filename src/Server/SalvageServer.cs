@@ -197,28 +197,58 @@ internal sealed class SalvageServer
     private bool IsWorldSource(EntityId entity) =>
         Spawn.Inspect(entity) is { Template: { } t } && _data.Templates.TryGet(t, out _);
 
-    /// <summary>Items arrived: gear from a world source a player's rules may mark or salvage.</summary>
+    /// <summary>Items arrived with the game's pickup note (loot-all, a hand take, a walk-over pickup): gear from a world
+    /// source a player's rules may mark or salvage.</summary>
     public void Arrived(ItemPickupEvent e)
     {
         if (_world is null || _jobs is null || !e.Receiver.IsPlayer || Ready() != SalvageReady.Ready) return;
         if (!_data.Items.TryGet(e.ItemId, out var row) || !GearRules.IsGear(row)) return;
-        if (!_sources.FromWorld(e.Receiver, e.Source)) return;
-        var s = _settingsOf(e.Receiver);
+        if (SalvageRules.Parse(_settingsOf(e.Receiver).SalvageRules).Count == 0) return;
+        if (!_sources.FromWorld(e.Receiver, e.Source))
+        {
+            if (!e.Source.IsNone)
+                _log($"salvage: rules leave {row.Internal} for player {e.Receiver}: its source {e.Source} is no world loot the mod saw");
+            return;
+        }
+        if (_world.AtSlot(e.Receiver, e.SlotInventory, e.SlotIndex) is not { } item || item.Item != e.ItemId) return;
+        ApplyRules(e.Receiver, item, "pickup");
+    }
+
+    /// <summary>Auto Loot's own slot moves out of a corpse or chest: no pickup note comes for them (0.2.0 missed every
+    /// such gear), so the loop names the item entities it brought.</summary>
+    public void MovedIn(EntityId player, EntityId from, IReadOnlyList<EntityId> items)
+    {
+        if (_world is null || _jobs is null || !player.IsPlayer || Ready() != SalvageReady.Ready) return;
+        if (SalvageRules.Parse(_settingsOf(player).SalvageRules).Count == 0 || !IsWorldSource(from)) return;
+        foreach (var entity in items)
+            if (_world.Read(player, entity) is { } item) ApplyRules(player, item, "auto loot");
+    }
+
+    private void ApplyRules(EntityId player, SalvageItem item, string how)
+    {
+        if (_world is null || _jobs is null) return;
+        if (item.Block != SalvageBlock.None)
+        {
+            _log($"salvage: rules skip {item.Name} for player {player} ({how}): {item.Block}");
+            return;
+        }
+        var s = _settingsOf(player);
         var rules = SalvageRules.Parse(s.SalvageRules);
-        if (rules.Count == 0) return;
-        if (_world.AtSlot(e.Receiver, e.SlotInventory, e.SlotIndex) is not { } item || item.Item != e.ItemId ||
-            item.Block != SalvageBlock.None) return;
         var kind = SalvageFormula.KindOf(_world.SlotTypeOf(item.Item));
-        if (SalvageRules.FirstMatch(rules, kind, item.Rarity, item.Level) is null) return;
+        if (SalvageRules.FirstMatch(rules, kind, item.Rarity, item.Level) is null)
+        {
+            _log($"salvage: no rule takes {item.Name} for player {player} ({how}; {kind}, rarity {item.Rarity}, level {item.Level})");
+            return;
+        }
         if (s.SalvageRuleAction == SalvageAction.Salvage)
         {
-            _log($"salvage: rule salvages {item.Name} (level {item.Level}, rarity {item.Rarity}) for player {e.Receiver}");
-            _jobs.Enqueue(e.Receiver, [item.ItemEntity], outcome => _last[e.Receiver] = outcome);
+            _log($"salvage: rule salvages {item.Name} (level {item.Level}, rarity {item.Rarity}) for player {player} ({how})");
+            _jobs.Enqueue(player, [item.ItemEntity], outcome => _last[player] = outcome);
         }
         else
         {
-            _world.Change(e.Receiver, [item.ItemEntity], m => { if (!m.Kept) m.Marked = true; });
-            _log($"salvage: rule marks {item.Name} (level {item.Level}, rarity {item.Rarity}) for player {e.Receiver}");
+            _world.Change(player, [item.ItemEntity], m => { if (!m.Kept) m.Marked = true; });
+            _log($"salvage: rule marks {item.Name} (level {item.Level}, rarity {item.Rarity}) for player {player} ({how})");
         }
     }
 

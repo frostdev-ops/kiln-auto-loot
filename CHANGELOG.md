@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.1
+- Salvage works for the player who hosts the world. In 0.2.0 "Salvage marked" did nothing there and said "1 skipped
+  (moved or changed)": the game records no Steam id for the hosting player (only for players who join over the
+  network), and the mod would not salvage for a player it could not name in its ledger. It now names the host, and a
+  player without a Steam id by their account id; when neither is known the tab says so instead of "moved or changed".
+- Rules for new gear now see what Auto Loot itself takes out of corpses and chests. In 0.2.0 they only saw gear that
+  came with the game's pickup note (a loot-all, a take by hand), and most gear arrives through Auto Loot's own slot
+  moves, which bring no such note. kiln.log now also says why a rule left a piece of gear ("no rule takes ...").
+
 ## 0.2.0
 - **Salvage**: turn gear into runes from F8's new Salvage tab (ideas by netjunk and HadToRegister). Mark items (their
   rows turn red), then "Salvage marked" with a confirm that lists the items and the runes ("Ask before salvaging", on by

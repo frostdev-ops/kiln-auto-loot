@@ -188,6 +188,8 @@ public sealed class SalvageJobsTests
         j.Enqueue(Player, [a], outs.Add);
         Assert.True(w.Bag.ContainsKey(a));
         Assert.Empty(j.Ledger.Entries);
+        // said as what it is, not as "moved or changed" (0.2.0 told a hosting player that)
+        Assert.Equal(SalvageBlock.NoAccount, outs[0].Reason);
     }
 
     [Fact]

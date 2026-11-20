@@ -21,9 +21,15 @@ internal sealed class KilnSalvageWorld(Data data, IClock clock, InstanceKey<Salv
     public uint RuneItem => _game.RuneItem;
     public string? SlotTypeOf(uint item) => _game.SlotTypeOf(item, data.Items);
 
+    /// <summary>The ledger's owner of a player (SalvageOwner): Steam id, account id, or the host.</summary>
     public ulong SteamIdOf(EntityId player)
     {
-        try { return Players.Find(player)?.SteamId ?? 0; }
+        try
+        {
+            var p = Players.Find(player);
+            var host = Kiln.Client.IsHosting && Kiln.Client.HasLocalPlayer && Kiln.Client.LocalPlayer == player;
+            return SalvageOwner.Of(p?.SteamId ?? 0, p is null ? 0 : (ulong)p.AccountId, host);
+        }
         catch (KilnUnavailableException) { return 0; }
     }
 

@@ -114,7 +114,8 @@ internal sealed class KilnGame(Action<string> logOnce) : IGame
     public void Loot(EntityId guest, EntityId host) =>
         Gameplay.Inject.Loot(guest, host, 0, lootAll: true, bypassInteraction: true);
 
-    public void Move(EntityId from, ulong slot, EntityId to, int count, Action<MoveOutcome> done)
+    public void Move(EntityId from, ulong slot, EntityId to, int count, Action<MoveOutcome> done,
+        Action<IReadOnlyList<EntityId>>? moved = null)
     {
         var scheduler = AutoLootMod.Scheduler;
         if (!_moves)
@@ -134,7 +135,16 @@ internal sealed class KilnGame(Action<string> logOnce) : IGame
                     _ => MoveOutcome.Failed,
                 }
                 : MoveOutcome.Failed;
-            if (scheduler is not null) scheduler.Post(() => done(outcome));
+            // gear keeps its item entity through a move: the entities that arrived (salvage rules look at them)
+            var entities = t.IsCompletedSuccessfully && outcome != MoveOutcome.Failed
+                ? t.Result.Changes.Select(c => c.ItemEntity).Where(x => !x.IsNone).Distinct().ToList()
+                : new List<EntityId>();
+            if (scheduler is not null)
+                scheduler.Post(() =>
+                {
+                    moved?.Invoke(entities);
+                    done(outcome);
+                });
         }, TaskScheduler.Default);
     }
 

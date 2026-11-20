@@ -149,7 +149,7 @@ internal sealed class SalvageJobs(ISalvageWorld world, SalvageLedger ledger)
         if (steam == 0)
         {
             // owed runes could not find their player again
-            b.Skip(SalvageBlock.Changed);
+            b.Skip(SalvageBlock.NoAccount);
             Next();
             return;
         }

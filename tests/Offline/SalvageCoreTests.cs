@@ -258,3 +258,30 @@ public sealed class SalvageSourceTests
         Assert.False(book.FromWorld(player, Kiln.EntityId.None));
     }
 }
+
+public sealed class SalvageOwnerTests
+{
+    [Fact]
+    public void The_steam_id_names_the_owner_when_the_game_logged_one() =>
+        Assert.Equal(76561190000000001UL, SalvageOwner.Of(76561190000000001UL, 77, isHost: false));
+
+    [Fact]
+    public void Without_a_steam_id_the_account_id_does()
+    {
+        var a = SalvageOwner.Of(0, 77, isHost: false);
+        Assert.NotEqual(0UL, a);
+        Assert.NotEqual(77UL, a);                                  // never equal to a steam id
+        Assert.Equal(a, SalvageOwner.Of(0, 77, isHost: false));
+    }
+
+    [Fact]
+    public void The_host_of_a_hosted_world_has_an_owner_even_with_no_ids()
+    {
+        // a hosting game's own player is not a network peer: the game logs no steam id for it (bug in 0.2.0)
+        Assert.Equal(SalvageOwner.Host, SalvageOwner.Of(0, 0, isHost: true));
+        Assert.NotEqual(0UL, SalvageOwner.Host);
+    }
+
+    [Fact]
+    public void Nobody_known_is_no_owner() => Assert.Equal(0UL, SalvageOwner.Of(0, 0, isHost: false));
+}

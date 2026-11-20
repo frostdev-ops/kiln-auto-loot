@@ -458,5 +458,6 @@ public static class Texts
         ["salvageBlock.NoYield"] = ("gives no runes", "gibt keine Runen"),
         ["salvageBlock.Changed"] = ("moved or changed", "verschoben oder verändert"),
         ["salvageBlock.NoRoom"] = ("no room for the runes", "kein Platz für die Runen"),
+        ["salvageBlock.NoAccount"] = ("the server cannot tell who you are yet", "der Server weiß noch nicht, wer du bist"),
     };
 }

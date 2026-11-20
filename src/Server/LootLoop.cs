@@ -16,6 +16,10 @@ internal readonly record struct CommandResult(uint Focus, bool Reply);
 
 internal sealed class LootLoop
 {
+    /// <summary>A slot move of the loop brought these item entities (gear) from this container into this player's bag:
+    /// they arrive with no pickup event, so salvage rules learn of them here. Tick thread.</summary>
+    public Action<EntityId, EntityId, IReadOnlyList<EntityId>>? Moved { get; set; }
+
     public const long ScanEveryMs = 100;           // each player every 100 ms
     public const int MaxInjectsPerScan = 64;       // for the whole mod
     public const long BlinkMs = 2000;              // the 2 s re-evaluation (counted only)
@@ -690,7 +694,12 @@ internal sealed class LootLoop
             var item = slot.Item;
             p.MovesInFlight[item] = p.MovesInFlight.GetValueOrDefault(item) + moving;
             ProbeTrace.Note(e, $"send: move slot {slot.Id} ({item} x{moving})");
-            _game.Move(e, slot.Id, gp.Entity, count, outcome => MoveAnswered(p, key, outcome, item, moving));
+            var player = gp.Entity;
+            _game.Move(e, slot.Id, gp.Entity, count, outcome => MoveAnswered(p, key, outcome, item, moving),
+                entities =>
+                {
+                    if (entities.Count > 0) Moved?.Invoke(player, e, entities);
+                });
         }
         if (sent > 0)
         {

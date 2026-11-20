@@ -156,7 +156,22 @@ public static class SalvageRules
 public enum SalvagePlace { Backpack, SalvageChest, Elsewhere }
 
 /// <summary>Why an item may not be salvaged; None = it may.</summary>
-public enum SalvageBlock : byte { None, Equipped, Kept, Quest, Gem, NoPerks, Elsewhere, NoYield, Changed, NoRoom }
+public enum SalvageBlock : byte { None, Equipped, Kept, Quest, Gem, NoPerks, Elsewhere, NoYield, Changed, NoRoom, NoAccount }
+
+/// <summary>Whose runes a ledger entry owes: the player's Steam id when the game logged one, else their account id
+/// (top bit set, so it never equals a Steam id), else the hosting game's own player (Host): a host is no network peer,
+/// so the game logs no Steam id for them. 0 = nobody can be named again: such a player's gear is not salvaged.</summary>
+public static class SalvageOwner
+{
+    public const ulong Host = 1;
+
+    public static ulong Of(ulong steamId, ulong accountId, bool isHost)
+    {
+        if (steamId != 0) return steamId;
+        if (accountId != 0) return accountId | (1UL << 63);
+        return isHost ? Host : 0;
+    }
+}
 
 /// <summary>What the check needs to know about one item. GemInSocket null: the socket could not be read.</summary>
 public readonly record struct SalvageFacts(SalvagePlace Place, bool Equipped, bool Kept, bool Quest, bool HasPerks,

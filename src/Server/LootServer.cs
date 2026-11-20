@@ -237,6 +237,7 @@ internal sealed class LootServer(Data data)
         var loop = _loop;
         _salvage = new SalvageServer(Data, _clock, p => loop.SettingsOf(p), () => _config?.Value.Limits, SendSalvage, KeyLine);
         Salvage(s => s.StartWorld());
+        loop.Moved = (p, from, items) => Salvage(s => s.MovedIn(p, from, items));
         foreach (var p in _loop.Players.Keys) SendInfo(p);
         try { StatusLines.Add(Status, StatusId); }
         catch (Exception e) { Log?.Warn($"Kiln Auto Loot: no status line ({e.Message})"); }
