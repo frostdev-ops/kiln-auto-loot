@@ -57,7 +57,8 @@ rules and what a dedicated server can show without a player. Everything below ne
 - [ ] Berry bushes, herbs, fibre and reeds are harvested, each once per visit.
 - [ ] Critters (fishing bait): fireflies at night, frogs in the wetlands, maggots, moths, grasshoppers, scarabs and
       pillbugs are picked up as you walk past (no need to stand still), with "Plants" off too; "Critters" off leaves
-      them. Animals and pets around you are never touched.
+      them. Animals and pets around you are never touched. kiln.log has one "critter:" line per swarm: "loot sent", or
+      why it was left; a "still there ... did not hand the bait over" line means the game refused the take.
 - [ ] "Ripe crops in a base" off: ripe beds in your base stay while you stand in or near it; ripe crops out in the
       world are still harvested. "Ripe crops in the world" off and "in a base" on: the other way round.
 - [ ] Settings from 0.2.2 carry over: with "Ripe crops" off before, both crop switches are off after the update; with

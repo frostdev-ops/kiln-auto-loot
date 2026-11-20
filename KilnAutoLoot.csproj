@@ -9,7 +9,7 @@
   <PropertyGroup>
     <KilnModId>kiln-auto-loot</KilnModId>
     <KilnModName>Kiln Auto Loot</KilnModName>
-    <Version>0.2.3</Version>
+    <Version>0.2.4</Version>
     <Description>Automatic looting around you: items, resources, collectibles, plants, fishing bait critters, crops, enemy corpses and chests, with quest items left in place. Smashes barrels, crates and urns in ruins, bigger stacks, gear salvage into runes, F8 settings.</Description>
     <Authors>Frostdev</Authors>
     <AssemblyName>KilnAutoLoot</AssemblyName>

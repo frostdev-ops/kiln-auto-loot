@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.2.4
+- kiln.log now says what happened to each critter (fishing bait swarm: fireflies, moths, grasshoppers, scarabs,
+  pillbugs, frogs, maggots) you pass: one line each with its name, distance and height, and either "loot sent" or why
+  it was left (Critters off, beyond the main radius, outside the height window, skip list, only list, gather focus, a
+  bag rule, not in plain view). If a swarm is still there 2 seconds after its take was sent, one more line says the
+  game did not hand the bait over. A bait swarm the mod's table does not know is named once too. At most 200 such
+  lines per world. The counter line (counterLog) counts critters as seen/sent/still there.
+- Nothing else changes: this build is for finding out why a player still sees fishing bait left on 0.2.3. Please send
+  kiln/logs/kiln.log after walking past some frogs, maggots or fireflies.
+
 ## 0.2.3
 - **Critters**: fireflies, moths, grasshoppers, scarabs, pillbugs, frogs and maggots (the fishing bait you catch) are
   picked up as you walk past, with their own switch "Critters (fishing bait)", on by default (asked by Tyrion67). The
