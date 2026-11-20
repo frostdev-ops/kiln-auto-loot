@@ -277,6 +277,30 @@ public class CropRulesTests
         Assert.Equal(Group.Farm, Facts.Rule(c, later)?.Group);
         foreach (var t in new[] { s0, s1, cornSeed, laterEarly, unused }) Assert.Null(Facts.Rule(c, t));
     }
+
+    [Fact]
+    public void World_plants_a_planted_crop_grows_into_are_flagged_grown()
+    {
+        // 0.2.6 (netjunk): planted algae grows into the world's own algae templates (no "Plant_Growth" in their names),
+        // so they were plants and ignored "Ripe crops in a base". The plant template's stage list names them.
+        var seed0 = Facts.T("T6_Plant_Growth_Algae_Seedling_0", Facts.Crop);
+        var budsB = Facts.T("Scatter_Loot_Wetland_Algae_01_b_AlgaeBuds", Facts.Bush);
+        var budsD = Facts.T("Scatter_Loot_Wetland_Algae_01_d_AlgaeBuds", Facts.Bush);
+        var wild = Facts.T("Scatter_Loot_Wetland_Algae_01_a_Plantfibre", Facts.Bush);   // the world's, in no stage list
+        var pumpkin = Facts.T("Scatter_Loot_coldheights_Pumpkin_01c", Facts.Pickup);
+        var plant = Facts.T("T6_Plant_Growth_Algae", ["Growth", "Upgrade"],
+            new() { ["Upgrade.stages"] = string.Join(",", seed0.Guid, budsB.Guid, budsD.Guid, pumpkin.Guid) });
+        var altarL1 = Facts.T("Scatter_Loot_Altar_Ember_b", Facts.Bush);
+        var altar = Facts.T("Home_Base_FlameAltar", ["Upgrade"], new() { ["Upgrade.stages"] = altarL1.Guid.ToString() });
+        var c = Facts.Run([seed0, budsB, budsD, wild, pumpkin, plant, altarL1, altar]);
+        Assert.Equal((Group.Plant, TemplateFlags.Grown), (Facts.Rule(c, budsB)?.Group, Facts.Rule(c, budsB)?.Flags));
+        Assert.Equal((Group.Plant, TemplateFlags.Grown), (Facts.Rule(c, budsD)?.Group, Facts.Rule(c, budsD)?.Flags));
+        Assert.Equal(Group.Ground, Facts.Rule(c, pumpkin)?.Group);
+        Assert.True((Facts.Rule(c, pumpkin)!.Flags & TemplateFlags.Grown) != 0);
+        Assert.Equal(TemplateFlags.None, Facts.Rule(c, wild)?.Flags);
+        Assert.Equal(TemplateFlags.None, Facts.Rule(c, altarL1)?.Flags);   // only crops' plant templates count
+        Assert.Null(Facts.Rule(c, seed0));
+    }
 }
 
 public class ItemRulesTests

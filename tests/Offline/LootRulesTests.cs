@@ -48,6 +48,15 @@ public class LootRulesTests
         Assert.Equal(Verdict.GroupOff, LootRules.Decide(crop, true, 1f, s, ItemFilter.SkipOnly(NoIgnore), out _, inBase: true));
         // the base switch is about crops only
         Assert.Equal(Verdict.Allowed, LootRules.Decide(Rule(Group.Plant), true, 1f, s, ItemFilter.SkipOnly(NoIgnore), out _, inBase: true));
+        // a world plant a planted crop grows into (algae, wheat, pumpkins): a crop in a base, a plant elsewhere
+        var grown = new TemplateRule(Guid.NewGuid(), Group.Plant, TemplateFlags.Grown, "Scatter_Loot_Wetland_Algae_01_d_AlgaeBuds", []);
+        Assert.Equal(Verdict.GroupOff, LootRules.Decide(grown, true, 1f, s, ItemFilter.SkipOnly(NoIgnore), out _, inBase: true));
+        Assert.Equal(Verdict.Allowed, LootRules.Decide(grown, true, 1f, s, ItemFilter.SkipOnly(NoIgnore), out _, inBase: false));
+        var pumpkin = new TemplateRule(Guid.NewGuid(), Group.Ground, TemplateFlags.Grown, "Scatter_Loot_coldheights_Pumpkin_01c", []);
+        Assert.Equal(Verdict.GroupOff, LootRules.Decide(pumpkin, false, 1f, s, ItemFilter.SkipOnly(NoIgnore), out _, inBase: true));
+        var plantsOff = new PersonalSettings { Plants = false, CropsInBase = true };
+        Assert.Equal(Verdict.Allowed, LootRules.Decide(grown, true, 1f, plantsOff, ItemFilter.SkipOnly(NoIgnore), out _, inBase: true));
+        Assert.Equal(Verdict.GroupOff, LootRules.Decide(grown, true, 1f, plantsOff, ItemFilter.SkipOnly(NoIgnore), out _, inBase: false));
     }
 
     [Fact]

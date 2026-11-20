@@ -31,6 +31,7 @@ internal static class GameRules
             Items = items,
             Buildable = buildable,
             RipeCrops = CropRules.RipeStages(facts.Templates, Usable),
+            GrownStages = CropRules.GrownStages(facts.Templates),
             Dropped = dropped,
             IsQuestItem = ItemRules.IsQuestItem,
             BossCorpse = TemplateRules.BossCorpses(facts.Templates),

@@ -10,7 +10,9 @@
 //   2. Creatures (Actor + Health) are enemies (pause and, once dead, their corpse) or fish; villagers, summons, pets and
 //      farm animals are nothing.
 //   3. Crops (plant growth stages): only the last stage of a crop that can be harvested (farm). Earlier stages may be
-//      harvestable too, but harvesting them early would waste the crop.
+//      harvestable too, but harvesting them early would waste the crop. The world's plants a crop's stage list names
+//      (planted algae, wheat and pumpkins grow into them) are taken as what they are (rules 4 and 5), flagged grown:
+//      a crop while the player is in or near a base.
 //   4. Pickups (PickupItem): never quest things; collectibles by their item's category; critters (the fishing bait
 //      swarms: fireflies, moths, frogs, maggots ..., an effect with no model) are their own group; the rest is ground
 //      loot, stones flagged, and so is furniture the world places that players can also build (the books of villages
@@ -48,6 +50,8 @@ public static class TemplateRules
         public required ISet<Guid> Buildable { get; init; }
         /// <summary>The last harvestable growth stage of each crop.</summary>
         public required ISet<Guid> RipeCrops { get; init; }
+        /// <summary>World plants a planted crop grows into (<see cref="CropRules.GrownStages"/>): flagged grown.</summary>
+        public ISet<Guid> GrownStages { get; init; } = new HashSet<Guid>();
         /// <summary>Templates other templates drop as pickups (mined resources falling to the ground).</summary>
         public required ISet<Guid> Dropped { get; init; }
         public required Func<ItemFacts, bool> IsQuestItem { get; init; }
@@ -86,8 +90,17 @@ public static class TemplateRules
     /// <summary>Not a development template (rule 1).</summary>
     public static bool IsWorkable(string name) => !AnyWord(name.ToLowerInvariant(), DevelopmentWords);
 
-    /// <summary>The rule for one template, or null when the mod leaves it alone.</summary>
+    /// <summary>The rule for one template, or null when the mod leaves it alone. A plant or ground template a planted crop
+    /// grows into is flagged grown: in a base it counts as a crop (LootRules.Decide).</summary>
     public static TemplateRule? Classify(TemplateFacts t, Context c)
+    {
+        var r = RuleOf(t, c);
+        return r is { Group: Group.Plant or Group.Ground } && c.GrownStages.Contains(t.Guid)
+            ? r with { Flags = r.Flags | TemplateFlags.Grown }
+            : r;
+    }
+
+    private static TemplateRule? RuleOf(TemplateFacts t, Context c)
     {
         var name = t.Name.ToLowerInvariant();
         if (!IsWorkable(name)) return null;

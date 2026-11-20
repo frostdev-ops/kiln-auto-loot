@@ -134,4 +134,21 @@ public sealed class CritterCropTests
         rig.ScanFor(5000);
         Assert.True(Took(rig, bed));
     }
+
+    [Fact]
+    public void Planted_algae_in_a_base_follows_crops_in_base()
+    {
+        // 0.2.6 (netjunk): algae planted in his base was still taken with "Ripe crops in a base" off. Planted algae
+        // grows into the world's own algae templates, which were plants only.
+        var rig = Rig(s => s.CropsInBase = false);
+        NearBase(rig, true);
+        var algae = rig.Game.Add(LoopRig.Algae, 3, Bed);
+        rig.ScanFor(5000);
+        Assert.False(Took(rig, algae));
+        Assert.Empty(rig.Game.Interacts);
+
+        NearBase(rig, false);   // the same algae out in the world: a plant, the Plants switch
+        rig.ScanFor(5000);
+        Assert.True(Took(rig, algae));
+    }
 }

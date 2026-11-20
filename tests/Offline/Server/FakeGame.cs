@@ -153,6 +153,7 @@ internal sealed class LoopRig
     public static readonly Guid Book = new("11111111-0000-0000-0000-00000000000d");    // world book players also build, item 1
     public static readonly Guid Frogs = new("11111111-0000-0000-0000-00000000000e");   // critter (bait swarm), yield item 40
     public static readonly Guid Crop = new("11111111-0000-0000-0000-00000000000f");    // ripe crop in a farm bed, yield plant fibre
+    public static readonly Guid Algae = new("11111111-0000-0000-0000-000000000010");   // a world plant planted algae grows into
     public static readonly Guid Unknown = new("11111111-0000-0000-0000-0000000000ff");
 
     public const string TemplatesText =
@@ -171,7 +172,8 @@ internal sealed class LoopRig
         "11111111-0000-0000-0000-00000000000c\tground\tgeneric\tBase_LootPickup_Generic_Gravity_Test\t\n" +
         "11111111-0000-0000-0000-00000000000d\tground\tdecor\tProp_Furniture_Book_Pile_Test_Lootpickup\t1\n" +
         "11111111-0000-0000-0000-00000000000e\tcritter\tswarm\tLootpickup_Scatter_VFX_Bait_Frogs_Test\t40\n" +
-        "11111111-0000-0000-0000-00000000000f\tfarm\t\tT1_Plant_Growth_Test_2_harvest\t3\n";
+        "11111111-0000-0000-0000-00000000000f\tfarm\t\tT1_Plant_Growth_Test_2_harvest\t3\n" +
+        "11111111-0000-0000-0000-000000000010\tplant\tgrown\tScatter_Loot_Wetland_Algae_01_d_AlgaeBuds_Test\t3\n";
 
     public static readonly string[] OfferInv = [LootLoop.OfferComponent, LootLoop.InventoryComponent];
 

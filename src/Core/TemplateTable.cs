@@ -57,6 +57,7 @@ public sealed class TemplateTable
             if (flagText.Contains("drop", StringComparison.Ordinal)) flags |= TemplateFlags.Drop;
             if (flagText.Contains("generic", StringComparison.Ordinal)) flags |= TemplateFlags.Generic;
             if (flagText.Contains("decor", StringComparison.Ordinal)) flags |= TemplateFlags.Decor;
+            if (flagText.Contains("grown", StringComparison.Ordinal)) flags |= TemplateFlags.Grown;
             var yield = new List<uint>();
             foreach (var part in cols[4].Split(','))
             {

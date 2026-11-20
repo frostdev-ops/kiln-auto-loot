@@ -45,6 +45,24 @@ public static class CropRules
             ? s.Split(',').Select(x => Guid.TryParse(x, out var g) ? g : Guid.Empty).Where(g => g != Guid.Empty).ToList()
             : [];
 
+    /// <summary>Templates a planted crop grows into that are not growth stages by name: the world's own plants a crop's
+    /// stage list names (planted algae grows into "Scatter_Loot_Wetland_Algae_01_b..d", wheat into
+    /// "Plant_Wheat_Grown_Step03_Harvest", pumpkins into "Scatter_Loot_coldheights_Pumpkin_01a..c"). Only the stage lists
+    /// of crop plant templates ("Plant_Growth" names) count: a flame altar's levels are a stage list too.</summary>
+    public static HashSet<Guid> GrownStages(IReadOnlyList<TemplateFacts> templates)
+    {
+        var names = new Dictionary<Guid, string>();
+        foreach (var t in templates) names.TryAdd(t.Guid, t.Name);
+        var grown = new HashSet<Guid>();
+        foreach (var plant in templates)
+        {
+            if (!IsGrowthStage(plant)) continue;
+            foreach (var g in StagesOf(plant))
+                if (names.TryGetValue(g, out var n) && !n.Contains("plant_growth", StringComparison.OrdinalIgnoreCase)) grown.Add(g);
+        }
+        return grown;
+    }
+
     /// <summary>For each crop, its last harvest stage: the last stage of its growth list when that can be harvested, else
     /// (for harvest stages no list names) the highest stage number of the name.</summary>
     public static HashSet<Guid> RipeStages(IReadOnlyList<TemplateFacts> templates, Func<TemplateFacts, bool> usable)

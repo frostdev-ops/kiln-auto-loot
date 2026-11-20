@@ -22,9 +22,11 @@ public enum Group { Unknown, Ground, Collectible, Plant, Farm, Corpse, Chest, Bo
 /// <see cref="Generic"/>: a pickup the game spawns loot as and gives its item only then (what broken barrels, pots and
 /// some resource nodes drop); judged by that item (GenericDrops). <see cref="Decor"/>: a pickup the game places as
 /// furniture (the books of villages and ruins) that players can also build: taken only with oldBooks on, and then not
-/// while the player is in or near a base, where it may be part of the décor.</summary>
+/// while the player is in or near a base, where it may be part of the décor. <see cref="Grown"/>: a plant or ground
+/// template a planted crop grows into (the world's algae, wheat, pumpkins, ...): a crop while the player is in or near a
+/// base (cropsInBase, the crop radius), what it is elsewhere.</summary>
 [Flags]
-public enum TemplateFlags { None = 0, Stone = 1, Swarm = 2, Boss = 4, Elite = 8, Animal = 16, Drop = 32, Generic = 64, Decor = 128 }
+public enum TemplateFlags { None = 0, Stone = 1, Swarm = 2, Boss = 4, Elite = 8, Animal = 16, Drop = 32, Generic = 64, Decor = 128, Grown = 256 }
 
 public sealed record TemplateRule(Guid Guid, Group Group, TemplateFlags Flags, string Name, IReadOnlyList<uint> Yield);
 

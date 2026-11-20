@@ -32,7 +32,9 @@ public static class LootRules
     /// it is taken too) and is refused without a known yield; a corpse or chest with a known yield needs one too, one
     /// without a yield is judged slot by slot. Pickups (<paramref name="released"/> false) are judged by their own
     /// item, not here. <paramref name="inBase"/>: the player is in or near a base (GamePlayer.NearBase): ripe crops
-    /// follow cropsInBase there (fields in a base may be decoration), crops elsewhere.</summary>
+    /// follow cropsInBase there (fields in a base may be decoration), crops elsewhere. A plant or ground template flagged
+    /// grown (a world plant a planted crop grows into: algae, wheat, pumpkins) counts as a crop in a base (cropsInBase,
+    /// the crop radius) and as what it is elsewhere.</summary>
     public static Verdict Decide(TemplateRule? rule, bool released, float distanceSquared, PersonalSettings s, ItemFilter filter,
         out uint noticeItem, bool inBase = false)
     {
@@ -40,6 +42,7 @@ public static class LootRules
         noticeItem = 0;
         if (rule is null) return Verdict.UnknownTemplate;   // unknown = never
         var group = EffectiveGroup(rule, released);
+        if (inBase && (rule.Flags & TemplateFlags.Grown) != 0 && group is Group.Plant or Group.Ground) group = Group.Farm;
         bool bossCorpse = group == Group.Corpse && (rule.Flags & (TemplateFlags.Boss | TemplateFlags.Elite)) != 0;
         bool off = group switch
         {

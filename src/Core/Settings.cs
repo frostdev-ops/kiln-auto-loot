@@ -26,7 +26,7 @@ public sealed class PersonalSettings
     [Comment("What grows on living plants: berries, herbs, fibre, reeds.")] public bool Plants { get; set; } = true;
     [Comment("Critters you catch as fishing bait: fireflies, moths, grasshoppers, scarabs, pillbugs, frogs, maggots. Never animals or pets.")] public bool Critters { get; set; } = true;
     [Comment("Ripe crops from farm beds out in the world, away from any base. Seedlings are left alone.")] public bool Crops { get; set; } = true;
-    [Comment("Ripe crops while you are in or near a base (fields there may be decoration). Seedlings are left alone.")] public bool CropsInBase { get; set; } = true;
+    [Comment("Ripe crops while you are in or near a base (fields there may be decoration), and there also the plants you can grow yourself (algae, wheat, pumpkins, bushes). Seedlings are left alone.")] public bool CropsInBase { get; set; } = true;
     [Comment("Fish swimming within the radius.")] public bool Fish { get; set; }
     [Comment("Items the mod leaves where they are, comma separated. =Name = that one item, #Group = a whole group, a plain word = every item whose name contains it.")]
     public string SkipList { get; set; } = "";

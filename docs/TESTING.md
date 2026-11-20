@@ -61,6 +61,8 @@ rules and what a dedicated server can show without a player. Everything below ne
       why it was left; a "still there ... did not hand the bait over" line means the game refused the take.
 - [ ] "Ripe crops in a base" off: ripe beds in your base stay while you stand in or near it; ripe crops out in the
       world are still harvested. "Ripe crops in the world" off and "in a base" on: the other way round.
+- [ ] 0.2.6: "Ripe crops in a base" off also leaves planted algae, wheat and pumpkins in your base (they grow into the
+      world's own plants); the same plants out in the world still follow "Plants and bushes" (pumpkins: ground loot).
 - [ ] Settings from 0.2.2 carry over: with "Ripe crops" off before, both crop switches are off after the update; with
       "Plants" off before, "Critters" is off too (kiln.log: "carried over from the setting it replaces").
 - [ ] Farm beds: only ripe crops; a bed in an early stage (Nettle, Rooibos, sugar cane, plant fibre at stage 1) is left
