@@ -41,8 +41,8 @@ public sealed class PersonalSettings
     public GearRarity MinGearRarity { get; set; } = GearRarity.Common;
 
     // Where: a height window around you, so a cave's loot stays in the cave
-    [Comment("Only take what is at most this many meters above you. 0 = no limit."), Range(0, 50)] public float HeightAbove { get; set; } = 4f;
-    [Comment("Only take what is at most this many meters below you. 0 = no limit."), Range(0, 50)] public float HeightBelow { get; set; } = 4f;
+    [Comment("Only take what is at most this many meters above you (critters: the main radius instead). 0 = no limit."), Range(0, 50)] public float HeightAbove { get; set; } = 4f;
+    [Comment("Only take what is at most this many meters below you (critters: the main radius instead). 0 = no limit."), Range(0, 50)] public float HeightBelow { get; set; } = 4f;
 
     // The bag
     [Comment("Only top up stacks you already carry, up to full; never start a new stack.")] public bool FillCarriedStacks { get; set; }

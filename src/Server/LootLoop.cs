@@ -473,12 +473,11 @@ internal sealed class LootLoop
                 _keyLine(still);
             }
         }
-        if (!HeightWindow.Allows(dy, p.Settings))
+        // critters ignore the height window: the main radius holds them in 3D (LootRules.Decide, d2 is 3D)
+        if ((classified is not { Rule: { } hr } || HeightWindow.AppliesTo(hr.Group)) && !HeightWindow.Allows(dy, p.Settings))
         {
             ProbeTrace.Note(e, $"height: outside the height window (dy {dy:0.0} m)");
             Counters.HeightOut++;   // above or below the player's height window: as if out of range
-            if (classified is { Rule: { Group: Group.Critter } hr, Key: var hk })
-                CritterLeft(p, hk, hr, d2, dy, $"outside the height window ({p.Settings.HeightAbove:0} m above, {p.Settings.HeightBelow:0} m below you)");
             return;
         }
         if (classified is not { Rule: { } rule, Key: var key })

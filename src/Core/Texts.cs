@@ -161,11 +161,11 @@ public static class Texts
 
         // Where and the bag
         new("heightAbove", "where", "Height above me", "Höhe über mir",
-            "Only takes things at most this many meters above your feet, so loot on the floor above you stays there. 0 = no limit.",
-            "Nimmt nur, was höchstens so viele Meter über deinen Füßen liegt; Beute im Stockwerk über dir bleibt also dort. 0 = keine Grenze."),
+            "Only takes things at most this many meters above your feet, so loot on the floor above you stays there. Fishing bait (critters) is taken within your main radius instead. 0 = no limit.",
+            "Nimmt nur, was höchstens so viele Meter über deinen Füßen liegt; Beute im Stockwerk über dir bleibt also dort. Angelköder (Krabbeltiere) nimmt es stattdessen im Hauptradius. 0 = keine Grenze."),
         new("heightBelow", "where", "Depth below me", "Tiefe unter mir",
-            "Only takes things at most this many meters below your feet, so a cave under you keeps its loot until you go down. 0 = no limit.",
-            "Nimmt nur, was höchstens so viele Meter unter deinen Füßen liegt; eine Höhle unter dir behält ihre Beute also, bis du hinuntergehst. 0 = keine Grenze."),
+            "Only takes things at most this many meters below your feet, so a cave under you keeps its loot until you go down. Fishing bait (critters) is taken within your main radius instead. 0 = no limit.",
+            "Nimmt nur, was höchstens so viele Meter unter deinen Füßen liegt; eine Höhle unter dir behält ihre Beute also, bis du hinuntergehst. Angelköder (Krabbeltiere) nimmt es stattdessen im Hauptradius. 0 = keine Grenze."),
         new("fillCarriedStacks", "where", "Only fill stacks I carry", "Nur getragene Stapel auffüllen",
             "Only takes items you already have in your bag, and only until that stack is full. Nothing new starts a stack. Handy with a few sticks in the bag: you gather sticks until the stack is full, and nothing else.",
             "Nimmt nur Gegenstände, die du schon im Rucksack hast, und nur, bis der Stapel voll ist. Nichts Neues fängt einen Stapel an. Praktisch mit ein paar Stöcken im Rucksack: du sammelst Stöcke, bis der Stapel voll ist, und sonst nichts."),

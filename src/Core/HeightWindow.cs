@@ -15,4 +15,9 @@ public static class HeightWindow
     }
 
     public static bool Allows(double dy, PersonalSettings s) => Allows(dy, s.HeightAbove, s.HeightBelow);
+
+    /// <summary>Whether the height window holds a group. Critters (fishing bait swarms) hover or sit above the ground, so
+    /// the window would leave a swarm right above the player: they count within the main radius in 3D instead (a sphere:
+    /// the loop's distance is 3D), 0.2.5.</summary>
+    public static bool AppliesTo(Group group) => group != Group.Critter;
 }

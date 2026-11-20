@@ -38,7 +38,8 @@ notes run in each player's game.
   F11 again.
 - **Rarity**: weapons, armor, rings and shields below a rarity you choose stay where they are.
 - **Height window**: only what is within a few meters above or below you (4 m each by default), so a cave's loot stays
-  in the cave and the cave doesn't empty the hill above it.
+  in the cave and the cave doesn't empty the hill above it. Critters (fishing bait) are the exception: they hover above
+  the ground, so they are taken anywhere within your main radius, above or below you.
 - **Salvage** (new in 0.2.0): turn gear into runes, as many as the game's own Trash gives. In F8's Salvage tab, mark
   what can go (marked rows are red) and salvage it in one go, with a confirm that lists the items and the runes. Keep
   protects an item for good. Rules for new gear (off until you add one): weapons, shields, armor, rings or all gear up to
