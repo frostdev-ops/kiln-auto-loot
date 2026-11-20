@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.2.5
+- Fishing bait above or below you is picked up within your main radius; the height limits apply to everything else.
+
 ## 0.2.4
 - kiln.log now says what happened to each critter (fishing bait swarm: fireflies, moths, grasshoppers, scarabs,
   pillbugs, frogs, maggots) you pass: one line each with its name, distance and height, and either "loot sent" or why
