@@ -7,6 +7,7 @@
   bag rule, not in plain view). If a swarm is still there 2 seconds after its take was sent, one more line says the
   game did not hand the bait over. A bait swarm the mod's table does not know is named once too. At most 200 such
   lines per world. The counter line (counterLog) counts critters as seen/sent/still there.
+- kiln.log's "world up" line names the right version again (0.2.3 still said 0.2.2).
 - Nothing else changes: this build is for finding out why a player still sees fishing bait left on 0.2.3. Please send
   kiln/logs/kiln.log after walking past some frogs, maggots or fireflies.
 
