@@ -93,7 +93,9 @@ internal sealed class SettingsLink(Server.LootServer server)
     /// <summary>Tick thread (OnLoad).</summary>
     public void Start(string dataDirectory, Func<string> mineName)
     {
+        var carry = Server.ConfigCarryOver.Before(AutoLootMod.Id + "-client", null);
         _kilnCfg = Config.Register<PersonalSettings>(ConfigKind.Client);
+        Server.ConfigCarryOver.After(_kilnCfg, carry, line => AutoLootMod.ModContext?.Log.Info(line));
         _kilnCfg.Changed += OnFileChanged;
         Attach(new KilnPersonalConfig(_kilnCfg), dataDirectory, mineName());
     }

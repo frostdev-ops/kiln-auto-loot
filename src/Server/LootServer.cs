@@ -189,7 +189,13 @@ internal sealed class LootServer(Data data)
 
     private ModConfig<ServerSettings> RegisterConfig()
     {
-        _config ??= Config.Register<ServerSettings>(ConfigKind.Server);
+        if (_config is null)
+        {
+            // the defaults for players without the mod: keys added since the file was written start from the old ones
+            var carry = ConfigCarryOver.Before(AutoLootMod.Id + "-server", "defaults");
+            _config = Config.Register<ServerSettings>(ConfigKind.Server);
+            ConfigCarryOver.After(_config, carry, line => AutoLootMod.ModContext?.Log.Info(line));
+        }
         if (!_subscribedConfig)
         {
             _config.Changed += OnConfigChanged;   // ignored while no world runs
@@ -460,7 +466,8 @@ internal sealed class LootServer(Data data)
         if (_config?.Value.CounterLog != true || _loop is null) return;
         var s = _loop.SettingsOf(player);
         _diag?.Write($"settings: player {player} ({how}): looting {B(s.Looting)}, groundLoot {B(s.GroundLoot)}, stones {B(s.Stones)}, oldBooks {B(s.OldBooks)}, " +
-                     $"collectibles {B(s.Collectibles)}, plants {B(s.Plants)}, crops {B(s.Crops)}, fish {B(s.Fish)}, " +
+                     $"collectibles {B(s.Collectibles)}, plants {B(s.Plants)}, critters {B(s.Critters)}, crops {B(s.Crops)}, " +
+                     $"cropsInBase {B(s.CropsInBase)}, fish {B(s.Fish)}, " +
                      $"corpses {B(s.Corpses)}, bosses {B(s.Bosses)}, chests {B(s.Chests)}, " +
                      $"smash {B(s.Smash)}, buildables {B(s.SmashBuildables)}, fellTrees {B(s.FellTrees)}, hives {B(s.SmashHives)}, radius {s.Radius:0} " +
                      $"(ground {s.GroundRadius:0}, collectibles {s.CollectiblesRadius:0}, plants {s.PlantsRadius:0}, " +

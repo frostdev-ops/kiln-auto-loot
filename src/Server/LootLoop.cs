@@ -257,13 +257,20 @@ internal sealed class LootLoop
     }
 
     /// <summary>The item of a ground pickup the player is about to take by hand (read before the game acts); null when
-    /// the target is no pickup or goes down the container path (a swarm).</summary>
+    /// the target is no pickup or goes down the container path. A critter's is the bait it gives.</summary>
     public uint? HandPickupItem(EntityId host)
     {
-        if (!_game.TryPickupItem(host, out var item)) return null;
-        if (Classify(host) is { Rule: { } rule } && !Release.IsPickupPath(rule)) return null;
+        var has = _game.TryPickupItem(host, out var item);
+        var rule = Classify(host)?.Rule;
+        if (rule is { Group: Group.Critter })
+            return item != 0 ? item : CritterItem(rule) is var bait and not 0 ? bait : null;   // the bait it gives
+        if (!has) return null;
+        if (rule is not null && !Release.IsPickupPath(rule)) return null;
         return item;
     }
+
+    /// <summary>The bait a critter gives (the first item of its default inventory), 0 = none known.</summary>
+    private static uint CritterItem(TemplateRule rule) => rule.Yield.Count > 0 ? rule.Yield[0] : 0;
 
     /// <summary>Sets the hand item directly (tests).</summary>
     internal void TookByHand(EntityId player, uint item)
@@ -473,6 +480,16 @@ internal sealed class LootLoop
             return;
         }
         var hasPickup = _game.TryPickupItem(e, out var item);
+        if (rule.Group == Group.Critter)
+        {
+            // a critter's pickup names no item (the bait is its default inventory): judged by the bait it gives
+            if (item == 0) item = CritterItem(rule);
+            if (item == 0)
+            {
+                ProbeTrace.Note(e, "critter: left, no known bait");
+                return;
+            }
+        }
         if ((rule.Flags & TemplateFlags.Generic) != 0)
         {
             // a generic drop (broken barrels, pots, resource nodes): judged by the item the game gave it at the spawn;
@@ -507,7 +524,7 @@ internal sealed class LootLoop
             Counters.ContainersHeldBack++;   // gate step 4
             return;
         }
-        var verdict = LootRules.Decide(rule, released: true, d2, s, p.Filter, out var noticeItem);
+        var verdict = LootRules.Decide(rule, released: true, d2, s, p.Filter, out var noticeItem, gp.NearBase);
         if (verdict != Verdict.Allowed)
         {
             ProbeTrace.Note(e, $"container: refused ({verdict})");
@@ -784,7 +801,7 @@ internal sealed class LootLoop
     private void PickupTarget(PlayerLoot p, GamePlayer gp, EntityId e, ulong key, TemplateRule rule, float d2, uint item)
     {
         var s = p.Settings;
-        var verdict = LootRules.Decide(rule, released: false, d2, s, p.Filter, out var noticeItem);
+        var verdict = LootRules.Decide(rule, released: false, d2, s, p.Filter, out var noticeItem, gp.NearBase);
         var wanted = verdict == Verdict.Allowed;
         if (!wanted)
         {

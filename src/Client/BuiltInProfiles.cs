@@ -55,8 +55,8 @@ internal static class BuiltInProfiles
                 break;
             case Plants:
                 AllGroupsOff(s);
-                s.Plants = true;
-                s.Crops = true;
+                s.Plants = s.Critters = true;
+                s.Crops = s.CropsInBase = true;
                 break;
             case Plunder:
                 AllGroupsOff(s);
@@ -78,7 +78,7 @@ internal static class BuiltInProfiles
     /// <summary>Every pickup and container group off, smashing too (the profile turns on what it is about).</summary>
     private static void AllGroupsOff(PersonalSettings s)
     {
-        s.GroundLoot = s.Stones = s.OldBooks = s.Collectibles = s.Plants = s.Crops = s.Fish = false;
+        s.GroundLoot = s.Stones = s.OldBooks = s.Collectibles = s.Plants = s.Critters = s.Crops = s.CropsInBase = s.Fish = false;
         s.Corpses = s.Bosses = s.Chests = false;
         s.Smash = s.SmashBuildables = s.FellTrees = s.SmashHives = false;
     }

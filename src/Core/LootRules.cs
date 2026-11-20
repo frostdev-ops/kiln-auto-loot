@@ -31,9 +31,10 @@ public static class LootRules
     /// (plant, crop, heap) needs at least one yield item the filter takes (the whole yield comes along, so the rest of
     /// it is taken too) and is refused without a known yield; a corpse or chest with a known yield needs one too, one
     /// without a yield is judged slot by slot. Pickups (<paramref name="released"/> false) are judged by their own
-    /// item, not here.</summary>
+    /// item, not here. <paramref name="inBase"/>: the player is in or near a base (GamePlayer.NearBase): ripe crops
+    /// follow cropsInBase there (fields in a base may be decoration), crops elsewhere.</summary>
     public static Verdict Decide(TemplateRule? rule, bool released, float distanceSquared, PersonalSettings s, ItemFilter filter,
-        out uint noticeItem)
+        out uint noticeItem, bool inBase = false)
     {
         var ignore = filter.Skip;
         noticeItem = 0;
@@ -46,7 +47,8 @@ public static class LootRules
                             ((rule.Flags & TemplateFlags.Decor) != 0 && !s.OldBooks),
             Group.Collectible => !s.Collectibles,
             Group.Plant => !s.Plants,
-            Group.Farm => !s.Crops,
+            Group.Farm => inBase ? !s.CropsInBase : !s.Crops,
+            Group.Critter => !s.Critters,
             Group.Corpse => !s.Corpses || (bossCorpse && !s.Bosses),
             Group.Chest => !s.Chests,
             Group.Boss or Group.Enemy => true,
@@ -83,7 +85,7 @@ public static class LootRules
     }
 
     /// <summary>The radius a group is checked against: its own if above 0, else radius.
-    /// Pass the effective group (a released enemy = <see cref="Group.Corpse"/>); fish and unknown use radius.</summary>
+    /// Pass the effective group (a released enemy = <see cref="Group.Corpse"/>); critters, fish and unknown use radius.</summary>
     public static float GroupRadius(Group group, PersonalSettings s)
     {
         float r = group switch

@@ -11,10 +11,10 @@
 //      farm animals are nothing.
 //   3. Crops (plant growth stages): only the last stage of a crop that can be harvested (farm). Earlier stages may be
 //      harvestable too, but harvesting them early would waste the crop.
-//   4. Pickups (PickupItem): never quest things; collectibles by their item's category; swarms (fireflies and the like,
-//      which the game shows as an effect, not a model) are taken like bushes; the rest is ground loot, stones flagged,
-//      and so is furniture the world places that players can also build (the books of villages and ruins: decor, the
-//      oldBooks switch). The generic drops (what other templates spawn their loot as, with no item of their own: the game
+//   4. Pickups (PickupItem): never quest things; collectibles by their item's category; critters (the fishing bait
+//      swarms: fireflies, moths, frogs, maggots ..., an effect with no model) are their own group; the rest is ground
+//      loot, stones flagged, and so is furniture the world places that players can also build (the books of villages
+//      and ruins: decor, the oldBooks switch). The generic drops (what other templates spawn their loot as, with no item of their own: the game
 //      sets it at the spawn) are ground loot flagged generic, judged by their live item (GenericDrops), also the ones
 //      that carry no PickupItem in their template.
 //   5. Things the player empties or harvests (an offer and a default inventory): boss loot is never taken; enemy remains
@@ -130,7 +130,7 @@ public static class TemplateRules
         if ((item is not null && c.IsQuestItem(item) && !IsCollectionPiece(item)) || AnyWord(name, StoryWords)) return null;
         if (item is not null && IsCollectibleItem(item.Category, item.Name))
             return Rule(t, Group.Collectible, TemplateFlags.None);   // finds kept for their own sake (paintings are building pieces)
-        if (IsSwarm(t, item)) return Rule(t, Group.Plant, TemplateFlags.Swarm);
+        if (IsSwarm(t, item)) return Rule(t, Group.Critter, TemplateFlags.Swarm);
         if (t.Has("Health") && !IsStone(item)) return null;                                    // something to fight or break first
         if (item is null && c.Dropped.Contains(t.Guid)) return Rule(t, Group.Ground, TemplateFlags.Generic);   // its item comes at the spawn
         var flags = IsStone(item) ? TemplateFlags.Stone : TemplateFlags.None;
@@ -149,8 +149,10 @@ public static class TemplateRules
 
     private static bool IsCollectionPiece(ItemFacts item) => item.Name.StartsWith("Collection_", StringComparison.OrdinalIgnoreCase);
 
-    /// <summary>A swarm (fireflies, moths, frogs, maggots): living fishing bait, shown as an effect with no model, with a
-    /// stock to take.</summary>
+    /// <summary>A swarm (fireflies, moths, grasshoppers, scarabs, pillbugs, frogs, maggots): living fishing bait, shown as
+    /// an effect with no model, with a stock to take. Built like a mushroom (a pickup with a default inventory and the
+    /// game's pickup interaction), but its pickup names no item: the bait is its default inventory. Never a creature (no
+    /// Actor, Wildlife or FoodBait: rule 2 and the pickup checks before this one).</summary>
     private static bool IsSwarm(TemplateFacts t, ItemFacts? item) =>
         t.Has("DefaultInventory") && !t.Has("ModelResource") && !t.Has("ModelComponent") &&
         item?.Value("ammunitionType") == "FishingBait";

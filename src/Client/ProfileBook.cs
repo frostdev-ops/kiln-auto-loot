@@ -275,6 +275,8 @@ internal sealed class ProfileBook
         PersonalSettings settings;
         try
         {
+            // a profile saved before a key was added keeps its choice (SettingsMigration)
+            if (o["settings"] is JsonObject so) SettingsMigration.Apply(so);
             settings = o["settings"]?.Deserialize<PersonalSettings>(JsonOptions) ?? new PersonalSettings();
         }
         catch (Exception e) when (e is JsonException or NotSupportedException or InvalidOperationException or ArgumentException)

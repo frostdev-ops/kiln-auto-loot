@@ -87,6 +87,7 @@ public sealed class TemplateTable
         "boss" => Group.Boss,
         "enemy" => Group.Enemy,
         "fish" => Group.Fish,
+        "critter" => Group.Critter,
         _ => Group.Unknown,
     };
 
@@ -102,6 +103,7 @@ public sealed class TemplateTable
         Group.Boss => "boss",
         Group.Enemy => "enemy",
         Group.Fish => "fish",
+        Group.Critter => "critter",
         _ => "unknown",
     };
 }

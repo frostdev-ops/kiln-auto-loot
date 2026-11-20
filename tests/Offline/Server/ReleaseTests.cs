@@ -30,9 +30,11 @@ public sealed class ReleaseTests
     }
 
     [Fact]
-    public void Swarms_take_the_container_path_although_they_have_a_pickup()
+    public void Critters_take_the_pickup_path_like_mushrooms_even_when_their_pickup_names_no_item()
     {
-        Assert.True(Release.IsContainerTarget(Fixtures.Rule(Group.Plant, TemplateFlags.Swarm), hasPickupItem: true));
+        Assert.False(Release.IsContainerTarget(Fixtures.Rule(Group.Critter, TemplateFlags.Swarm), hasPickupItem: true));
+        Assert.False(Release.IsContainerTarget(Fixtures.Rule(Group.Critter, TemplateFlags.Swarm), hasPickupItem: false));
+        Assert.True(Release.PickupReleased(Fixtures.Rule(Group.Critter, TemplateFlags.Swarm)));
         Assert.False(Release.IsContainerTarget(Fixtures.Rule(Group.Plant), hasPickupItem: true));
         Assert.True(Release.IsContainerTarget(Fixtures.Rule(Group.Chest), hasPickupItem: false));
     }

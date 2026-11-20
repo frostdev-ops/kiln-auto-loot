@@ -50,7 +50,7 @@ internal static class SettingCatalog
     [
         new("looting", [
             new(null, [B("looting"), M("radius", 1, 50), B("takeInPlace")]),
-            new("pickUp", [B("groundLoot"), B("stones"), B("oldBooks"), B("collectibles"), B("plants"), B("crops"), B("fish")]),
+            new("pickUp", [B("groundLoot"), B("stones"), B("oldBooks"), B("collectibles"), B("plants"), B("critters"), B("crops"), B("cropsInBase"), B("fish")]),
         ]),
         new("containers", [
             new(null, [

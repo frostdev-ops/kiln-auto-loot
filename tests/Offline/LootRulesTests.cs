@@ -18,6 +18,7 @@ public class LootRulesTests
         { Group.Collectible, nameof(PersonalSettings.Collectibles) },
         { Group.Plant, nameof(PersonalSettings.Plants) },
         { Group.Farm, nameof(PersonalSettings.Crops) },
+        { Group.Critter, nameof(PersonalSettings.Critters) },
         { Group.Corpse, nameof(PersonalSettings.Corpses) },
         { Group.Chest, nameof(PersonalSettings.Chests) },
         { Group.Fish, nameof(PersonalSettings.Fish) },
@@ -33,6 +34,27 @@ public class LootRulesTests
         Assert.Equal(Verdict.Allowed, D(Rule(g), s));
         p.SetValue(s, false);
         Assert.Equal(Verdict.GroupOff, D(Rule(g), s));
+    }
+
+    [Fact]
+    public void Ripe_crops_in_a_base_follow_crops_in_base_and_out_in_the_world_crops()
+    {
+        var s = new PersonalSettings { Crops = false, CropsInBase = true };
+        var crop = Rule(Group.Farm);
+        Assert.Equal(Verdict.GroupOff, LootRules.Decide(crop, true, 1f, s, NoIgnore, out _));
+        Assert.Equal(Verdict.Allowed, LootRules.Decide(crop, true, 1f, s, ItemFilter.SkipOnly(NoIgnore), out _, inBase: true));
+        s = new PersonalSettings { Crops = true, CropsInBase = false };
+        Assert.Equal(Verdict.Allowed, LootRules.Decide(crop, true, 1f, s, NoIgnore, out _));
+        Assert.Equal(Verdict.GroupOff, LootRules.Decide(crop, true, 1f, s, ItemFilter.SkipOnly(NoIgnore), out _, inBase: true));
+        // the base switch is about crops only
+        Assert.Equal(Verdict.Allowed, LootRules.Decide(Rule(Group.Plant), true, 1f, s, ItemFilter.SkipOnly(NoIgnore), out _, inBase: true));
+    }
+
+    [Fact]
+    public void Critters_reach_as_far_as_the_main_radius()
+    {
+        var s = new PersonalSettings { Radius = 9, PlantsRadius = 2 };
+        Assert.Equal(9f, LootRules.GroupRadius(Group.Critter, s));
     }
 
     [Fact]

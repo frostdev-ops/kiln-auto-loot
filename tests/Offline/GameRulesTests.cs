@@ -187,16 +187,33 @@ public class TemplateRulesTests
     }
 
     [Fact]
-    public void Swarms_are_plants_flagged_swarm()
+    public void Swarms_are_critters_flagged_swarm()
     {
         var bait = Facts.I(20, "Material_T1_Fire_Fly_FishingBait", "Ammunition") with { Values = new Dictionary<string, string> { ["ammunitionType"] = "FishingBait" } };
         var comps = new[] { "PickupItem", "DestroyOnLoot", "DefaultInventory", "InteractionOfferRuntime", "VfxComponent" };
         var r = One(Facts.T("Lootpickup_Scatter_VFX_Bait_T1_Fire_Fly", comps, yield: [20]), bait);
-        Assert.Equal((Group.Plant, TemplateFlags.Swarm), (r!.Group, r.Flags));
+        Assert.Equal((Group.Critter, TemplateFlags.Swarm), (r!.Group, r.Flags));
         // an effect-only pickup of something else (flame essence) is plain ground loot
         var essence = Facts.I(21, "Material_FlameEssence", "Materials");
         var e = One(Facts.T("LootPickup_FlameEssence_T1", comps, yield: [21]), essence);
         Assert.Equal((Group.Ground, TemplateFlags.None), (e!.Group, e.Flags));
+    }
+
+    [Fact]
+    public void Critters_are_never_creatures_pets_farm_animals_thrown_bait_or_quest_things()
+    {
+        var bait = Facts.I(20, "Material_T6_Frogs_FishingBait", "Ammunition") with { Values = new Dictionary<string, string> { ["ammunitionType"] = "FishingBait" } };
+        var swarm = new[] { "PickupItem", "DestroyOnLoot", "DefaultInventory", "InteractionOfferRuntime", "VfxComponent" };
+        // a live creature with the same yield, a pet, a farm animal: never a critter (nor anything taken)
+        Assert.Null(One(Facts.T("Animal_Wildlife_Frog", [.. swarm, "Actor", "Health", "Wildlife"], yield: [20]), bait));
+        Assert.Null(One(Facts.T("Lootpickup_Scatter_VFX_Bait_Frog_Pet", [.. swarm, "Wildlife"], yield: [20]), bait));
+        Assert.Null(One(Facts.T("Animal_Wildlife_Dog_01_tame", ["Actor", "Health", "Faction", "Wildlife", "HealthBar", "InteractionOfferRuntime"]), bait));
+        Assert.Null(One(Facts.T("Animal_Baby_T2_Bunny", ["Actor", "InteractionOfferRuntime", "Faction"]), bait));
+        // bait thrown for animals, and bait a quest needs
+        Assert.Null(One(Facts.T("FoodBait_T6_Fish_common", ["PickupItem", "DestroyOnLoot", "FoodBait"], yield: [20]), bait));
+        Assert.Null(One(Facts.T("Lootpickup_Scatter_VFX_Bait_Frogs_Quest", swarm, yield: [20]), bait));
+        // a swarm with a model is something else (ground loot), not a critter
+        Assert.NotEqual(Group.Critter, One(Facts.T("Lootpickup_Bait_Jar", [.. swarm, "ModelResource"], yield: [20]), bait)?.Group);
     }
 
     [Fact]

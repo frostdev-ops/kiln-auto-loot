@@ -23,8 +23,10 @@ public sealed class PersonalSettings
     [Comment("Stones and stone piles. Also decides whether boulders and stone carts get smashed. Needs groundLoot (off: no stones, no boulders).")] public bool Stones { get; set; } = true;
     [Comment("Old books lying in villages and ruins (they give Old Books). Off by default; never in or near a base. Needs groundLoot.")] public bool OldBooks { get; set; } = false;
     [Comment("Fossils, urns, gnomes and the other finds you collect for their own sake.")] public bool Collectibles { get; set; } = true;
-    [Comment("What grows on living plants: berries, herbs, fibre, reeds, fireflies.")] public bool Plants { get; set; } = true;
-    [Comment("Ripe crops from farm beds, also in your base. Seedlings are left alone.")] public bool Crops { get; set; } = true;
+    [Comment("What grows on living plants: berries, herbs, fibre, reeds.")] public bool Plants { get; set; } = true;
+    [Comment("Critters you catch as fishing bait: fireflies, moths, grasshoppers, scarabs, pillbugs, frogs, maggots. Never animals or pets.")] public bool Critters { get; set; } = true;
+    [Comment("Ripe crops from farm beds out in the world, away from any base. Seedlings are left alone.")] public bool Crops { get; set; } = true;
+    [Comment("Ripe crops while you are in or near a base (fields there may be decoration). Seedlings are left alone.")] public bool CropsInBase { get; set; } = true;
     [Comment("Fish swimming within the radius.")] public bool Fish { get; set; }
     [Comment("Items the mod leaves where they are, comma separated. =Name = that one item, #Group = a whole group, a plain word = every item whose name contains it.")]
     public string SkipList { get; set; } = "";

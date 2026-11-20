@@ -3,8 +3,9 @@
 // the player's own game data) and the entity's live state, with no data patch (Kiln dev.28 holds boot data patches on a
 // hosting game, mods.boot.resource_patches):
 //
-//   The template table lists the templates the mod may take: loot-all targets (corpse, chest, plant incl. swarms, farm,
-//   and the fog-nest resources and creature drops, whose loot-all goes out unread) and pickups (ground, collectible, plant pickups, fish). Loot-all
+//   The template table lists the templates the mod may take: loot-all targets (corpse, chest, plant, farm, and the
+//   fog-nest resources and creature drops, whose loot-all goes out unread) and pickups (ground, collectible, critter,
+//   plant pickups, fish). Loot-all
 //   templates whose name holds "boss" are in group "boss", which LootRules always refuses (boss keys and quest
 //   progress stay a hand job). Creatures that fight are group "enemy".
 //
@@ -18,17 +19,21 @@
 //   A pickup is released when its template is in the table with any group but enemy and boss. It only matters for
 //   the accept on pickups with an inventory (mushrooms, stone piles).
 //
-//   Swarms (flag swarm: fireflies, moths ...) carry PickupItem in the game's data but are taken like bushes (accept,
-//   then loot-all), so the mod sends them down the container path (IsContainerTarget).
+//   Critters (group critter, flag swarm: fireflies, moths, frogs, maggots ...) are built like mushrooms: a pickup with a
+//   default inventory and the game's pickup interaction, whose pickup names no item. They take the pickup path like
+//   mushrooms (the loot at once, no accept, no openDelay), judged by the bait they give (IsContainerTarget). Before 0.2.3
+//   they went the container path like bushes, whose visit sends an accept and waits up to 3 s per accept for the offer
+//   to move on before the loot-all: a player walking past was gone before it came.
 using KilnAutoLoot.Core;
 
 namespace KilnAutoLoot.Server;
 
 internal static class Release
 {
-    /// <summary>The container path takes this target (no pickup, or a swarm).</summary>
+    /// <summary>The container path takes this target: no pickup, and not a critter (critters are pickups, also when the
+    /// live entity's pickup names no item).</summary>
     public static bool IsContainerTarget(TemplateRule rule, bool hasPickupItem) =>
-        !hasPickupItem || (rule.Flags & TemplateFlags.Swarm) != 0;
+        !hasPickupItem && rule.Group != Group.Critter;
 
     /// <summary>A target with a pickup that is taken as a pickup (not a swarm).</summary>
     public static bool IsPickupPath(TemplateRule rule) => !IsContainerTarget(rule, hasPickupItem: true);
