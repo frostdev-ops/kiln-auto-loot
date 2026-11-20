@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.6
+- **"Ripe crops in a base" now covers everything you plant there** (reported by netjunk): planted algae was still
+  harvested in a base with the switch off. Algae, wheat, pumpkins, papyrus, daylilies, cattails, reeds, taro, ginger,
+  shiitake, beans, thyme, pomegranates and the bushes you can plant grow into the same plants the world has, so the
+  mod saw them as wild plants ("Plants and bushes", pumpkins as ground loot) and never asked the base switch. In or
+  near a base they now count as crops: "Ripe crops in a base" and the crop radius decide. Out in the world nothing
+  changes for them.
+
 ## 0.2.5
 - Fishing bait above or below you is picked up within your main radius; the height limits apply to everything else.
 
