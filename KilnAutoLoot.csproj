@@ -1,4 +1,4 @@
-<Project Sdk="Kiln.Sdk/0.2.0-dev.28">
+<Project Sdk="Kiln.Sdk/0.2.0-dev.29.18">
   <!-- Kiln Auto Loot: automatic looting around each player, done on the server.
          dotnet build -m:2 -nodeReuse:false                                          (build)
          dotnet build -t:KilnDeploy -p:KilnServer=<server folder>                     (copy into a server)
