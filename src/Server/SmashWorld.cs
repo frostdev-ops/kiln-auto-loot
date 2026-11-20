@@ -15,6 +15,8 @@ internal interface ISmashWorld
     IReadOnlyList<EntityId> Candidates();
     IReadOnlyList<EntityId> Within(IReadOnlyList<EntityId> candidates, WorldPosition at, double radius);
     SmashTarget? Inspect(EntityId entity);
+    /// <summary>World.Position: where a target already inspected is now; null when it is gone.</summary>
+    WorldPosition? PositionOf(EntityId entity);
     bool InSaveZone(EntityId player);
     bool NearBuildZone(EntityId player);
     /// <summary>One smash hit from <paramref name="player"/> on the target (fire and forget).</summary>
@@ -50,6 +52,8 @@ internal sealed class KilnSmashWorld : ISmashWorld
             ? new SmashTarget(entity, template, info.Serial, info.Position)
             : null;
     }
+
+    public WorldPosition? PositionOf(EntityId entity) => World.Position(entity);
 
     // the two player states smashing tests: in a save zone (nothing at all) and near a build zone
     public bool InSaveZone(EntityId player) => PlayerStates.Is(player, PlayerStateId.InSaveZone);

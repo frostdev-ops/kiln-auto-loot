@@ -5,6 +5,9 @@
 // C# picks the targets (the template's kind from Data.Smash, read from the game, the switches, the player's two states) and runs a
 // one-target program per hit (SmashHit). Because the loop runs in C#:
 //   - at most SmashRules.MaxTargetsPerStep (4) targets per player per call, nearest first;
+//   - targets are looked at nearest first, and the look stops at the 4 nearest wanted ones or when RunBudgetMicros are
+//     spent (a village of props the mod has never looked at, after a fast travel: the rest waits for the next second);
+//     each target's template is read once (Spawn.Inspect) and kept while it stays in reach;
 //   - a target is hit again only after RetryMs (it needs a step or two to break), and after MaxTries hits that did
 //     not break it, it is left alone for GiveUpMs (otherwise one target that never breaks would hold a slot forever).
 using Kiln;
@@ -16,6 +19,18 @@ internal sealed class Smash
 {
     public const long CandidateCacheMs = 250, RetryMs = 1500, GiveUpMs = 30_000;
     public const int MaxTries = 3;
+    public const long RunBudgetMicros = 4_000;   // one Run's look at the targets; the rest waits for the next second
+    public const long KnownForgetMs = 2_500;     // a template kept for a target no Run saw this long is read again
+
+    /// <summary>What the last Run did (the "slow smash" line).</summary>
+    internal readonly record struct RunWork(int InReach, int Looked, int New, long InspectMicros, long SlowestInspect, bool Stopped);
+
+    internal RunWork LastRun { get; private set; }
+
+    private readonly Func<long> _micros;
+    // per target: its template and serial from its first Spawn.Inspect, and when a Run last saw it
+    private readonly Dictionary<uint, (Guid Template, ulong Serial, long SeenMs)> _known = new();
+    private long _lastKnownPrune;
 
     private readonly ISmashWorld _world;
     private readonly Func<long> _nowMs;
@@ -39,8 +54,9 @@ internal sealed class Smash
 
     public Smash(Data data) : this(data, new KilnSmashWorld(), () => Environment.TickCount64, () => data.Smash) { }
 
-    internal Smash(Data data, ISmashWorld world, Func<long> nowMs, Func<SmashTable> table)
+    internal Smash(Data data, ISmashWorld world, Func<long> nowMs, Func<SmashTable> table, Func<long>? micros = null)
     {
+        _micros = micros ?? LootLoop.StopwatchMicros;
         Data = data;
         _world = world;
         _nowMs = nowMs;
@@ -70,6 +86,7 @@ internal sealed class Smash
         _candidates = [];
         _candidatesAt = null;
         _tries.Clear();
+        _known.Clear();
     }
 
     /// <summary>Once per second per player, tick thread. Does nothing when auto loot (s.Looting, F9) or s.Smash is off or the limits forbid it. Only
@@ -94,9 +111,38 @@ internal sealed class Smash
         bool NearBuildZone() => near ??= _world.NearBuildZone(player);
 
         var wanted = new List<(double Dist, SmashTarget Target, SmashKind Kind)>();
-        foreach (var e in _world.Within(_candidates, position, sw.Radius))
+        var started = _micros();
+        var inReach = _world.Within(_candidates, position, sw.Radius);   // nearest first
+        int looked = 0, fresh = 0;
+        long inspectMicros = 0, slowest = 0;
+        var stopped = false;
+        foreach (var e in inReach)
         {
-            if (_world.Inspect(e) is not { } target || !table.TryGet(target.Template, out var kind))
+            if (wanted.Count >= SmashRules.MaxTargetsPerStep) break;   // the nearest wanted ones are found
+            if (looked > 0 && _micros() - started >= RunBudgetMicros)
+            {
+                stopped = true;   // the rest waits for the next second
+                break;
+            }
+            looked++;
+            SmashTarget? found;
+            if (_known.TryGetValue(e.Value, out var k))
+            {
+                found = _world.PositionOf(e) is { } here ? new SmashTarget(e, k.Template, k.Serial, here) : null;
+                if (found is null) _known.Remove(e.Value);
+                else _known[e.Value] = (k.Template, k.Serial, now);
+            }
+            else
+            {
+                var t0 = _micros();
+                found = _world.Inspect(e);
+                var took = _micros() - t0;
+                fresh++;
+                inspectMicros += took;
+                if (took > slowest) slowest = took;
+                if (found is { } f) _known[e.Value] = (f.Template, f.Serial, now);
+            }
+            if (found is not { } target || !table.TryGet(target.Template, out var kind))
             {
                 ProbeTrace.Note(e, "smash: not a smash target");
                 continue;
@@ -112,11 +158,13 @@ internal sealed class Smash
             var dist = target.Position.DistanceTo(position);
             if (dist <= sw.Radius) wanted.Add((dist, target, kind));
         }
+        LastRun = new RunWork(inReach.Count, looked, fresh, inspectMicros, slowest, stopped);
         wanted.Sort((a, b) => a.Dist.CompareTo(b.Dist));
         var picked = wanted.Take(SmashRules.MaxTargetsPerStep).Select(w => (w.Target, w.Kind));
         foreach (var (target, kind) in picked)
         {
             Remember(target, now);
+            _known.Remove(target.Entity.Value);   // a hit target breaks and its id may come back as another: read it anew
             ProbeTrace.Note(target.Entity, $"smash: hit as {kind}");
             _world.Hit(player, target, kind);
             Hit?.Invoke(target, kind, sw);
@@ -144,6 +192,14 @@ internal sealed class Smash
 
     private void PruneTries(long now)
     {
+        if (now - _lastKnownPrune >= 1000)
+        {
+            _lastKnownPrune = now;
+            List<uint>? old = null;
+            foreach (var (id, k) in _known)
+                if (now - k.SeenMs > KnownForgetMs) (old ??= []).Add(id);
+            if (old is not null) foreach (var id in old) _known.Remove(id);
+        }
         if (now - _lastPrune < 10_000) return;
         _lastPrune = now;
         List<uint>? gone = null;

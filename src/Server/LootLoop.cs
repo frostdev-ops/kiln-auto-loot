@@ -5,6 +5,8 @@
 // One scan = every player once, every 100 ms by wall clock. Each scan evaluates every target in range
 // afresh (at least every 2 s, so a corpse that was empty when it died is looked at again): nothing is ever "done" except through the
 // visit table. At most 64 injects (accept, loot-all, Items.Move) per scan for the whole mod; the rest waits.
+// On the server a scan spends at most StepBudgetMicros of one server step: what is left (a place full of targets the
+// mod has never looked at, after a fast travel) goes on in the next steps, and the next scan starts once it is done.
 using Kiln;
 using KilnAutoLoot.Core;
 using KilnAutoLoot.Net;
@@ -30,6 +32,9 @@ internal sealed class LootLoop
     public const int SettingsPerTick = 2;          // and at most two per tick for all players; the rest wait a tick
     public const int CommandsPerSecond = 4;        // gather focus commands per player per second; the rest are dropped
     public const long HandTakeWindowMs = 2000;     // a hand take counts when its item arrives within this time
+    public const long StepBudgetMicros = 4_000;    // a scan's work per server step; the rest goes on in the next steps
+    public const long SlowStepMicros = 50_000;     // a step over this leaves a "slow scan" line in kiln.log ...
+    public const long SlowLineGapMs = 60_000;      // ... at most one a minute
 
     // Candidate components, one World.Find each per scan, shared by all players.
     public const string PickupComponent = "PickupItem";
@@ -54,13 +59,34 @@ internal sealed class LootLoop
     private PersonalSettings _defaults = new();
     private long _lastScan = long.MinValue, _lastBlink, _scanNumber;
     private int _budget, _rotate;
+    private readonly Func<long> _micros;
+    // the scan in progress: every (player, target) to look at, and how far it got
+    private readonly List<(PlayerLoot P, GamePlayer Gp, EntityId E)> _work = [];
+    private int _workAt;
+    private bool _scanOpen;
+    private long _scanMicros;
+    private int _scanSteps;
+    private StepWork _step;
+    private long? _lastSlowLine;
+
+    /// <summary>What one server step of the scan did (the "slow scan" line).</summary>
+    private struct StepWork
+    {
+        public long StartMicros, EnemyMicros, TargetMicros, InspectMicros, SlowestInspect;
+        public int Players, Lists, Candidates, InReach, Targets, New;
+        public EntityId SlowestEntity;
+    }
 
     public LootCounters Counters { get; } = new();
 
     /// <param name="notice">sends a notice to a player's game (or hands it to the hosting game's client part).</param>
     /// <param name="keyLine">key log lines: unknown ignore entries.</param>
-    public LootLoop(IGame game, IClock clock, Data data, Action<EntityId, NoticeMsg> notice, Action<string> keyLine)
+    /// <param name="micros">the work clock the step budget reads, in microseconds (tests: a fake one); default the
+    /// Stopwatch.</param>
+    public LootLoop(IGame game, IClock clock, Data data, Action<EntityId, NoticeMsg> notice, Action<string> keyLine,
+        Func<long>? micros = null)
     {
+        _micros = micros ?? StopwatchMicros;
         _game = game;
         _clock = clock;
         _data = data;
@@ -287,7 +313,13 @@ internal sealed class LootLoop
         _templates.Clear();
         _critters.Reset();
         _lastScan = long.MinValue;
+        _work.Clear();
+        _workAt = 0;
+        _scanOpen = false;
     }
+
+    internal static long StopwatchMicros() =>
+        (long)(System.Diagnostics.Stopwatch.GetTimestamp() * (1_000_000.0 / System.Diagnostics.Stopwatch.Frequency));
 
     private void Recompute(PlayerLoot p)
     {
@@ -357,21 +389,51 @@ internal sealed class LootLoop
 
     // ---------------------------------------------------------------- the scan
 
-    /// <summary>Every server step: scans when 100 ms passed since the last scan.</summary>
+    /// <summary>Every server step: goes on with the scan in progress, within <see cref="StepBudgetMicros"/>; starts the
+    /// next scan when 100 ms passed since the last one started and it is done. A step slower than
+    /// <see cref="SlowStepMicros"/> leaves one "slow scan" key line (at most one per <see cref="SlowLineGapMs"/>).</summary>
     public void Step()
     {
         var now = _clock.NowMs;
-        if (_lastScan != long.MinValue && now - _lastScan < ScanEveryMs) return;
-        _lastScan = now;
-        Scan();
+        if (!_scanOpen)
+        {
+            if (_lastScan != long.MinValue && now - _lastScan < ScanEveryMs) return;
+            _lastScan = now;
+        }
+        var started = _micros();
+        _step = default;
+        if (!_scanOpen) Begin();
+        Continue(started, StepBudgetMicros);
+        var spent = _micros() - started;
+        if (spent > SlowStepMicros) SlowLine(spent, now);
     }
 
-    /// <summary>One scan of every player.</summary>
+    /// <summary>One whole scan of every player at once, without the step budget (tests, and a caller that wants it
+    /// done now). A scan in progress is finished first.</summary>
     public void Scan()
     {
-        var started = System.Diagnostics.Stopwatch.GetTimestamp();
+        var started = _micros();
+        _step = default;
+        if (_scanOpen) Continue(started, long.MaxValue);
+        _lastScan = _clock.NowMs;
+        started = _micros();
+        _step = default;
+        Begin();
+        Continue(started, long.MaxValue);
+    }
+
+    /// <summary>Starts a scan: the players, their window and enemy checks, and every target in reach of each, in the
+    /// order they are looked at (players rotated, each player's targets nearest first).</summary>
+    private void Begin()
+    {
+        var started = _micros();
         var now = _clock.NowMs;
         _scanNumber++;
+        _scanOpen = true;
+        _scanMicros = 0;
+        _scanSteps = 0;
+        _work.Clear();
+        _workAt = 0;
         _budget = MaxInjectsPerScan;
         if (_ignoreVersion != _data.Items.Version)   // the item table was filled again: match every skip list anew
             foreach (var player in _players.Values) Recompute(player);
@@ -393,23 +455,96 @@ internal sealed class LootLoop
             ScanPlayer(Join(gp.Entity), gp, lists);
         }
         if (players.Count > 0) _rotate = (_rotate + 1) % players.Count;
-        ForgetUnseenTemplates();
-
-        var micros = System.Diagnostics.Stopwatch.GetElapsedTime(started).Ticks / 10;
-        Counters.ScanMicros += micros;
-        Counters.ScanCount++;
-        if (micros > Counters.ScanMaxMicros) Counters.ScanMaxMicros = micros;
+        _step.Players = players.Count;
+        _step.Lists = lists.Fetched;
+        _step.Candidates = lists.Entities;
+        _step.InReach = _work.Count;
+        _step.StartMicros = _micros() - started - _step.EnemyMicros - _step.InspectMicros;
+        _step.TargetMicros = 0;
     }
+
+    /// <summary>Looks at the scan's targets until <paramref name="budget"/> microseconds since <paramref name="stepStart"/>
+    /// are spent (at least one target per step); the scan ends when all were looked at.</summary>
+    private void Continue(long stepStart, long budget)
+    {
+        _scanSteps++;
+        var targetsStart = _micros();
+        var inspectBefore = _step.InspectMicros;
+        while (_workAt < _work.Count)
+        {
+            if (_step.Targets > 0 && _micros() - stepStart >= budget) break;
+            var (p, gp, e) = _work[_workAt++];
+            // a player who left, switched looting off or opened a window since the scan started is passed over
+            if (!_players.TryGetValue(p.Entity, out var current) || !ReferenceEquals(current, p)) continue;
+            if (!p.Settings.Looting || (p.ReportsWindow && p.WindowOpen)) continue;
+            _step.Targets++;
+            Target(p, gp, e);
+        }
+        _step.TargetMicros = _micros() - targetsStart - (_step.InspectMicros - inspectBefore);
+        _scanMicros += _micros() - stepStart;
+        if (_workAt < _work.Count) return;   // the rest in the next step
+
+        _scanOpen = false;
+        _work.Clear();
+        _workAt = 0;
+        ForgetUnseenTemplates();
+        Counters.ScanMicros += _scanMicros;
+        Counters.ScanCount++;
+        if (_scanMicros > Counters.ScanMaxMicros) Counters.ScanMaxMicros = _scanMicros;
+        if (_scanSteps > Counters.ScanStepsMax) Counters.ScanStepsMax = _scanSteps;
+    }
+
+    /// <summary>The "slow scan" key line: the step's time, the phase that took most of it, and the counts.</summary>
+    private void SlowLine(long spent, long now)
+    {
+        if (!SlowLineDue(now)) return;
+        var w = _step;
+        var phases = new (long Micros, string Name)[]
+        {
+            (w.StartMicros, "the scan's start (Players, World.Find, Nearby.Within)"),
+            (w.EnemyMicros, "the enemy check"),
+            (w.InspectMicros, "Spawn.Inspect of targets new to the mod"),
+            (w.TargetMicros, "the target rules and game reads"),
+        };
+        var top = phases.MaxBy(x => x.Micros);
+        var left = _scanOpen ? $"{_work.Count - _workAt} targets left for the next steps" : "the scan is done";
+        _keyLine($"slow scan: {Ms(spent)} ms in one server step, most in {top.Name} ({Ms(top.Micros)} ms). " +
+                 $"start {Ms(w.StartMicros)} ms: {w.Players} player(s), {w.Lists} lists of {w.Candidates} entities, {w.InReach} in reach; " +
+                 $"enemy check {Ms(w.EnemyMicros)} ms; Spawn.Inspect {Ms(w.InspectMicros)} ms: {w.New} new, slowest call {Ms(w.SlowestInspect)} ms" +
+                 $"{(w.New > 0 ? $" (entity {w.SlowestEntity.Value})" : "")}; targets {Ms(w.TargetMicros)} ms: {w.Targets} looked at; " +
+                 $"scan step {_scanSteps}, {left}");
+    }
+
+    /// <summary>Whether a "slow" key line may go out now (one per <see cref="SlowLineGapMs"/> for the scan and the
+    /// smasher together); true takes the turn.</summary>
+    internal bool SlowLineDue(long now)
+    {
+        if (_lastSlowLine is { } last && now - last < SlowLineGapMs) return false;
+        _lastSlowLine = now;
+        return true;
+    }
+
+    internal static string Ms(long micros) => (micros / 1000).ToString(System.Globalization.CultureInfo.InvariantCulture);
 
     /// <summary>The shared World.Find lists of one scan, each fetched on first need.</summary>
     private sealed class Candidates(IGame game)
     {
         private IReadOnlyList<EntityId>? _pickups, _offers, _inventories, _markers, _enemies;
-        public IReadOnlyList<EntityId> Pickups => _pickups ??= game.Find(PickupComponent);
-        public IReadOnlyList<EntityId> Offers => _offers ??= game.Find(OfferComponent);
-        public IReadOnlyList<EntityId> Inventories => _inventories ??= game.Find(InventoryComponent);
-        public IReadOnlyList<EntityId> Markers => _markers ??= game.Find(LootMarkerComponent);
-        public IReadOnlyList<EntityId> Enemies => _enemies ??= game.Find(EnemyComponent);
+        public IReadOnlyList<EntityId> Pickups => _pickups ??= Fetch(PickupComponent);
+        public IReadOnlyList<EntityId> Offers => _offers ??= Fetch(OfferComponent);
+        public IReadOnlyList<EntityId> Inventories => _inventories ??= Fetch(InventoryComponent);
+        public IReadOnlyList<EntityId> Markers => _markers ??= Fetch(LootMarkerComponent);
+        public IReadOnlyList<EntityId> Enemies => _enemies ??= Fetch(EnemyComponent);
+        public int Fetched { get; private set; }
+        public int Entities { get; private set; }
+
+        private IReadOnlyList<EntityId> Fetch(string component)
+        {
+            var list = game.Find(component);
+            Fetched++;
+            Entities += list.Count;
+            return list;
+        }
     }
 
     private void ScanPlayer(PlayerLoot p, GamePlayer gp, Candidates lists)
@@ -434,6 +569,9 @@ internal sealed class LootLoop
 
         // the mod's own search, exactly enemyDistance, not capped by the loot radius.
         if (s.EnemyPause)
+        {
+            var enemyStart = _micros();
+            var inspectBefore = _step.InspectMicros;
             foreach (var e in _game.Within(lists.Enemies, gp.Position, s.EnemyDistance))
                 if (Classify(e) is { Rule: { } er } && Release.IsPausingEnemy(er, _game.IsDead(e)))
                 {
@@ -441,6 +579,8 @@ internal sealed class LootLoop
                     Counters.EnemyNear++;
                     break;
                 }
+            _step.EnemyMicros += _micros() - enemyStart - (_step.InspectMicros - inspectBefore);
+        }
         if (p.Enemy.Paused(s.EnemyPause))
         {
             Counters.EnemyPauses++;
@@ -453,7 +593,7 @@ internal sealed class LootLoop
         foreach (var list in new Func<IReadOnlyList<EntityId>>[] { () => lists.Pickups, () => lists.Offers, () => lists.Inventories, () => lists.Markers })
             foreach (var e in _game.Within(list(), gp.Position, radius))
                 if (!_playerIds.Contains(e) && seen.Add(e))
-                    Target(p, gp, e);
+                    _work.Add((p, gp, e));
     }
 
     private void Target(PlayerLoot p, GamePlayer gp, EntityId e)
@@ -1074,7 +1214,17 @@ internal sealed class LootLoop
             _templates[e] = (c.Serial, c.Rule, _scanNumber, c.Template);
             return (KeyOf(e, c.Serial), c.Rule);
         }
-        if (_game.Inspect(e) is not { } info) return null;
+        var inspectStart = _micros();
+        var inspected = _game.Inspect(e);
+        var took = _micros() - inspectStart;
+        _step.New++;
+        _step.InspectMicros += took;
+        if (took >= _step.SlowestInspect)
+        {
+            _step.SlowestInspect = took;
+            _step.SlowestEntity = e;
+        }
+        if (inspected is not { } info) return null;
         TemplateRule? rule = info.Template is { } g && _data.Templates.TryGet(g, out var r) ? r : null;
         _templates[e] = (info.Serial, rule, _scanNumber, info.Template);
         return (KeyOf(e, info.Serial), rule);

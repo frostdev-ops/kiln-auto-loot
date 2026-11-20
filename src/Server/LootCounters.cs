@@ -61,6 +61,9 @@ internal sealed class LootCounters
     /// <summary>Scan time of the last 5 s, in microseconds.</summary>
     public long ScanMicros, ScanCount, ScanMaxMicros;
 
+    /// <summary>The most server steps one scan of the last 5 s was spread over (the step budget).</summary>
+    public long ScanStepsMax;
+
     /// <summary>Item ids moved by the mod's loot (up to 64 ids, reset each line).</summary>
     public readonly Dictionary<uint, long> LootedItems = new();
 
@@ -87,10 +90,10 @@ internal sealed class LootCounters
     public string TimingLine()
     {
         var avg = ScanCount == 0 ? 0 : ScanMicros / ScanCount;
-        var sb = new StringBuilder($"timing (5 s): scans={ScanCount} total={ScanMicros} us avg={avg} us max={ScanMaxMicros} us");
+        var sb = new StringBuilder($"timing (5 s): scans={ScanCount} total={ScanMicros} us avg={avg} us max={ScanMaxMicros} us steps={ScanStepsMax}");
         sb.Append(" | items taken (id x count):");
         foreach (var (id, n) in LootedItems) sb.Append($" {id}x{n}");
-        ScanMicros = ScanCount = ScanMaxMicros = 0;
+        ScanMicros = ScanCount = ScanMaxMicros = ScanStepsMax = 0;
         LootedItems.Clear();
         return sb.ToString();
     }

@@ -1,6 +1,16 @@
 # Changelog
 
 ## 0.2.6
+- **No more multi-second freezes when you arrive somewhere new** (reported by HadToRegister): the first auto-loot look
+  around after a fast travel (Flame Altar, with the map open for a while before) held the server for 5.3 s on a slower
+  PC, and walking into a village full of props held it 3.6 s while the mod looked for things to smash. The mod now
+  spends at most about 4 ms of a server step on its look around: what it has not looked at yet (a whole new place at
+  once) is looked at in the next steps, nearest first, so nothing near you waits. Smashing looks at the nearest props
+  first and stops once it has the four it hits; a prop's type is read once and kept while it stays in reach.
+- If a step is slow anyway, kiln.log says so (at most once a minute): a "slow scan" or "slow smash" line with the time,
+  which part took it (finding things around you, reading a new thing's type from the game, the loot rules) and the
+  counts. Please send kiln.log if you see one.
+- The timing line of counterLog says how many server steps the slowest scan was spread over (steps=).
 - **"Ripe crops in a base" now covers everything you plant there** (reported by netjunk): planted algae was still
   harvested in a base with the switch off. Algae, wheat, pumpkins, papyrus, daylilies, cattails, reeds, taro, ginger,
   shiitake, beans, thyme, pomegranates and the bushes you can plant grow into the same plants the world has, so the

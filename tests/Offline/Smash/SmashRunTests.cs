@@ -32,6 +32,9 @@ public sealed class SmashRunTests
         public readonly List<(EntityId Player, EntityId Target, SmashKind Kind)> Hits = [];
         public bool SaveZone, BuildZone;
         public int CandidateCalls, BuildZoneCalls;
+        /// <summary>The work clock (microseconds): each Inspect costs InspectCostMicros.</summary>
+        public long Micros, InspectCostMicros;
+        public int InspectCalls;
 
         public EntityId Add(Guid template, double x, ulong serial = 1)
         {
@@ -42,10 +45,21 @@ public sealed class SmashRunTests
 
         public IReadOnlyList<EntityId> Candidates() { CandidateCalls++; return Entities.Select(t => t.Entity).ToList(); }
 
+        // nearest first, as Nearby.Within
         public IReadOnlyList<EntityId> Within(IReadOnlyList<EntityId> candidates, WorldPosition at, double radius) =>
-            candidates.Where(c => Inspect(c) is { } t && t.Position.DistanceTo(at) <= radius).ToList();
+            candidates.Select(Find).Where(t => t is { } x && x.Position.DistanceTo(at) <= radius)
+                .OrderBy(t => t!.Value.Position.DistanceTo(at)).Select(t => t!.Value.Entity).ToList();
 
         public SmashTarget? Inspect(EntityId entity)
+        {
+            InspectCalls++;
+            Micros += InspectCostMicros;
+            return Find(entity);
+        }
+
+        public WorldPosition? PositionOf(EntityId entity) => Find(entity)?.Position;
+
+        private SmashTarget? Find(EntityId entity)
         {
             foreach (var t in Entities) if (t.Entity == entity) return t;
             return null;
@@ -61,7 +75,45 @@ public sealed class SmashRunTests
     private readonly FakeWorld _world = new();
     private readonly global::KilnAutoLoot.Server.Smash _smash;
 
-    public SmashRunTests() => _smash = new global::KilnAutoLoot.Server.Smash(null!, _world, () => _now, Table);
+    public SmashRunTests() => _smash = new global::KilnAutoLoot.Server.Smash(null!, _world, () => _now, Table, () => _world.Micros);
+
+    // ---- the run budget (HadToRegister 2026-11-20: a 3.6 s step on arriving in a village)
+
+    [Fact]
+    public void A_village_of_2000_props_new_to_the_mod_is_looked_at_within_the_budget_per_run()
+    {
+        const long cost = 500;
+        _world.InspectCostMicros = cost;
+        for (var i = 0; i < 2000; i++) _world.Add(TUnknown, 1 + (i % 140) / 10.0);   // nothing to hit: every one is looked at
+        var before = _world.Micros;
+        Run(S());
+        Assert.True(_world.Micros - before <= global::KilnAutoLoot.Server.Smash.RunBudgetMicros + cost, $"{_world.Micros - before} us");
+        var looked = _world.InspectCalls;
+        Assert.True(looked < 2000);
+        // later runs go on with the rest, and what was read once is not read again
+        for (var i = 0; i < 400 && _world.InspectCalls < 2000; i++) { _now += 1000; Run(S()); }
+        Assert.Equal(2000, _world.InspectCalls);
+    }
+
+    [Fact]
+    public void A_run_stops_looking_once_it_has_the_four_nearest_wanted_targets()
+    {
+        for (var i = 0; i < 200; i++) _world.Add(TSmash, 1 + i * 0.05);
+        Run(S());
+        Assert.Equal(4, _world.Hits.Count);
+        Assert.Equal(4, _world.InspectCalls);
+        Assert.Equal(_world.Entities.Take(4).Select(t => t.Entity), _world.Hits.Select(h => h.Target));
+    }
+
+    [Fact]
+    public void A_target_read_once_is_not_read_again_while_it_stays_in_reach()
+    {
+        _world.Add(TUnknown, 2);
+        _world.Add(TUnknown, 3);
+        Run(S());
+        for (var i = 0; i < 5; i++) { _now += 1000; Run(S()); }
+        Assert.Equal(2, _world.InspectCalls);
+    }
 
     private static PersonalSettings S(Action<PersonalSettings>? change = null)
     {

@@ -451,7 +451,16 @@ internal sealed class LootServer(Data data)
             state.NextSmashMs = now + 1000;
             if (Kiln.Players.Find(entity) is not { State: PlayerState.InGame, IsDead: false, Position: { } at }) continue;
             _smash.Hit = _config.Value.CounterLog ? (t, kind, sw) => SmashLine(entity, t, kind, sw) : null;
+            var started = LootLoop.StopwatchMicros();
             _smash.Run(entity, at, state.Settings, _config.Value.Limits);
+            var spent = LootLoop.StopwatchMicros() - started;
+            if (spent > LootLoop.SlowStepMicros && _loop.SlowLineDue(now))
+            {
+                var w = _smash.LastRun;
+                KeyLine($"slow smash: {LootLoop.Ms(spent)} ms in one server step for player {entity}: {w.InReach} candidates in reach, " +
+                        $"{w.Looked} looked at, {w.New} new (Spawn.Inspect {LootLoop.Ms(w.InspectMicros)} ms, slowest call " +
+                        $"{LootLoop.Ms(w.SlowestInspect)} ms){(w.Stopped ? "; the rest waits for the next second" : "")}");
+            }
         }
     }
 

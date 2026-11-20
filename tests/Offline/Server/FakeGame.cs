@@ -40,6 +40,13 @@ internal sealed class FakeGame : IGame
     public readonly Dictionary<string, int> FindCalls = new();
     public readonly Dictionary<Guid, string> TemplateNames = new();
     public int FreeSlotCount = 10;
+    /// <summary>The work clock the loop's step budget reads (microseconds): each Spawn.Inspect costs
+    /// <see cref="InspectCostMicros"/>, or the entity's own entry in <see cref="InspectCost"/>.</summary>
+    public long Micros;
+    public long InspectCostMicros;
+    public readonly Dictionary<EntityId, long> InspectCost = new();
+    public readonly HashSet<EntityId> Inspected = [];
+    public int InspectCalls;
     private uint _next = 100;
 
     public EntityId AddPlayer(double x = 0, double y = 0, double z = 0, bool uiOpen = false, bool nearBase = false)
@@ -86,8 +93,13 @@ internal sealed class FakeGame : IGame
 
     public string? TemplateName(Guid template) => TemplateNames.TryGetValue(template, out var n) ? n : null;
 
-    public Inspected? Inspect(EntityId entity) =>
-        Entities.TryGetValue(entity, out var e) ? new Inspected(e.Template, e.Serial) : null;
+    public Inspected? Inspect(EntityId entity)
+    {
+        InspectCalls++;
+        Inspected.Add(entity);
+        Micros += InspectCost.TryGetValue(entity, out var cost) ? cost : InspectCostMicros;
+        return Entities.TryGetValue(entity, out var e) ? new Inspected(e.Template, e.Serial) : null;
+    }
 
     public bool TryPickupItem(EntityId entity, out uint itemId)
     {
@@ -192,7 +204,7 @@ internal sealed class LoopRig
         ItemTable? items = null, bool hasMod = true, uint[]? skipIds = null, uint[]? onlyIds = null)
     {
         Data = new Data(TemplateTable.Parse(new StringReader(TemplatesText)), items ?? Fixtures.Items(), Fixtures.Quest(quest ?? []));
-        Loop = new LootLoop(Game, Clock, Data, (p, m) => Notices.Add((p, m)), KeyLines.Add);
+        Loop = new LootLoop(Game, Clock, Data, (p, m) => Notices.Add((p, m)), KeyLines.Add, () => Game.Micros);
         Loop.Configure(server ?? new ServerSettings());
         Player = Game.AddPlayer();
         var s = new PersonalSettings();
@@ -213,6 +225,16 @@ internal sealed class LoopRig
     {
         Clock.NowMs += ms;
         Loop.Scan();
+    }
+
+    /// <summary>One server step after <paramref name="ms"/> (the budgeted path the mod runs); returns the work
+    /// microseconds the step spent on the fake work clock.</summary>
+    public long StepAfter(long ms = 16)
+    {
+        Clock.NowMs += ms;
+        var before = Game.Micros;
+        Loop.Step();
+        return Game.Micros - before;
     }
 
     public void ScanFor(long ms, long step = LootLoop.ScanEveryMs)
