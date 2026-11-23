@@ -6,7 +6,7 @@ rules and what a dedicated server can show without a player. Everything below ne
 ## Setup
 1. Back up your save (stack sizes and felled trees change it).
 2. `dotnet build -c Release -t:KilnPack -p:KilnPackageOutputPath=dist/`, then import `dist/kiln-auto-loot-<version>.zip`
-   in the Kiln Launcher's Library and switch it on in your profile (Kiln 0.2.0-dev.29.18 or later).
+   in the Kiln Launcher's Library and switch it on in your profile (Kiln 0.2.0-dev.30.6 or later).
 3. Set `"counterLog": true` in `kiln-auto-loot-server.json` (it is not in the F8 window): in the Kiln Launcher, Kiln
    Auto Loot > Configs > kiln-auto-loot-server, or by hand in your profile's config folder (`kiln/config/` without a
    profile). The mod then writes its counters every 5 s to `kiln/data/kiln-auto-loot/kiln-auto-loot.log`, from the
@@ -30,9 +30,10 @@ rules and what a dedicated server can show without a player. Everything below ne
 ## 2. Loose things
 - [ ] Rocks, sticks, ore, mushrooms and dropped items within the radius are picked up without pressing E; each thing
       once (no doubled amounts on stones, mushrooms, fireflies, frogs).
-- [ ] Each group switch (ground loot, stones, collectibles, plants, critters, crops in the world, crops in a base, fish)
-      stops its group at once; pressing or holding E still takes a switched-off thing, also beyond its group radius and
-      with auto loot off (F9); the radius slider and a group radius larger than the general one both work.
+- [ ] Each group switch (ground loot, stones, collectibles, plants, critters, crops in the world, crops in a base, farm
+      animal produce, fish) stops its group at once; pressing or holding E still takes a switched-off thing, also
+      beyond its group radius and with auto loot off (F9); the radius slider and a group radius larger than the general
+      one both work.
 - [ ] Old books the world placed (village and ruin furniture that gives Old Books) stay where they are with "Old
       books" off (the default). With it on they are picked up away from any base but stay while you stand in or near
       one, also with a base built around them. E takes them either way.

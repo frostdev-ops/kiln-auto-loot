@@ -14,9 +14,8 @@ notes run in each player's game.
   mushrooms, dropped potions and arrows), finds you collect (fossils, urns, gnomes ...), what grows on plants
   (berries, herbs, fibre, reeds), the critters you use as fishing bait (fireflies, moths, grasshoppers, scarabs,
   pillbugs, frogs, maggots; never animals or pets), ripe crops from farm beds, and fish swimming free if you want
-  them (see "Fish" below). Each group
-  has its own switch and, if you like, its own radius. Ripe crops have two switches: out in the world, and in or near
-  a base, so the fields in your base can stay as decoration.
+  them (see "Fish" below). Each group has its own switch and, if you like, its own radius. Ripe crops have two
+  switches: out in the world, and in or near a base, so the fields in your base can stay as decoration.
 - **Collects from your farm animals** (off by default, switch **Farm animal produce** on): the milk, wool and other
   produce your grown farm animals have ready, within your main radius, as the game's Collect does (with its pickup
   note). Babies are never grown up and no animal is petted: the mod takes only what waits in the animal. On a
