@@ -54,6 +54,7 @@ internal sealed class LootCounters
     public long GenericLeft;      // ... left: no item yet, or a quest item
     public long DecorLeft;
     public long CrittersSeen, CrittersSent, CrittersStuck;   // critters seen, takes sent, still there after the take        // world furniture players also build (books) left: the player is in or near a base
+    public long LivestockReads;   // farm animals whose inventory was read for produce
 
     // Kiln side: injects sent, moves, the per-scan cap, sight.
     public long Injects, Moves, CapReached, SightBlocked;

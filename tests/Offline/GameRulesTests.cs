@@ -292,6 +292,32 @@ public class TemplateRulesTests
         Assert.Null(One(Facts.T("Animal_Pet_Cat_tame", ["Actor", "Health", "Faction", "Wildlife"])));
         Assert.Null(One(Facts.T("Prop_Training_Dummy", ["Actor", "Health"])));
     }
+
+    // the components of the game's own farm animals (probed in a hosted world: goats and yaks in a base), shortened to what tells them
+    private static readonly string[] Adult =
+        ["Actor", "Animal", "Faction", "Health", "HealthBar", "InteractionLootRefill", "InteractionOfferRuntime", "Inventory",
+         "InventorySetup", "IsTame", "RandomLoot", "Wildlife"];
+    private static readonly string[] Baby = ["Actor", "Animal", "BabyAnimal", "Faction", "InteractionOfferRuntime", "IsTame"];
+    private static Dictionary<string, string> Faction(string f) => new() { ["Faction.faction"] = f };
+
+    [Fact]
+    public void Grown_farm_animals_are_livestock_whatever_their_development_name()
+    {
+        foreach (var n in new[] { "PLACEMENT_HELPER_T1_Animal_Farm_Goat", "PLACEMENT_HELPER_T5_Animal_Farm_Yak" })
+            Assert.Equal((Group.Livestock, TemplateFlags.None), One(Facts.T(n, Adult, Faction("FarmAnimal"))) is { } r ? (r.Group, r.Flags) : default);
+    }
+
+    [Fact]
+    public void Baby_wild_and_pet_animals_are_no_livestock()
+    {
+        Assert.Null(One(Facts.T("Animal_Baby_T1_Goat", Baby, Faction("PlayerAlly"))));
+        Assert.Null(One(Facts.T("Animal_Baby_T1_Goat", [.. Baby, "Inventory", "InteractionLootRefill"], Faction("FarmAnimal"))));
+        Assert.NotEqual(Group.Livestock, One(Facts.T("Animal_Wildlife_T1_Goat_AG2", ["Actor", "Health", "Faction", "Wildlife", "HealthBar"]))?.Group);
+        Assert.Null(One(Facts.T("PLACEMENT_HELPER_Animal_Pet_Dog_03_dark", Adult.Except(["InteractionLootRefill"]).ToArray(), Faction("PlayerAlly"))));
+        // not tame, or nothing the game refills: no livestock
+        Assert.Null(One(Facts.T("PLACEMENT_HELPER_Animal_Farm_Goat_Wild", Adult.Except(["IsTame"]).ToArray(), Faction("FarmAnimal"))));
+        Assert.Null(One(Facts.T("PLACEMENT_HELPER_Animal_Farm_Goat_Empty", Adult.Except(["InteractionLootRefill"]).ToArray(), Faction("FarmAnimal"))));
+    }
 }
 
 public class CropRulesTests

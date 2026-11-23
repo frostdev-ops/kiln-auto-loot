@@ -22,6 +22,7 @@ public class LootRulesTests
         { Group.Corpse, nameof(PersonalSettings.Corpses) },
         { Group.Chest, nameof(PersonalSettings.Chests) },
         { Group.Fish, nameof(PersonalSettings.Fish) },
+        { Group.Livestock, nameof(PersonalSettings.AnimalProduce) },
     };
 
     [Theory]

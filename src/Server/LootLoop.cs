@@ -35,6 +35,8 @@ internal sealed class LootLoop
     public const long StepBudgetMicros = 4_000;    // a scan's work per server step; the rest goes on in the next steps
     public const long SlowStepMicros = 50_000;     // a step over this leaves a "slow scan" line in kiln.log ...
     public const long SlowLineGapMs = 60_000;      // ... at most one a minute
+    public const long LivestockEveryMs = 5_000;    // a farm animal's inventory is read once per 5 s (it refills in minutes)
+    public const int LivestockMemory = 512;        // farm animals remembered per player before the stale ones are dropped
 
     // Candidate components, one World.Find each per scan, shared by all players.
     public const string PickupComponent = "PickupItem";
@@ -740,6 +742,24 @@ internal sealed class LootLoop
         }
         Counters.ContainerTries++;
         var offer = _game.OfferOf(e);
+        if (Release.IsLivestock(rule))
+        {
+            // a farm animal: its produce is read from its inventory and taken (loot-all, or slot moves when something
+            // stays), never with an accept; it refills slowly, so it is read again every LivestockEveryMs, not "done"
+            var now = _clock.NowMs;
+            if (p.LivestockNext.TryGetValue(key, out var next) && now < next)
+            {
+                ProbeTrace.Note(e, "livestock: read again later");
+                return;
+            }
+            if (p.LivestockNext.Count >= LivestockMemory)
+                foreach (var old in p.LivestockNext.Where(x => x.Value <= now).Select(x => x.Key).ToList()) p.LivestockNext.Remove(old);
+            p.LivestockNext[key] = now + LivestockEveryMs;
+            Counters.LivestockReads++;
+            ProbeTrace.Note(e, "livestock: produce read");
+            TakeFromContainer(p, gp, e, key, rule, offer);
+            return;
+        }
         var step = p.Visits.Next(key, offer.Usable, offer.OfferId, s.OpenDelay, Release.HarvestOnce(rule));
         ProbeTrace.Note(e, $"container: step {step} (offer present {offer.Present}, disabled {offer.Disabled}, id {offer.OfferId})");
         switch (step)

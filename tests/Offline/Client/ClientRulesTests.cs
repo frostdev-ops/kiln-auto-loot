@@ -255,7 +255,7 @@ public class CatalogTests
         Assert.Equal(["looting", "containers", "smashing", "filters", "where", "ranges", "salvage", "world"], SettingCatalog.Pages.Select(p => p.Key));
         string[] On(string page) => SettingCatalog.Pages.Single(p => p.Key == page).Settings.Select(s => s.Key).ToArray();
         Assert.Equal(["looting", "radius", "takeInPlace", "groundLoot", "stones", "oldBooks", "collectibles", "plants",
-                      "critters", "crops", "cropsInBase", "fish"], On("looting"));
+                      "critters", "crops", "cropsInBase", "animalProduce", "fish"], On("looting"));
         Assert.Equal(["corpses", "bosses", "chests", "openDelay", "leaveQuestItems"], On("containers"));
         Assert.Equal(["smash", "smashBuildables", "fellTrees", "smashHives"], On("smashing"));
         Assert.Equal(["itemFilter", "skipList", "onlyList", "skipNotice", "minGearRarity"], On("filters"));

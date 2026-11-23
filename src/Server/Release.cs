@@ -10,7 +10,8 @@
 //   progress stay a hand job). Creatures that fight are group "enemy".
 //
 //   A target WITHOUT a pickup (container path) is released when
-//     1. its template's group is corpse, chest, plant, farm or ground, or
+//     1. its template's group is corpse, chest, plant, farm, ground or livestock (a farm animal's produce: read from
+//        its inventory and taken without an accept, see IsLivestock), or
 //     2. its template's group is enemy and the creature is dead (Combat.GetHealth Dead, or the loot marker
 //        DisableColliderModeChanges the game itself sets when a dead enemy turns into loot).
 //   Everything else is not released: living enemies, the boss group, collectible/fish/unknown-word templates without a
@@ -41,7 +42,7 @@ internal static class Release
     /// <summary>Released, for a container-path target.</summary>
     public static bool ContainerReleased(TemplateRule rule, bool dead) => rule.Group switch
     {
-        Group.Corpse or Group.Chest or Group.Plant or Group.Farm or Group.Ground => true,
+        Group.Corpse or Group.Chest or Group.Plant or Group.Farm or Group.Ground or Group.Livestock => true,
         Group.Enemy => dead,
         _ => false,
     };
@@ -76,5 +77,11 @@ internal static class Release
     /// in its inventory yet, and the loot-all hands it over (once per visit, <see cref="HarvestOnce"/>; the pile goes
     /// when it is looted).</summary>
     public static bool SkipWhenEmpty(TemplateRule rule) =>
-        (rule.Group is Group.Corpse or Group.Chest or Group.Enemy) && !IsDrop(rule);
+        (rule.Group is Group.Corpse or Group.Chest or Group.Enemy or Group.Livestock) && !IsDrop(rule);
+
+    /// <summary>A farm animal's produce (group livestock) is taken from its inventory without an accept: the animal's
+    /// offer upgrades a baby, pets an animal with nothing to give, and an accept the mod sends moves nothing. The game
+    /// refills it slowly, so it is never "done" (no visit table) but read again every
+    /// <see cref="LootLoop.LivestockEveryMs"/>.</summary>
+    public static bool IsLivestock(TemplateRule rule) => rule.Group == Group.Livestock;
 }

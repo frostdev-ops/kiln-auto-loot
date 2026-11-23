@@ -107,6 +107,7 @@ public sealed class TemplateTable
         "enemy" => Group.Enemy,
         "fish" => Group.Fish,
         "critter" => Group.Critter,
+        "livestock" => Group.Livestock,
         _ => Group.Unknown,
     };
 
@@ -123,6 +124,7 @@ public sealed class TemplateTable
         Group.Enemy => "enemy",
         Group.Fish => "fish",
         Group.Critter => "critter",
+        Group.Livestock => "livestock",
         _ => "unknown",
     };
 }

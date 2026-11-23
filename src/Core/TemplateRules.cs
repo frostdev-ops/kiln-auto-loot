@@ -5,6 +5,11 @@
 // the table, and a template that is not in the table is never taken.
 //
 // In order:
+//   0. Grown farm animals (livestock: the goats, yaks, ... a player keeps in a base) are taken from, whatever their name
+//      (the game names them "PLACEMENT_HELPER_..._Animal_Farm_...", a development word for rule 1): their produce (milk,
+//      wool) waits in their own inventory, refilled by the game. Told by their components alone: an animal, tame, of the
+//      FarmAnimal faction, with an inventory the game refills. Babies (BabyAnimal, PlayerAlly, no inventory), pets and
+//      wild animals are not livestock.
 //   1. Work-in-progress and developer templates (deprecated, test, debug, placement helpers, cheats, unused) are never taken,
 //      and neither are base templates (the ones others are made from), except the generic drops resource nodes spawn.
 //   2. Creatures (Actor + Health) are enemies (pause and, once dead, their corpse) or fish; villagers, summons, pets and
@@ -119,6 +124,7 @@ public static class TemplateRules
 
     private static TemplateRule? RuleOf(TemplateFacts t, Context c)
     {
+        if (IsLivestock(t)) return Rule(t, Group.Livestock, TemplateFlags.None);
         var name = t.Name.ToLowerInvariant();
         if (!IsWorkable(name)) return null;
         // a base template is what others are made from; the game places only the ones it drops from resource nodes
@@ -132,6 +138,14 @@ public static class TemplateRules
     }
 
     // ---------------------------------------------------------------- creatures
+
+    /// <summary>A grown farm animal with produce to collect (rule 0): an actor and an animal, tame, not a baby, of the
+    /// FarmAnimal faction, with an inventory the game refills (InteractionLootRefill). Its produce is taken from that
+    /// inventory, never with the animal's E offer (which upgrades a baby and pets an animal with nothing to give).</summary>
+    public static bool IsLivestock(TemplateFacts t) =>
+        t.Has("Actor") && t.Has("Animal") && t.Has("IsTame") && !t.Has("BabyAnimal") &&
+        t.Has("Inventory") && t.Has("InteractionLootRefill") &&
+        string.Equals(t.Value("Faction.faction"), "FarmAnimal", StringComparison.OrdinalIgnoreCase);
 
     private static TemplateRule? Creature(TemplateFacts t, string name)
     {
