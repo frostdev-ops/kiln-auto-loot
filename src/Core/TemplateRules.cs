@@ -14,7 +14,9 @@
 //   1. Work-in-progress and developer templates (deprecated, test, debug, placement helpers, cheats, unused) are never taken,
 //      and neither are base templates (the ones others are made from), except the generic drops resource nodes spawn.
 //   2. Creatures (Actor + Health) are enemies (pause and, once dead, their corpse) or fish; villagers, summons, pets and
-//      farm animals are nothing.
+//      farm animals are nothing. A fish is one swimming free that a player grabs by hand: built as the game's pickup
+//      (IsFreeFish). A fish a player let go (tame) stays free; a fish on the hook and a fishing spot are no creature with
+//      a pickup at all: their fish is an item only once the rod catches it.
 //   3. Crops (plant growth stages): only the last stage of a crop that can be harvested (farm). Earlier stages may be
 //      harvestable too, but harvesting them early would waste the crop. The world's plants a crop's stage list names
 //      (planted algae, wheat and pumpkins grow into them) are taken as what they are (rules 4 and 5), flagged grown:
@@ -150,10 +152,22 @@ public static class TemplateRules
         string.Equals(t.Value("Faction.faction"), "FarmAnimal", StringComparison.OrdinalIgnoreCase) &&
         IsWorkable(t.Name.ToLowerInvariant().Replace("placement_helper", "", StringComparison.Ordinal));
 
+    /// <summary>A fish swimming free, as the game lets a swimming player grab it with E: a wildlife creature built as a
+    /// pickup, with the components the game's own interaction pickup (loot_pickup_item) works on (InteractionOfferRuntime,
+    /// PickupItem, DestroyOnLoot) and the item it gives in its PickupItem. In the game data of 0.2.0-dev.30.6: Shimmerfin
+    /// and Lakehopper (Animal_wildlife_Fish_T1_common_01/02) and the Fish Cutlet fish (Animal_Wildlife_Fish_Big/Medium/
+    /// Small), whose spawners are in the Veilwater Basin's lakes. Not a tame one: a raw fish's "drop into the world"
+    /// (UseItem_Drop_Fish_Into_World) lets that fish go as "..._tame", and it stays free as a pet does. The fish a fishing
+    /// spot shows and the one on the hook are no such creature: the rod's minigame makes the fish (Fishable, no pickup)
+    /// from the spot's fish table when one bites, and its item exists only once caught.</summary>
+    public static bool IsFreeFish(TemplateFacts t, string lowerName) =>
+        t.Has("PickupItem") && t.Has("InteractionOfferRuntime") && t.Has("DestroyOnLoot") &&
+        !t.Has("IsTame") && !lowerName.Contains("_tame");
+
     private static TemplateRule? Creature(TemplateFacts t, string name)
     {
         if (t.Has("ActiveNpcState") || name.StartsWith("npc_", StringComparison.Ordinal) || name.Contains("townsfolk")) return null;
-        if (t.Has("Wildlife") && name.Contains("fish")) return Rule(t, Group.Fish, TemplateFlags.Animal);   // the world's own creatures
+        if (t.Has("Wildlife") && name.Contains("fish")) return IsFreeFish(t, name) ? Rule(t, Group.Fish, TemplateFlags.Animal) : null;
         if (t.Value("Faction.faction") is { } faction && FriendlyFactions.Contains(faction)) return null;
         if (name.Contains("_tame")) return null;   // pets
         if (!t.Has("Faction") || !t.Has("HealthBar")) return null;   // turrets and spawners that only look like creatures
