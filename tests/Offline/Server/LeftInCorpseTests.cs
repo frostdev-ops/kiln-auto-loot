@@ -207,4 +207,80 @@ public sealed class LeftInCorpseTests
         Assert.Empty(rig.Game.Moves);
         Assert.Empty(rig.Game.Loots);
     }
+
+    // ---------------------------------------------------------------- corpses seen but not looked into
+
+    private static List<string> UnreadLines(LoopRig rig) => LootLines(rig).Where(l => l.Contains("not looked into")).ToList();
+
+    [Fact]
+    public void A_corpse_outside_the_height_window_says_so_once()
+    {
+        var rig = new LoopRig(s => { s.OpenDelay = 0; s.VisibleOnly = false; s.HeightBelow = 4; });
+        var corpse = rig.Game.Add(LoopRig.Vukah, 3, LoopRig.OfferInv, y: -6);   // down a slope
+        corpse.Offer = new Offer(true, false, 5);
+        corpse.Slots = [new ContainerSlot(10, Flint, 6)];
+        rig.ScanFor(3000);
+        Assert.Empty(rig.Game.Interacts);
+        var line = Assert.Single(UnreadLines(rig));
+        Assert.Contains("LootContainer_Enemy_Corpse_Vukah_Test", line);
+        Assert.Contains("6.0 m below you, deeper than Depth below me (4 m)", line);
+    }
+
+    [Fact]
+    public void A_corpse_beyond_the_corpse_radius_says_so()
+    {
+        var rig = new LoopRig(s => { s.OpenDelay = 0; s.CorpsesRadius = 5; });
+        var corpse = rig.Game.Add(LoopRig.Vukah, 8, LoopRig.OfferInv);
+        corpse.Offer = new Offer(true, false, 5);
+        rig.ScanFor(1000);
+        Assert.Contains("beyond the corpse radius (5 m)", Assert.Single(UnreadLines(rig)));
+    }
+
+    [Fact]
+    public void An_elite_corpse_with_Bosses_off_says_so()
+    {
+        var rig = new LoopRig(s => { s.OpenDelay = 0; s.Bosses = false; });
+        var corpse = rig.Game.Add(LoopRig.EliteCorpse, 3, LoopRig.OfferInv);
+        corpse.Offer = new Offer(true, false, 5);
+        rig.ScanFor(1000);
+        Assert.Contains("a boss, mini boss or elite corpse, and Bosses is off", Assert.Single(UnreadLines(rig)));
+    }
+
+    [Fact]
+    public void A_corpse_out_of_sight_says_so()
+    {
+        var rig = new LoopRig(s => { s.OpenDelay = 0; s.VisibleOnly = true; });
+        var corpse = rig.Game.Add(LoopRig.Vukah, 3, LoopRig.OfferInv);
+        corpse.Offer = new Offer(true, false, 5);
+        corpse.Sight = Sight.Hidden;
+        rig.ScanFor(3000);
+        Assert.Empty(rig.Game.Interacts);
+        Assert.Contains("not in plain view from where you stand", Assert.Single(UnreadLines(rig)));
+    }
+
+    [Fact]
+    public void A_bush_left_for_the_skip_list_writes_no_corpse_line()
+    {
+        var rig = new LoopRig(s => { s.OpenDelay = 0; s.SkipList = "=Material_PlantFibre"; });
+        rig.Game.Add(LoopRig.Bush, 3, LoopRig.OfferInv);
+        rig.ScanFor(1000);
+        Assert.Empty(LootLines(rig));
+    }
+
+    [Fact]
+    public void A_corpse_first_out_of_reach_then_looted_gets_both_lines()
+    {
+        var rig = new LoopRig(s => { s.OpenDelay = 0; s.VisibleOnly = false; s.HeightBelow = 4; s.SkipList = "=Material_T1_Twigs"; });
+        var corpse = rig.Game.Add(LoopRig.Vukah, 3, LoopRig.OfferInv, y: -6);
+        corpse.Offer = new Offer(true, false, 5);
+        corpse.Slots = [new ContainerSlot(10, Flint, 6), new ContainerSlot(11, Twigs, 2)];
+        rig.ScanFor(1000);
+        corpse.Position = new Kiln.WorldPosition(3, -2, 0);   // the player walked down to it
+        rig.ScanAfter(100);
+        corpse.Offer = new Offer(true, false, 6);
+        rig.ScanFor(500);
+        Assert.Single(rig.Game.Moves);
+        Assert.Equal(2, LootLines(rig).Count);
+        Assert.Single(UnreadLines(rig));
+    }
 }

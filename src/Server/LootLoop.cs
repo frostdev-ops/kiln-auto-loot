@@ -60,6 +60,8 @@ internal sealed class LootLoop
     // what a corpse, chest or creature pile kept and why: one kiln.log line per target (a report of corpses "never
     // looted" was corpses keeping skipped stacks, which the game removes only once they are empty)
     private readonly CritterWatch _left = new("loot");
+    // corpses in reach the loop does not look into, and why (height window, radius, sight, a switch): one line per corpse
+    private readonly CritterWatch _unread = new("loot");
     private readonly HashSet<EntityId> _spotsSaid = [];
     private bool _spotsDue;   // this scan looks for fishing spots (every BlinkMs)
     private readonly HashSet<EntityId> _playerIds = [];
@@ -326,6 +328,7 @@ internal sealed class LootLoop
         _critters.Reset();
         _fish.Reset();
         _left.Reset();
+        _unread.Reset();
         _spotsSaid.Clear();
         _lastScan = long.MinValue;
         _work.Clear();
@@ -644,10 +647,11 @@ internal sealed class LootLoop
         {
             ProbeTrace.Note(e, $"height: outside the height window (dy {dy:0.0} m)");
             Counters.HeightOut++;   // above or below the player's height window: as if out of range
-            if (classified is { Rule: { Group: Group.Fish } fr, Key: var fk })
-                WatchLeft(p, fk, fr, d2, dy, dy < 0
-                    ? $"{-dy:0.0} m below you, deeper than Depth below me ({p.Settings.HeightBelow:0} m)"
-                    : $"{dy:0.0} m above you, higher than Height above me ({p.Settings.HeightAbove:0} m)");
+            var outside = dy < 0
+                ? $"{-dy:0.0} m below you, deeper than Depth below me ({p.Settings.HeightBelow:0} m)"
+                : $"{dy:0.0} m above you, higher than Height above me ({p.Settings.HeightAbove:0} m)";
+            if (classified is { Rule: { Group: Group.Fish } fr, Key: var fk }) WatchLeft(p, fk, fr, d2, dy, outside);
+            if (classified is { Rule: { } ur, Key: var uk }) UnreadLine(p, e, uk, ur, d2, () => "it is " + outside);
             return;
         }
         if (classified is not { Rule: { } rule, Key: var key })
@@ -778,6 +782,7 @@ internal sealed class LootLoop
         {
             ProbeTrace.Note(e, "container: not released");
             Counters.ContainersHeldBack++;   // gate step 4
+            UnreadLine(p, e, key, rule, d2, () => "it is boss loot, which Auto Loot always leaves for you");
             return;
         }
         var verdict = LootRules.Decide(rule, released: true, d2, s, p.Filter, out var noticeItem, gp.NearBase);
@@ -785,6 +790,7 @@ internal sealed class LootLoop
         {
             ProbeTrace.Note(e, $"container: refused ({verdict})");
             CountRefusal(p, verdict, noticeItem);
+            UnreadLine(p, e, key, rule, d2, () => CorpseRefusal(verdict, rule, s));
             return;
         }
         if (Release.IsHarvest(rule) && !HarvestFits(p, gp, e, rule, out _))
@@ -812,6 +818,8 @@ internal sealed class LootLoop
         if (!InSight(p, gp, e, key))
         {
             ProbeTrace.Note(e, "container: not in sight");
+            if (p.Sight.TryGetValue(key, out var seen) && !seen.Visible)
+                UnreadLine(p, e, key, rule, d2, () => "it is not in plain view from where you stand (Only what I can see)");
             return;
         }
         if (_budget <= 0)
@@ -1107,6 +1115,29 @@ internal sealed class LootLoop
             $"so only its loot-all can take it, all at once, and {why}");
         if (line is not null) _keyLine(line);
     }
+
+    /// <summary>The kiln.log line of a corpse (or boss loot) in reach that the loop does not look into, once per corpse:
+    /// a player's "it never touched that corpse" says where to look (the height window, a radius, sight, a switch).</summary>
+    private void UnreadLine(PlayerLoot p, EntityId e, ulong key, TemplateRule rule, float d2, Func<string> why)
+    {
+        if (_unread.Told(key)) return;
+        if (!(rule.Group is Group.Corpse or Group.Boss || (rule.Group == Group.Enemy && _game.IsDead(e)))) return;
+        var line = _unread.Left(key, () =>
+            $"loot: player {p.Entity} {rule.Name} {Math.Sqrt(d2):0.0} m away: not looked into while {why()}");
+        if (line is not null) _keyLine(line);
+    }
+
+    private static string CorpseRefusal(Verdict v, TemplateRule rule, PersonalSettings s) => v switch
+    {
+        Verdict.GroupOff when (rule.Flags & (TemplateFlags.Boss | TemplateFlags.Elite)) != 0 && s.Corpses =>
+            "it is a boss, mini boss or elite corpse, and Bosses is off",
+        Verdict.GroupOff => "Corpses is off",
+        Verdict.RadiusOut => $"it is beyond the corpse radius ({LootRules.GroupRadius(Group.Corpse, s):0} m)",
+        Verdict.YieldIgnored => "everything it can give is on the skip list",
+        Verdict.NotListed => "nothing it can give is on the only list",
+        Verdict.NotFocus => "nothing it can give is the gather focus",
+        _ => v.ToString(),
+    };
 
     private static string BagText(BagRefusal why) => why == BagRefusal.CarryLimit ? "your carry limit" : "no room under your bag rules";
 
