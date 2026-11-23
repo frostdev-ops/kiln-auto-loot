@@ -13,9 +13,10 @@ internal static class ProbeTrace
 {
     public const string Symbol = "KILN_AUTOLOOT_PROBE";
 
-    /// <summary>Whether an entity is watched, and where its lines go (tick thread; null = nobody watches).</summary>
-    internal static Func<EntityId, bool>? Watching;
-    internal static Action<EntityId, string>? Sink;
+    /// <summary>Whether an entity is watched, and where its lines go (null = nobody watches). Per thread: the loop runs on
+    /// the tick thread, and the offline tests run loops on several threads at once.</summary>
+    [ThreadStatic] internal static Func<EntityId, bool>? Watching;
+    [ThreadStatic] internal static Action<EntityId, string>? Sink;
 
     /// <summary>One decision about a watched entity ("site: text").</summary>
     public static void Note(EntityId e, string text)
