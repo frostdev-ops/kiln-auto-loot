@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.7
 - **Farm animal produce** (new switch, off by default; contributed by potter420, pull request #3): the milk, wool and
   other produce your grown farm animals (goats, yaks, ...) have ready is collected within your main radius, the same
   way the game's Collect does, with the game's own pickup note. The mod takes only what waits in the animal: it never
