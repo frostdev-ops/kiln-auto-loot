@@ -3,11 +3,17 @@
 // why; one more when a take was sent but the swarm is still there a moment later (the game did not hand the bait over);
 // and one per bait-like template the mod's table does not know. So a player's report shows what happened to the frogs
 // and maggots they walked past. At most MaxLines per world, then one line saying the rest is left out. Pure; the loop
-// writes the lines.
+// writes the lines. A second watch ("fish") does the same for the fish a player with Fish on passes, and for the
+// fishing spots in their reach.
 namespace KilnAutoLoot.Core;
 
 public sealed class CritterWatch
 {
+    private readonly string _kind;
+
+    /// <param name="kind">the lines' first word ("critter"; "fish" for the fish a player passes with Fish on).</param>
+    public CritterWatch(string kind = "critter") => _kind = kind;
+
     public const int MaxLines = 200;
     /// <summary>A swarm still there this long after its take was sent counts as not handed over.</summary>
     public const long StillThereMs = 2000;
@@ -103,6 +109,6 @@ public sealed class CritterWatch
         }
         if (_capSaid) return null;
         _capSaid = true;
-        return $"critter: {MaxLines} critter lines in this world; the rest are left out";
+        return $"{_kind}: {MaxLines} {_kind} lines in this world; the rest are left out";
     }
 }
