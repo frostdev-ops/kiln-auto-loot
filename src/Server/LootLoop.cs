@@ -60,9 +60,9 @@ internal sealed class LootLoop
     private readonly CritterWatch _fish = new("fish");
     // what a corpse, chest or creature pile kept and why: one kiln.log line per target (a report of corpses "never
     // looted" was corpses keeping skipped stacks, which the game removes only once they are empty)
-    private readonly CritterWatch _left = new("loot");
+    private readonly CritterWatch _left = new("loot", "\"left\"");
     // corpses in reach the loop does not look into, and why (height window, radius, sight, a switch): one line per corpse
-    private readonly CritterWatch _unread = new("loot");
+    private readonly CritterWatch _unread = new("loot", "\"not looked into\"");
     private readonly HashSet<EntityId> _spotsSaid = [];
     private bool _spotsDue;   // this scan looks for fishing spots (every BlinkMs)
     private readonly HashSet<EntityId> _playerIds = [];

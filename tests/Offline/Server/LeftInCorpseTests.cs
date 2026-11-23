@@ -329,4 +329,16 @@ public sealed class LeftInCorpseTests
         Assert.Empty(UnreadLines(later));
         Assert.Empty(later.Game.Interacts);
     }
+
+    // two watches write "loot:" lines, each with its own cap of 200 a world: each cap line says which lines stop
+    [Fact]
+    public void The_cap_line_of_the_not_looked_into_lines_says_which_lines_stop()
+    {
+        var rig = new LoopRig(s => { s.OpenDelay = 0; s.CorpsesRadius = 2; });
+        for (var i = 0; i <= CritterWatch.MaxLines; i++) rig.Game.Add(LoopRig.Vukah, 3 + i * 0.05, LoopRig.OfferInv);
+        rig.ScanAfter(100);
+        var cap = Assert.Single(LootLines(rig), l => l.Contains("in this world"));
+        Assert.Equal(CritterWatch.MaxLines, UnreadLines(rig).Count(l => l != cap));
+        Assert.Contains("not looked into", cap);
+    }
 }

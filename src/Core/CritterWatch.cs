@@ -9,10 +9,16 @@ namespace KilnAutoLoot.Core;
 
 public sealed class CritterWatch
 {
-    private readonly string _kind;
+    private readonly string _kind, _what;
 
     /// <param name="kind">the lines' first word ("critter"; "fish" for the fish a player passes with Fish on).</param>
-    public CritterWatch(string kind = "critter") => _kind = kind;
+    /// <param name="what">what the cap line calls the lines it stops (default: the kind), for two watches of one
+    /// kind.</param>
+    public CritterWatch(string kind = "critter", string? what = null)
+    {
+        _kind = kind;
+        _what = what ?? kind;
+    }
 
     public const int MaxLines = 200;
     /// <summary>A swarm still there this long after its take was sent counts as not handed over.</summary>
@@ -122,6 +128,6 @@ public sealed class CritterWatch
         }
         if (_capSaid) return null;
         _capSaid = true;
-        return $"{_kind}: {MaxLines} {_kind} lines in this world; the rest are left out";
+        return $"{_kind}: {MaxLines} {_what} lines in this world; the rest are left out";
     }
 }
