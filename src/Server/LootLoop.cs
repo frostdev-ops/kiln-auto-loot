@@ -822,7 +822,7 @@ internal sealed class LootLoop
         if (!InSight(p, gp, e, key))
         {
             ProbeTrace.Note(e, "container: not in sight");
-            if (p.Sight.TryGetValue(key, out var seen) && !seen.Visible)
+            if (HiddenNow(p, key))
                 UnreadLine(p, e, key, rule, d2, () => "it is not in plain view from where you stand (Only what I can see)");
             return;
         }
@@ -1238,7 +1238,8 @@ internal sealed class LootLoop
         if (wanted && !InSight(p, gp, e, key))
         {
             wanted = false;
-            why = "not in plain view (Only what I can see)";
+            // a check the step's shared ray budget could not answer yet is no reason to leave it (no line)
+            if (HiddenNow(p, key)) why = "not in plain view (Only what I can see)";
         }
         if (watch is not null && why is not null) WatchLeft(p, key, rule, d2, dy, why);
         if (_budget <= 0)
@@ -1397,6 +1398,11 @@ internal sealed class LootLoop
             p.Sight[key] = (now + SightCacheMs, visible);
         }
     }
+
+    /// <summary>Line of sight answered "hidden" for this target lately (InSight false for another reason: the step's
+    /// ray budget is spent, ask again).</summary>
+    private bool HiddenNow(PlayerLoot p, ulong key) =>
+        p.Sight.TryGetValue(key, out var c) && !c.Visible && c.Until > _clock.NowMs;
 
     private void LeftBehind(PlayerLoot p, uint item)
     {

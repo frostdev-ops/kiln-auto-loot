@@ -190,4 +190,33 @@ public sealed class CritterLogTests
         w.Reset();
         Assert.NotNull(w.Left(1, "critter: x"));
     }
+
+    // 0.2.8: "Only what I can see" is on by default, so every critter in reach asks for line of sight. A check the step's
+    // shared ray budget could not answer ("ask again next step") is no reason to leave a swarm: its line says what
+    // happened once there is an answer, not "not in plain view".
+    [Fact]
+    public void A_critter_whose_sight_check_waits_for_the_ray_budget_gets_no_not_in_view_line()
+    {
+        var rig = Rig();
+        var frogs = rig.Game.Add(LoopRig.Frogs, 3, Swarm);
+        frogs.Sight = Sight.Later;
+        rig.ScanAfter(100);
+        Assert.Empty(rig.Game.Loots);
+        frogs.Sight = Sight.Visible;
+        rig.ScanFor(1000);
+        Assert.NotEmpty(rig.Game.Loots);
+        var line = Assert.Single(Critter(rig));
+        Assert.Contains("loot sent", line);
+        Assert.DoesNotContain("not in plain view", line);
+    }
+
+    [Fact]
+    public void A_critter_out_of_sight_says_so()
+    {
+        var rig = Rig();
+        rig.Game.Add(LoopRig.Frogs, 3, Swarm).Sight = Sight.Hidden;
+        rig.ScanFor(1000);
+        Assert.Empty(rig.Game.Loots);
+        Assert.Contains("not in plain view", Assert.Single(Critter(rig)));
+    }
 }

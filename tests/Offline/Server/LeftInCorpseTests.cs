@@ -312,4 +312,21 @@ public sealed class LeftInCorpseTests
         Assert.Equal(10ul, Assert.Single(rig.Game.Moves).Slot);
         Assert.Empty(rig.Game.Loots);
     }
+
+    // a corpse whose sight check waited for the ray budget, with an older "hidden" answer that ran out: no line until a
+    // check answers again
+    [Fact]
+    public void A_corpse_whose_sight_check_waits_for_the_ray_budget_gets_no_out_of_sight_line()
+    {
+        var (rig, corpse) = VukahCorpse();
+        corpse.Sight = Sight.Hidden;
+        rig.ScanAfter(100);
+        Assert.Contains("not in plain view", Assert.Single(UnreadLines(rig)));
+
+        var (later, laterCorpse) = VukahCorpse();
+        laterCorpse.Sight = Sight.Later;
+        later.ScanFor(500);
+        Assert.Empty(UnreadLines(later));
+        Assert.Empty(later.Game.Interacts);
+    }
 }
