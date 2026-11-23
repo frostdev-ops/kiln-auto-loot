@@ -34,8 +34,8 @@
   lines per world.
 - Fishing bait that Auto Loot does not know (reported by Tyrion67: maggots "not in the mod's table") now gets a
   kiln.log line that says what your game's data showed of it, so the next log tells us why. In the game data we
-  checked, all nine kinds of bait swarm (fireflies, moths, grasshoppers, scarabs, pillbugs, frogs, maggots) are
-  known.
+  checked, all nine bait swarms (fireflies and frogs in two forms each, moths, grasshoppers, scarabs, pillbugs and
+  maggots) are known.
 
 ## 0.2.7
 - **Farm animal produce** (new switch, off by default; contributed by potter420, pull request #3): the milk, wool and
