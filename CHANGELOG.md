@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+- **Corpses that keep a skipped item stay where they fell** (reported by HadToRegister): with Twigs on the skip
+  list, Vukah corpses looked as if they were never looted. They are looted: Auto Loot takes the Animal Fur and
+  everything else you want from them, one stack at a time, and leaves the Twigs in the corpse, as the skip list says.
+  The game removes a corpse only once it is empty, so a corpse still holding Twigs stays. While you have a corpse
+  open yourself, Auto Loot waits, and it carries on once you close it.
+- kiln.log now says what a corpse, chest or creature pile kept, and why, once for each: for example "left Twigs x2
+  (on the skip list); taking Animal Fur x6". Creature piles the mod cannot look into (bones, bat fur, critter parts:
+  the game hands their contents over only all at once) that it leaves whole get a line too, with the reason: an item
+  they can give is on your skip list, nothing they can give is on your only list, or a bag rule needs the amounts.
+  At most 200 such lines per world.
+
 ## 0.2.7
 - **Farm animal produce** (new switch, off by default; contributed by potter420, pull request #3): the milk, wool and
   other produce your grown farm animals (goats, yaks, ...) have ready is collected within your main radius, the same
