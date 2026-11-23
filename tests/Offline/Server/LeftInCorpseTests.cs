@@ -283,4 +283,33 @@ public sealed class LeftInCorpseTests
         Assert.Equal(2, LootLines(rig).Count);
         Assert.Single(UnreadLines(rig));
     }
+
+    // 0.2.8 (HadToRegister, Tyrion67): what a corpse can give is read from the game data (its default inventory); loot the
+    // game adds at the death can be missing from that list. A readable corpse is never refused up front because every
+    // item of its list is skipped (or none is listed): it is read, and each stack is judged.
+    [Fact]
+    public void A_readable_corpse_whose_known_yield_is_all_skipped_is_still_read_and_gives_the_rest()
+    {
+        var (rig, corpse) = VukahCorpse(s => s.SkipList = "=Material_T1_Twigs, =Flint");   // its yield: flint, twigs
+        corpse.Slots = [new ContainerSlot(10, Apple, 3), new ContainerSlot(11, Twigs, 2)];  // apple: not in that list
+        rig.ScanAfter(100);
+        corpse.Offer = new Offer(true, false, 6);
+        rig.ScanFor(500);
+        var move = Assert.Single(rig.Game.Moves);
+        Assert.Equal(10ul, move.Slot);
+        Assert.Empty(rig.Game.Loots);
+        Assert.Contains("left Twigs x2 (on the skip list)", Assert.Single(LootLines(rig)));
+    }
+
+    [Fact]
+    public void A_readable_corpse_whose_known_yield_has_no_listed_item_is_still_read_in_only_mode()
+    {
+        var (rig, corpse) = VukahCorpse(s => { s.ItemFilter = FilterMode.Only; s.OnlyList = "=Food_Apple"; });
+        corpse.Slots = [new ContainerSlot(10, Apple, 3), new ContainerSlot(11, Twigs, 2)];
+        rig.ScanAfter(100);
+        corpse.Offer = new Offer(true, false, 6);
+        rig.ScanFor(500);
+        Assert.Equal(10ul, Assert.Single(rig.Game.Moves).Slot);
+        Assert.Empty(rig.Game.Loots);
+    }
 }

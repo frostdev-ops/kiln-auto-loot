@@ -29,9 +29,11 @@ public static class LootRules
     /// <summary>As above, with the player's whole item filter. Skip mode judges the yield against the skip list as
     /// always. A picking filter (only mode, gather focus) judges a container-path target by its yield: a harvest
     /// (plant, crop, heap) needs at least one yield item the filter takes (the whole yield comes along, so the rest of
-    /// it is taken too) and is refused without a known yield; a corpse or chest with a known yield needs one too, one
-    /// without a yield is judged slot by slot. Pickups (<paramref name="released"/> false) are judged by their own
-    /// item, not here. <paramref name="inBase"/>: the player is in or near a base (GamePlayer.NearBase): ripe crops
+    /// it is taken too) and is refused without a known yield. Pickups (<paramref name="released"/> false) are judged by
+    /// their own item, not here. A released corpse (a dead enemy too) or chest is never refused by its yield, in either
+    /// mode (0.2.8): the yield is only what the game data says it can give (its default inventory), and loot the game
+    /// adds at the death can be missing from it; it is read and judged slot by slot. A creature's pile (drop) keeps the
+    /// yield check, as its contents cannot always be read. <paramref name="inBase"/>: the player is in or near a base (GamePlayer.NearBase): ripe crops
     /// follow cropsInBase there (fields in a base may be decoration), crops elsewhere. A plant or ground template flagged
     /// grown (a world plant a planted crop grows into: algae, wheat, pumpkins) counts as a crop in a base (cropsInBase,
     /// the crop radius) and as what it is elsewhere.</summary>
@@ -65,6 +67,9 @@ public static class LootRules
             float r = GroupRadius(group, s);
             if (distanceSquared > r * r) return Verdict.RadiusOut;
         }
+        // a corpse or chest is read and judged slot by slot (its yield list may lack loot added at the death)
+        if (released && (group == Group.Chest || (group == Group.Corpse && (rule.Flags & TemplateFlags.Drop) == 0)))
+            return Verdict.Allowed;
         if (filter.Picks)
         {
             if (!released) return Verdict.Allowed;

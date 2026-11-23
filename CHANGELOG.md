@@ -17,14 +17,19 @@
   everything else you want from them, one stack at a time, and leaves the Twigs in the corpse, as the skip list says.
   The game removes a corpse only once it is empty, so a corpse still holding Twigs stays. While you have a corpse
   open yourself, Auto Loot waits, and it carries on once you close it.
+- **A corpse or chest is never passed over for what it is supposed to give.** What the game data lists for a corpse
+  may miss loot the game adds when the enemy dies, so Auto Loot now opens every corpse and chest in reach and judges
+  each stack. Before, a corpse whose listed loot was all on your skip list (or had nothing on your only list or gather
+  focus) was never looked into. Creature piles (bones, bat fur) still go by what they can give, as their contents can't
+  always be read.
 - kiln.log now says what a corpse, chest or creature pile kept, and why, once for each: for example "left Twigs x2
   (on the skip list); taking Animal Fur x6". Creature piles the mod cannot look into (bones, bat fur, critter parts:
   the game hands their contents over only all at once) that it leaves whole get a line too, with the reason: an item
   they can give is on your skip list, nothing they can give is on your only list, or a bag rule needs the amounts.
   At most 200 such lines per world.
 - kiln.log also says why a corpse in reach was not looked into, once for each: out of sight, outside the height
-  window, beyond the corpse radius, Corpses off, Bosses off for a boss, mini boss or elite corpse, or nothing it can
-  give is wanted. At most 200 such lines per world.
+  window, beyond the corpse radius, Corpses off, or Bosses off for a boss, mini boss or elite corpse. At most 200 such
+  lines per world.
 - Fishing bait that Auto Loot does not know (reported by Tyrion67: maggots "not in the mod's table") now gets a
   kiln.log line that says what your game's data showed of it, so the next log tells us why. In the game data we
   checked, all nine kinds of bait swarm (fireflies, moths, grasshoppers, scarabs, pillbugs, frogs, maggots) are

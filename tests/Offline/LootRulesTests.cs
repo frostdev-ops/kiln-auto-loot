@@ -184,6 +184,37 @@ public class LootRulesTests
         Assert.Equal(Verdict.Allowed, LootRules.Decide(Rule(g), false, 1f, s, ignore, out _));   // no yield list
     }
 
+    // 0.2.8: a corpse's or chest's yield is only what the game data says it can give (the pickup and the default
+    // inventory); loot the game adds at the death can be missing from it. A released one is read and judged slot by slot,
+    // never refused up front by its yield. Creature piles (drop) keep the yield check: their contents cannot always be read.
+    [Theory]
+    [InlineData(Group.Corpse)]
+    [InlineData(Group.Chest)]
+    [InlineData(Group.Enemy)]   // a dead enemy counts as a corpse
+    public void A_released_corpse_or_chest_is_never_refused_by_its_yield(Group g)
+    {
+        var s = new PersonalSettings();
+        var twigsOnly = Rule(g, TemplateFlags.None, 1);
+        var skip = ItemFilter.SkipOnly(Ignore("=Material_T1_Twigs"));
+        Assert.Equal(Verdict.Allowed, LootRules.Decide(twigsOnly, true, 1f, s, skip, out var n));
+        Assert.Equal(0u, n);
+        var only = new ItemFilter(FilterMode.Only, NoIgnore, Ignore("=Food_Apple"), 0);
+        Assert.Equal(Verdict.Allowed, LootRules.Decide(twigsOnly, true, 1f, s, only, out _));
+        var focus = new ItemFilter(FilterMode.Skip, NoIgnore, null, 6);
+        Assert.Equal(Verdict.Allowed, LootRules.Decide(twigsOnly, true, 1f, s, focus, out _));
+    }
+
+    [Fact]
+    public void A_creature_pile_is_still_refused_by_its_yield()
+    {
+        var s = new PersonalSettings();
+        var pile = Rule(Group.Corpse, TemplateFlags.Drop, 1);
+        Assert.Equal(Verdict.YieldIgnored, LootRules.Decide(pile, true, 1f, s, ItemFilter.SkipOnly(Ignore("=Material_T1_Twigs")), out var n));
+        Assert.Equal(1u, n);
+        var only = new ItemFilter(FilterMode.Only, NoIgnore, Ignore("=Food_Apple"), 0);
+        Assert.Equal(Verdict.NotListed, LootRules.Decide(pile, true, 1f, s, only, out _));
+    }
+
     [Fact]
     public void Notice_item_is_the_first_ignored_yield_id()
     {
