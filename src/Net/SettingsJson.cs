@@ -15,15 +15,17 @@ internal static class SettingsJson
 
     public static string Write(PersonalSettings s) => JsonSerializer.Serialize(s, Options);
 
-    /// <summary>A player's settings; keys an older game does not send yet start from the ones they replace
-    /// (SettingsMigration).</summary>
+    /// <summary>A player's settings, or what a server applies for one; keys an older game or server does not send yet
+    /// start from the ones they replace (SettingsMigration.ApplyAdded). Defaults a newer version moved are left as
+    /// sent: an older game's settings apply as its window shows them, and a newer game shows what an older server
+    /// applies.</summary>
     public static PersonalSettings? Read(string json)
     {
         if (string.IsNullOrWhiteSpace(json)) return null;
         try
         {
             if (JsonNode.Parse(json) is not JsonObject o) return ReadAs<PersonalSettings>(json);
-            SettingsMigration.Apply(o);
+            SettingsMigration.ApplyAdded(o);
             return o.Deserialize<PersonalSettings>(Options);
         }
         catch (Exception e) when (e is JsonException or NotSupportedException or InvalidOperationException or ArgumentException)

@@ -7,6 +7,7 @@ using System.Text.Json.Nodes;
 using KilnAutoLoot.Client;
 using KilnAutoLoot.Core;
 using KilnAutoLoot.Net;
+using KilnAutoLoot.Server;
 using Xunit;
 
 namespace KilnAutoLoot.Offline;
@@ -117,7 +118,7 @@ public sealed class SettingsMigrationTests
     }
 
     [Fact]
-    public void The_settings_files_and_an_old_players_message_and_profiles_get_the_new_defaults()
+    public void The_settings_files_and_profiles_get_the_new_defaults()
     {
         var client = """
             {
@@ -133,14 +134,52 @@ public sealed class SettingsMigrationTests
             SettingsMigration.MovedInFile(server, "defaults"));
         Assert.Empty(SettingsMigration.MovedInFile("""{ "defaults": { "heightAbove": 4, "settingsVersion": 2 } }""", "defaults"));
 
-        var sent = SettingsJson.Read("""{"heightAbove": 4, "heightBelow": 4, "visibleOnly": false}""")!;
-        Assert.Equal((0f, 0f, true), (sent.HeightAbove, sent.HeightBelow, sent.VisibleOnly));
-
         var book = ProfileBook.FromJson("""
             {"format": "kiln-auto-loot-profiles", "version": 1, "active": "mine", "profiles": [
               {"id": "mine", "settings": {"heightAbove": 4, "heightBelow": 8, "visibleOnly": false}}]}
             """)!;
         var mine = book.SettingsOf("mine")!;
         Assert.Equal((0f, 8f, true), (mine.HeightAbove, mine.HeightBelow, mine.VisibleOnly));
+    }
+
+    // ---- 0.2.8, version skew: settings that cross the network are never moved to the new defaults. An older game sends
+    // what its window shows, and the server applies exactly that until the game updates (its file moves then, once). A
+    // newer game reading an older server's answer shows what that server applies.
+
+    private const string OldDefaults = """{"heightAbove": 4, "heightBelow": 4, "visibleOnly": false, "crops": false}""";
+
+    [Fact]
+    public void An_older_games_settings_are_applied_as_it_sends_them_every_time()
+    {
+        var rig = new LootServerTests.LoopRig();
+        for (var i = 0; i < 2; i++)
+        {
+            rig.Loop.QueuePersonal(rig.Player, OldDefaults, []);
+            Assert.Equal([(rig.Player, true)], rig.Loop.ApplyQueuedSettings());
+            var s = rig.Loop.SettingsOf(rig.Player);
+            Assert.Equal((4f, 4f, false), (s.HeightAbove, s.HeightBelow, s.VisibleOnly));
+            Assert.False(s.CropsInBase);   // a key the older game does not send still starts from the one it replaces
+            rig.Clock.NowMs += LootLoop.SettingsGapMs;
+        }
+    }
+
+    [Fact]
+    public void A_newer_game_shows_what_an_older_server_applies()
+    {
+        var link = new SettingsLink(new LootServer(new Data()));
+        link.SetInfo(new ServerInfoMsg(OldDefaults, "{}", 0, false, false, true, true, 0));
+        var effective = link.Info!.Effective!;
+        Assert.Equal((4f, 4f, false), (effective.HeightAbove, effective.HeightBelow, effective.VisibleOnly));
+        Assert.False(effective.CropsInBase);
+    }
+
+    [Fact]
+    public void Settings_written_by_this_version_carry_their_version_across_the_network()
+    {
+        var mine = new PersonalSettings { HeightAbove = 4, HeightBelow = 4, VisibleOnly = false };
+        var json = SettingsJson.Write(mine);
+        Assert.Contains("\"settingsVersion\":2", json);
+        var back = SettingsJson.Read(json)!;
+        Assert.Equal((4f, 4f, false, 2), (back.HeightAbove, back.HeightBelow, back.VisibleOnly, back.SettingsVersion));
     }
 }

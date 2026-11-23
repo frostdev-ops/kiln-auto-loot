@@ -10,8 +10,10 @@
   HadToRegister saw with Vukah corpses that were never touched: a corpse more than 4 m below or above you (down a
   slope, on a camp's platform) was outside the old height window, so Auto Loot never looked into it.
 - Your saved settings move to the new defaults where they still hold the old ones (4 m above, 4 m below, "Only what I
-  can see" off), in your settings file, every profile and a server's defaults for players without the mod. Anything
-  you changed yourself stays as you set it.
+  can see" off), once, in your settings file, every profile and a server's defaults for players without the mod. Any
+  other value stays as you set it, and after the move you can choose the old values again. On a server, the new
+  defaults reach each player once they update Kiln Auto Loot: a game that still runs an older version keeps the
+  settings its window shows (players without the mod get the server's defaults).
 - **Corpses that keep a skipped item stay where they fell** (reported by HadToRegister): with Twigs on the skip
   list, Vukah corpses looked as if they were never looted. They are looted: Auto Loot takes the Animal Fur and
   everything else you want from them, one stack at a time, and leaves the Twigs in the corpse, as the skip list says.

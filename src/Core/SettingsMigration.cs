@@ -8,8 +8,10 @@
 //          heightAbove 4 -> 0, heightBelow 4 -> 0 (no limit), visibleOnly false -> true. A value the player changed
 //          stays.
 // Read where settings come from outside: the player's config file and the server file's defaults (before Kiln reads
-// them, as Kiln writes the missing keys with their defaults at once), profiles.json and the settings a player's game
-// sends. Pure: no Kiln calls.
+// them, as Kiln writes the missing keys with their defaults at once) and profiles.json; each is moved once, as it is
+// saved with settingsVersion right after. Settings that cross the network (what a player's game sends, what a server
+// answers) only get the added keys (ApplyAdded), never the moved defaults: an older game gets exactly what its window
+// shows until it updates, and a newer game shows what an older server applies. Pure: no Kiln calls.
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
@@ -68,12 +70,12 @@ public static class SettingsMigration
     }
 
     /// <summary>Adds what <see cref="Missing"/> finds to the object, and the new defaults <see cref="Moved"/>
-    /// finds.</summary>
+    /// finds: for settings a file or profiles.json holds (moved once: they are saved with settingsVersion).</summary>
     public static void Apply(JsonObject? o)
     {
         if (o is null) return;
         var moved = Moved(o);
-        foreach (var (key, value) in Missing(o)) o[key] = value;
+        ApplyAdded(o);
         foreach (var (key, value) in moved)
         {
             var name = o.FirstOrDefault(p => string.Equals(p.Key, key, StringComparison.OrdinalIgnoreCase)).Key ?? key;
@@ -84,6 +86,14 @@ public static class SettingsMigration
                 _ => JsonValue.Create(value.ToString()),
             };
         }
+    }
+
+    /// <summary>Adds only what <see cref="Missing"/> finds to the object: for settings that cross the network, where
+    /// nothing is moved to a new default (an older game sends them as its window shows them, every time).</summary>
+    public static void ApplyAdded(JsonObject? o)
+    {
+        if (o is null) return;
+        foreach (var (key, value) in Missing(o)) o[key] = value;
     }
 
     /// <summary>As <see cref="Moved"/> for a settings file's text: the config paths to set after Kiln read it.</summary>
