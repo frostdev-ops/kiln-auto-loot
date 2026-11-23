@@ -88,6 +88,25 @@ public sealed class LivestockTests
     }
 
     [Fact]
+    public void A_player_whose_user_group_may_not_access_inventories_takes_nothing()
+    {
+        // a Visitor or Guest group on a server (canAccessInventories false): no loot-all, and no slot moves either,
+        // which would get past the game's own checks
+        foreach (var skip in new[] { "", "=Flint" })
+        {
+            var rig = Rig(s => s.SkipList = skip);
+            rig.Game.PlayerList[0] = rig.Game.PlayerList[0] with { MayOpenInventories = false };
+            var goat = Goat(rig, produce: [(Apple, 2), (Flint, 3)]);
+            rig.ScanFor(LootLoop.LivestockEveryMs * 2);
+            Assert.Equal(0, LootsOf(rig, goat));
+            Assert.Empty(rig.Game.Moves);
+            Assert.Empty(rig.Game.Interacts);
+            Assert.Equal(0, rig.Loop.Counters.LivestockReads);
+            Assert.True(rig.Loop.Counters.LivestockNoAccess > 0);
+        }
+    }
+
+    [Fact]
     public void Animals_follow_the_main_radius()
     {
         var rig = Rig(s => { s.Radius = 10; s.ChestsRadius = 30; s.CropsRadius = 30; });

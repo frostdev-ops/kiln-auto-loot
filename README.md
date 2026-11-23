@@ -18,7 +18,9 @@ notes run in each player's game.
   a base, so the fields in your base can stay as decoration.
 - **Collects from your farm animals** (off by default, switch **Farm animal produce** on): the milk, wool and other
   produce your grown farm animals have ready, within your main radius, as the game's Collect does (with its pickup
-  note). Babies are never grown up and no animal is petted: the mod takes only what waits in the animal.
+  note). Babies are never grown up and no animal is petted: the mod takes only what waits in the animal. On a
+  server, only for players whose user group may access inventories (canAccessInventories), the right the game asks
+  for at a chest.
 - **Empties containers**: corpses of defeated enemies (bosses and elites too, or leave those to you), chests, coffins,
   cupboards and heaps out in the world. A fresh container waits a moment before it is opened (1 s by default), so the
   game has time to fill in its special loot.

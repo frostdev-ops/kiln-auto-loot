@@ -12,7 +12,11 @@ namespace KilnAutoLoot.Server;
 /// the window signal for players whose game has no Kiln Auto Loot.</param>
 /// <param name="NearBase">In a base or near a build zone (PlayerStateId.InBase or IsNearBuildingZone): decor
 /// stays.</param>
-internal readonly record struct GamePlayer(EntityId Entity, WorldPosition Position, bool UiOpen, bool NearBase = false);
+/// <param name="MayOpenInventories">The player's user group may access inventories (enshrouded_server.json
+/// canAccessInventories), or the server does not know the group's rights (Player.PermissionsKnown false): farm animals,
+/// which live in a base, are taken from only then.</param>
+internal readonly record struct GamePlayer(EntityId Entity, WorldPosition Position, bool UiOpen, bool NearBase = false,
+    bool MayOpenInventories = true);
 
 /// <summary>Spawn.Inspect's answer: the template behind the entity and the spawn serial (ids are reused).</summary>
 internal readonly record struct Inspected(Guid? Template, ulong Serial);

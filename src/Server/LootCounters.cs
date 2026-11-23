@@ -55,6 +55,7 @@ internal sealed class LootCounters
     public long DecorLeft;
     public long CrittersSeen, CrittersSent, CrittersStuck;   // critters seen, takes sent, still there after the take        // world furniture players also build (books) left: the player is in or near a base
     public long LivestockReads;   // farm animals whose inventory was read for produce
+    public long LivestockNoAccess;   // ... left: the player's user group may not access inventories
 
     // Kiln side: injects sent, moves, the per-scan cap, sight.
     public long Injects, Moves, CapReached, SightBlocked;

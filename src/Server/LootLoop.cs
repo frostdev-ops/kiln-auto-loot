@@ -729,6 +729,14 @@ internal sealed class LootLoop
             ProbeTrace.Note(e, "container: the harvest does not fit the bag rules");
             return;   // checked before the accept too
         }
+        if (Release.IsLivestock(rule) && !gp.MayOpenInventories)
+        {
+            // farm animals live in a base: a player whose user group may not access inventories (the game gives it no
+            // prompt at a chest) gets none of their produce; the slot moves would get past the game's own checks
+            ProbeTrace.Note(e, "livestock: left, the player's user group may not access inventories");
+            Counters.LivestockNoAccess++;
+            return;
+        }
         if (!InSight(p, gp, e, key))
         {
             ProbeTrace.Note(e, "container: not in sight");

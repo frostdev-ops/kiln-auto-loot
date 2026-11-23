@@ -25,7 +25,9 @@ internal sealed class KilnGame(Action<string> logOnce) : IGame
             if (p.State != PlayerState.InGame || p.IsDead || p.Position is not { } at) continue;
             var ui = p.Is(PlayerStateId.InFullScreenUi) || p.Is(PlayerStateId.ClientUiIsInLootingMenu);
             var nearBase = p.IsInBase || p.Is(PlayerStateId.IsNearBuildingZone);
-            list.Add(new GamePlayer(p.Entity, at, ui, nearBase));
+            // a user group without "access inventories" gets no prompt at a chest: no farm animal's produce either
+            var inventories = !p.PermissionsKnown || p.Can(PlayerPermissions.AccessInventories);
+            list.Add(new GamePlayer(p.Entity, at, ui, nearBase, inventories));
         }
         return list;
     }
