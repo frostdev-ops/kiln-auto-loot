@@ -68,8 +68,9 @@ internal sealed class LootLoop
     private long _lastScan = long.MinValue, _lastBlink, _scanNumber;
     private int _budget, _rotate;
     private readonly Func<long> _micros;
-    // the scan in progress: every (player, target) to look at, and how far it got
-    private readonly List<(PlayerLoot P, GamePlayer Gp, EntityId E)> _work = [];
+    // the scan in progress: every (player, target) to look at, and how far it got; Spot: a fishing spot for its kiln.log
+    // line (FishingSpot), else a target
+    private readonly List<(PlayerLoot P, GamePlayer Gp, EntityId E, bool Spot)> _work = [];
     private int _workAt;
     private bool _scanOpen;
     private long _scanMicros;
@@ -484,12 +485,13 @@ internal sealed class LootLoop
         while (_workAt < _work.Count)
         {
             if (_step.Targets > 0 && _micros() - stepStart >= budget) break;
-            var (p, gp, e) = _work[_workAt++];
+            var (p, gp, e, spot) = _work[_workAt++];
             // a player who left, switched looting off or opened a window since the scan started is passed over
             if (!_players.TryGetValue(p.Entity, out var current) || !ReferenceEquals(current, p)) continue;
             if (!p.Settings.Looting || (p.ReportsWindow && p.WindowOpen)) continue;
             _step.Targets++;
-            Target(p, gp, e);
+            if (spot) FishingSpot(p, gp, e);
+            else Target(p, gp, e);
         }
         _step.TargetMicros = _micros() - targetsStart - (_step.InspectMicros - inspectBefore);
         _scanMicros += _micros() - stepStart;
@@ -599,14 +601,18 @@ internal sealed class LootLoop
             return;
         }
         Counters.PlayersLooting++;
-        if (s.Fish && _spotsDue) FishingSpotsNear(p, gp, lists);
+        // the fishing spots in reach go first, looked at within the step budget as targets are (their line reads the
+        // template: Spawn.Inspect)
+        if (s.Fish && _spotsDue)
+            foreach (var e in _game.Within(lists.FishingSpots, gp.Position, s.Radius))
+                if (!_spotsSaid.Contains(e)) _work.Add((p, gp, e, true));
 
         var radius = LootRules.SearchRadius(s);   // the largest of the general and the group radii
         var seen = new HashSet<EntityId>();
         foreach (var list in new Func<IReadOnlyList<EntityId>>[] { () => lists.Pickups, () => lists.Offers, () => lists.Inventories, () => lists.Markers })
             foreach (var e in _game.Within(list(), gp.Position, radius))
                 if (!_playerIds.Contains(e) && seen.Add(e))
-                    _work.Add((p, gp, e));
+                    _work.Add((p, gp, e, false));
     }
 
     private void Target(PlayerLoot p, GamePlayer gp, EntityId e)
@@ -718,24 +724,20 @@ internal sealed class LootLoop
 
     /// <summary>Fish on: one kiln.log line per fishing spot within the main radius (the radius fish use). Its fish are
     /// not in the water: the spot's effect draws them, the rod's minigame makes one from the spot's fish table when it
-    /// bites, and its item exists only once caught, so there is nothing to take. Looked for every
-    /// <see cref="BlinkMs"/>.</summary>
-    private void FishingSpotsNear(PlayerLoot p, GamePlayer gp, Candidates lists)
+    /// bites, and its item exists only once caught, so there is nothing to take. Spots are looked for every
+    /// <see cref="BlinkMs"/> and looked at in the scan's budgeted steps (<see cref="Classify"/>: Spawn.Inspect).</summary>
+    private void FishingSpot(PlayerLoot p, GamePlayer gp, EntityId e)
     {
-        foreach (var e in _game.Within(lists.FishingSpots, gp.Position, p.Settings.Radius))
-        {
-            if (_spotsSaid.Count > 4096) _spotsSaid.Clear();
-            if (!_spotsSaid.Add(e) || _game.PositionOf(e) is not { } at) continue;
-            var inspected = _game.Inspect(e);
-            var name = inspected?.Template is { } g ? _game.TemplateName(g) : null;
-            var key = KeyOf(e, inspected?.Serial ?? 0) | (1UL << 63);   // never a fish's key
-            var line = _fish.Left(key,
-                $"fish: player {p.Entity} is {Math.Sqrt(DistanceSquared(gp.Position, at)):0.0} m from a fishing spot" +
-                $"{(name is null ? "" : $" ({name})")}: its fish come only with a fishing rod (the game makes the " +
-                "fish when one bites), so Kiln Auto Loot cannot take them. It takes fish swimming free, the ones you " +
-                "can grab by hand while swimming (mostly in the Veilwater Basin's lakes)");
-            if (line is not null) _keyLine(line);
-        }
+        if (_spotsSaid.Count > 4096) _spotsSaid.Clear();
+        if (!_spotsSaid.Add(e) || _game.PositionOf(e) is not { } at) return;
+        var key = (Classify(e)?.Key ?? KeyOf(e, 0)) | (1UL << 63);   // never a fish's key
+        var name = TemplateOf(e) is { } g ? _game.TemplateName(g) : null;
+        var line = _fish.Left(key,
+            $"fish: player {p.Entity} is {Math.Sqrt(DistanceSquared(gp.Position, at)):0.0} m from a fishing spot" +
+            $"{(name is null ? "" : $" ({name})")}: its fish come only with a fishing rod (the game makes the " +
+            "fish when one bites), so Kiln Auto Loot cannot take them. It takes fish swimming free, the ones you " +
+            "can grab by hand while swimming (mostly in the Veilwater Basin's lakes)");
+        if (line is not null) _keyLine(line);
     }
 
     private string ItemText(uint item) =>

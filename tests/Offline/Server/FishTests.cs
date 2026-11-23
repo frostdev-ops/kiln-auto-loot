@@ -110,4 +110,20 @@ public sealed class FishTests
         // looked for every 2 s, not every scan
         Assert.InRange(rig.Game.FindCalls[LootLoop.FishingSpotComponent], 1, 4);
     }
+
+    [Fact]
+    public void Fishing_spots_are_looked_at_within_the_step_budget()
+    {
+        // a spot's line reads its template (Spawn.Inspect), the call 0.2.6 put under the step budget: a player with Fish
+        // on who arrives at a lake full of spots is not held up by them in one server step
+        const long cost = 2000;
+        var rig = Rig();
+        rig.StepAfter(200);   // the first look around, nothing in reach
+        rig.Game.InspectCostMicros = cost;
+        for (var i = 0; i < 6; i++) AddSpot(rig, 2 + i);
+        long worst = 0;
+        for (var i = 0; i < 200; i++) worst = Math.Max(worst, rig.StepAfter());
+        Assert.Equal(6, Fish(rig).Count(l => l.Contains("from a fishing spot (_FishingLocation_Generic_MoreFish)")));
+        Assert.True(worst <= LootLoop.StepBudgetMicros + cost, $"a step spent {worst} us");
+    }
 }
