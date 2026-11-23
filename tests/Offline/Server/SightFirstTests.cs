@@ -102,10 +102,11 @@ public sealed class SightFirstTests
     {
         const long cost = 400;
         var rig = new LoopRig(s => s.OpenDelay = 0);
-        rig.StepAfter(200);
-        rig.Game.SightCostMicros = cost;
         var twigs = new List<FakeEntity>();
-        for (var i = 0; i < 300; i++) twigs.Add(rig.Game.Add(LoopRig.Twig, 0.5 + i * 0.04, Pickup, pickupItem: 1));
+        for (var i = 0; i < 300; i++) twigs.Add(rig.Game.Add(LoopRig.Twig, 1000.5 + i * 0.04, Pickup, pickupItem: 1));
+        for (var i = 0; i < 6; i++) rig.StepAfter(200);                   // far away: every list found, nothing in reach
+        rig.Game.SightCostMicros = cost;
+        rig.Game.PlayerList[0] = rig.Game.PlayerList[0] with { Position = new WorldPosition(1000, 0, 0) };   // arrived
         long worst = rig.StepAfter(100);                                  // the scan starts: nearest first
         Assert.Contains(rig.Game.Loots, l => l.Host == twigs[0].Id);
         for (var i = 0; i < 60; i++) worst = Math.Max(worst, rig.StepAfter());   // about a second of 16 ms steps

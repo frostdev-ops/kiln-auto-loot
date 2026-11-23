@@ -43,6 +43,10 @@ internal sealed class FakeGame : IGame
     /// <summary>What one line-of-sight call costs on the work clock (microseconds).</summary>
     public long SightCostMicros;
     public readonly Dictionary<string, int> FindCalls = new();
+    /// <summary>What one World.Find costs on the work clock (a pass over every entity of the world), and one position
+    /// read (World.Position, also each candidate Nearby.Within looks at); PositionReads counts the reads.</summary>
+    public long FindCostMicros, PositionCostMicros, PlayerCostMicros;
+    public long PositionReads;
     public readonly Dictionary<Guid, string> TemplateNames = new();
     public int FreeSlotCount = 10;
     /// <summary>The work clock the loop's step budget reads (microseconds): each Spawn.Inspect costs
@@ -94,21 +98,32 @@ internal sealed class FakeGame : IGame
         MoveCounts.Clear();
     }
 
-    public IReadOnlyList<GamePlayer> Players() => PlayerList;
+    public IReadOnlyList<GamePlayer> Players()
+    {
+        Micros += PlayerCostMicros;
+        return PlayerList.ToArray();
+    }
 
     public IReadOnlyList<EntityId> Find(string component)
     {
         FindCalls[component] = FindCalls.GetValueOrDefault(component) + 1;
+        Micros += FindCostMicros;
         return Entities.Values.Where(e => e.Components.Contains(component)).Select(e => e.Id).ToList();
     }
 
+    // as Nearby.Within: one position read per candidate, nearest first
     public IReadOnlyList<EntityId> Within(IReadOnlyList<EntityId> candidates, WorldPosition at, double radius) =>
-        candidates.Where(c => PositionOf(c) is { } p && p.DistanceTo(at) <= radius)
-            .OrderBy(c => PositionOf(c)!.Value.DistanceTo(at)).ToList();
+        candidates.Select(c => (Id: c, At: PositionOf(c)))
+            .Where(c => c.At is { } p && p.DistanceTo(at) <= radius)
+            .OrderBy(c => c.At!.Value.DistanceTo(at)).Select(c => c.Id).ToList();
 
-    public WorldPosition? PositionOf(EntityId entity) =>
-        Entities.TryGetValue(entity, out var e) ? e.Position
-        : PlayerList.FirstOrDefault(p => p.Entity == entity) is { Entity.IsNone: false } gp ? gp.Position : null;
+    public WorldPosition? PositionOf(EntityId entity)
+    {
+        PositionReads++;
+        Micros += PositionCostMicros;
+        return Entities.TryGetValue(entity, out var e) ? e.Position
+            : PlayerList.FirstOrDefault(p => p.Entity == entity) is { Entity.IsNone: false } gp ? gp.Position : null;
+    }
 
     public string? TemplateName(Guid template) => TemplateNames.TryGetValue(template, out var n) ? n : null;
 

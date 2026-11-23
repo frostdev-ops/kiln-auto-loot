@@ -9,19 +9,24 @@ using Xunit;
 
 namespace KilnAutoLoot.Offline.LootServerTests;
 
-public sealed class ScanBudgetTests
+public sealed class ScanBudgetTests(Xunit.ITestOutputHelper output)
 {
     private static readonly string[] None = [];
 
+    /// <summary>Where the player arrives (a fast travel 1 km away).</summary>
+    private const double There = 1000;
+
     /// <summary>A player who just arrived somewhere: <paramref name="n"/> entities the mod has never looked at, all in
-    /// reach, each Spawn.Inspect costing <paramref name="costMicros"/>.</summary>
+    /// reach, each Spawn.Inspect costing <paramref name="costMicros"/>. They were far away during earlier scans,
+    /// and the next step's scan is the first to have them in reach.</summary>
     private static (LoopRig Rig, List<FakeEntity> Burst) Arrive(int n, long costMicros)
     {
         var rig = new LoopRig(s => s.OpenDelay = 0);
-        rig.StepAfter(200);   // a scan with nothing around
-        rig.Game.InspectCostMicros = costMicros;
         var burst = new List<FakeEntity>();
-        for (var i = 0; i < n; i++) burst.Add(rig.Game.Add(LoopRig.Unknown, (i % 140) / 10.0, None, pickupItem: 1));
+        for (var i = 0; i < n; i++) burst.Add(rig.Game.Add(LoopRig.Unknown, There + (i % 140) / 10.0, None, pickupItem: 1));
+        for (var i = 0; i < 6; i++) rig.StepAfter(200);   // scans with nothing in reach: every list found
+        rig.Game.InspectCostMicros = costMicros;
+        rig.Game.PlayerList[0] = rig.Game.PlayerList[0] with { Position = new WorldPosition(There, 0, 0) };
         return (rig, burst);
     }
 
@@ -46,7 +51,7 @@ public sealed class ScanBudgetTests
     public void Targets_near_the_player_are_still_taken_while_a_burst_is_worked_through()
     {
         var (rig, _) = Arrive(2000, 500);
-        var twig = rig.Game.Add(LoopRig.Twig, 0.5, None, pickupItem: 1);   // nearest of all
+        var twig = rig.Game.Add(LoopRig.Twig, There + 0.5, None, pickupItem: 1);   // nearest of all (new: found in the next scan)
         for (var i = 0; i < 400 && rig.Game.Loots.Count == 0; i++) rig.StepAfter();
         Assert.Contains(rig.Game.Loots, l => l.Host == twig.Id);
     }
@@ -70,7 +75,7 @@ public sealed class ScanBudgetTests
     public void A_player_who_leaves_while_their_scan_is_spread_out_is_dropped_from_it()
     {
         var (rig, _) = Arrive(1000, 1000);
-        rig.Game.Add(LoopRig.Twig, 13.9, None, pickupItem: 1);   // far end of the burst
+        rig.Game.Add(LoopRig.Twig, There + 13.9, None, pickupItem: 1);   // far end of the burst
         rig.StepAfter(200);
         rig.Loop.Leave(rig.Player);
         rig.Game.PlayerList.Clear();
@@ -94,14 +99,14 @@ public sealed class ScanBudgetTests
         Assert.Contains("1 new", line);
 
         // another slow step within the minute: no second line
-        var again = rig.Game.Add(LoopRig.Unknown, 2, None, pickupItem: 1);
+        var again = rig.Game.Add(LoopRig.Unknown, There + 2, None, pickupItem: 1);
         rig.Game.InspectCost[again.Id] = 2_000_000;
         for (var i = 0; i < 10; i++) rig.StepAfter(200);
         Assert.Single(rig.KeyLines, l => l.StartsWith("slow scan:", StringComparison.Ordinal));
 
         // a minute after the first: the next slow step is named
         rig.Clock.NowMs += LootLoop.SlowLineGapMs;
-        var third = rig.Game.Add(LoopRig.Unknown, 3, None, pickupItem: 1);
+        var third = rig.Game.Add(LoopRig.Unknown, There + 3, None, pickupItem: 1);
         rig.Game.InspectCost[third.Id] = 2_000_000;
         for (var i = 0; i < 10; i++) rig.StepAfter(200);
         Assert.Equal(2, rig.KeyLines.Count(l => l.StartsWith("slow scan:", StringComparison.Ordinal)));
@@ -114,4 +119,174 @@ public sealed class ScanBudgetTests
         for (var i = 0; i < 200; i++) rig.StepAfter();
         Assert.DoesNotContain(rig.KeyLines, l => l.StartsWith("slow scan:", StringComparison.Ordinal));
     }
+
+    // ---- 0.2.8, the owner's hosted game on Kiln 30.8: "slow scan: 56-113 ms in one server step, most in the scan's
+    // start (Players, World.Find, Nearby.Within). start 89 ms: 1 player(s), 4 lists of 10252 entities". Every 100 ms
+    // the start found four lists over the whole world and read the position of every candidate in them, though only the
+    // few within reach of a player matter. A world of 12,000 candidates, all but a few far away:
+
+    private static readonly string[][] Lists =
+        [[LootLoop.PickupComponent], [LootLoop.OfferComponent], [LootLoop.InventoryComponent], [LootLoop.LootMarkerComponent]];
+
+    private static LoopRig BigWorld(int n = 12_000, bool hasMod = true)
+    {
+        var rig = new LoopRig(s => s.OpenDelay = 0, hasMod: hasMod);
+        rig.Game.FindCostMicros = 600;     // one pass over the world's entities
+        rig.Game.PositionCostMicros = 2;   // one position read
+        for (var i = 0; i < n; i++) rig.Game.Add(LoopRig.Unknown, 100 + (i * 7919L) % 4000, Lists[i % 4]);
+        return rig;
+    }
+
+    [Fact]
+    public void A_world_of_12000_candidates_keeps_every_step_of_the_scan_within_the_budget()
+    {
+        var rig = BigWorld();
+        var twig = rig.Game.Add(LoopRig.Twig, 2, None, pickupItem: 1);
+        long worst = 0;
+        for (var i = 0; i < 125; i++) worst = Math.Max(worst, rig.StepAfter());   // two seconds of 16 ms steps
+        output.WriteLine($"12k far candidates: worst step {worst} us; {rig.Loop.Counters.ScanCount} complete scans; {rig.Game.PositionReads} position reads");
+        Assert.True(worst <= LootLoop.StepBudgetMicros + 600, $"a step spent {worst} us");
+        Assert.Contains(rig.Game.Loots, l => l.Host == twig.Id);
+        // Full fresh positions, not a speed-bound heuristic: every completed scan rechecks the far candidates.
+        Assert.True(rig.Game.PositionReads >= 12_000, $"{rig.Game.PositionReads} position reads");
+    }
+
+    [Fact]
+    public void After_a_fast_travel_into_the_far_part_of_the_world_what_is_in_reach_there_is_taken()
+    {
+        var rig = BigWorld();
+        var there = rig.Game.Add(LoopRig.Twig, 3001, None, pickupItem: 1);
+        for (var i = 0; i < 60; i++) rig.StepAfter();
+        Assert.DoesNotContain(rig.Game.Loots, l => l.Host == there.Id);
+        rig.Game.PlayerList[0] = rig.Game.PlayerList[0] with { Position = new WorldPosition(3000, 0, 0) };
+        for (var i = 0; i < 125 && !rig.Game.Loots.Any(l => l.Host == there.Id); i++) rig.StepAfter();
+        Assert.Contains(rig.Game.Loots, l => l.Host == there.Id);
+    }
+
+    [Fact]
+    public void Something_new_next_to_the_player_or_coming_close_is_taken_soon()
+    {
+        var rig = BigWorld();
+        var coming = rig.Game.Add(LoopRig.Twig, 60, None, pickupItem: 1);   // beyond reach
+        for (var i = 0; i < 60; i++) rig.StepAfter();
+        var fresh = rig.Game.Add(LoopRig.Twig, 1, None, pickupItem: 1);     // dropped right next to the player
+        coming.Position = new WorldPosition(4, 0, 0);                        // it came close
+        var steps = 0;
+        while (steps < 200 && !(rig.Game.Loots.Any(l => l.Host == fresh.Id) && rig.Game.Loots.Any(l => l.Host == coming.Id)))
+        {
+            rig.StepAfter();
+            steps++;
+        }
+        Assert.Contains(rig.Game.Loots, l => l.Host == fresh.Id);
+        Assert.Contains(rig.Game.Loots, l => l.Host == coming.Id);
+        Assert.True(steps * 16 <= 2500, $"{steps * 16} ms");
+    }
+    [Fact]
+    public void A_warm_world_of_12000_in_range_candidates_slices_position_reads_too()
+    {
+        var rig = BigWorld();
+        foreach (var e in rig.Game.Entities.Values) e.Position = new WorldPosition(2, 0, 0);
+        // Warm every list before measuring: the interrupted cache exempted known-near positions from its budget.
+        rig.Loop.Scan();
+        long worst = 0;
+        for (var i = 0; i < 200; i++) worst = Math.Max(worst, rig.StepAfter());
+        output.WriteLine($"12k near candidates: worst step {worst} us; {rig.Loop.Counters.ScanCount} complete scans");
+        Assert.True(worst <= LootLoop.StepBudgetMicros + 600, $"a step spent {worst} us");
+    }
+
+    [Fact]
+    public void New_corpses_in_any_candidate_list_are_seen_by_the_next_complete_scan()
+    {
+        var rig = BigWorld();
+        rig.Loop.Scan();
+        var scans = rig.Loop.Counters.ScanCount;
+        var corpse = rig.Game.Add(LoopRig.Vukah, 2, [LootLoop.InventoryComponent]);
+        corpse.Slots = [new ContainerSlot(1, 7, 1)];
+        for (var i = 0; i < 500 && rig.Loop.Counters.ScanCount == scans; i++) rig.StepAfter();
+        Assert.True(rig.Loop.Counters.ScanCount > scans);
+        Assert.Contains(corpse.Id, rig.Game.Inspected);
+    }
+
+    [Fact]
+    public void Nearest_targets_go_first_even_when_their_component_list_comes_last()
+    {
+        var rig = new LoopRig(s => s.OpenDelay = 0);
+        var far = rig.Game.Add(LoopRig.Unknown, 12, [LootLoop.PickupComponent]);
+        var near = rig.Game.Add(LoopRig.Unknown, 1, [LootLoop.LootMarkerComponent]);
+        rig.Game.InspectCostMicros = LootLoop.StepBudgetMicros;
+        rig.StepAfter();
+        Assert.Contains(near.Id, rig.Game.Inspected);
+        Assert.DoesNotContain(far.Id, rig.Game.Inspected);
+    }
+
+    [Fact]
+    public void A_slow_indivisible_Find_is_reported_not_misrepresented_as_a_hard_4ms_bound()
+    {
+        var rig = BigWorld();
+        rig.Game.FindCostMicros = 80_000;
+        var spent = rig.StepAfter();
+        Assert.Equal(80_000, spent);  // no position reads or target is forced after this call
+        Assert.Equal(0, rig.Game.PositionReads);
+        var line = Assert.Single(rig.KeyLines, l => l.StartsWith("slow scan:"));
+        Assert.Contains("1 World.Find (80 ms, slowest call 80 ms)", line);
+        Assert.Contains("0 positions read", line);
+        output.WriteLine(line);
+    }
+
+    [Fact]
+    public void Players_and_individual_position_reads_have_separate_slow_call_evidence()
+    {
+        var rig = new LoopRig(s => s.OpenDelay = 0);
+        rig.Game.PlayerCostMicros = 55_000;
+        rig.StepAfter();
+        Assert.Contains("Players 55 ms", Assert.Single(rig.KeyLines));
+        rig.Game.PlayerCostMicros = 0;
+        rig.Clock.NowMs += LootLoop.SlowLineGapMs;
+        rig.Game.Add(LoopRig.Twig, 1, [], pickupItem: 1);
+        rig.Game.PositionCostMicros = 60_000;
+        for (var i = 0; i < 10 && rig.KeyLines.Count < 2; i++) rig.StepAfter();
+        Assert.Contains("1 positions read (60 ms, slowest call 60 ms)", rig.KeyLines[1]);
+        Assert.Equal(2, rig.KeyLines.Count);
+    }
+
+    [Fact]
+    public void Shared_component_entries_read_their_position_once_per_scan_and_work_nearest_first()
+    {
+        var rig = new LoopRig(s => s.OpenDelay = 0);
+        for (var i = 0; i < 12_000; i++) rig.Game.Add(LoopRig.Unknown, 100, Lists.SelectMany(x => x).ToArray());
+        var twig = rig.Game.Add(LoopRig.Twig, 2, [], pickupItem: 1);
+        rig.Game.PositionCostMicros = 2;
+        var scans = rig.Loop.Counters.ScanCount;
+        long worst = 0;
+        while (rig.Loop.Counters.ScanCount == scans) worst = Math.Max(worst, rig.StepAfter());
+        Assert.InRange(rig.Game.PositionReads, 12_001, 12_002);  // shared discovery plus the live target read
+        Assert.Contains(rig.Game.Loots, l => l.Host == twig.Id);
+        Assert.True(worst <= LootLoop.StepBudgetMicros + 2, $"a step spent {worst} us");
+    }
+
+    [Fact]
+    public void Enemy_classification_during_preparation_is_also_time_sliced()
+    {
+        var rig = new LoopRig(s => { s.OpenDelay = 0; s.EnemyPause = true; });
+        for (var i = 0; i < 100; i++) rig.Game.Add(LoopRig.Unknown, 2, [LootLoop.EnemyComponent]);
+        rig.Game.InspectCostMicros = 1000;
+        var scans = rig.Loop.Counters.ScanCount;
+        long worst = 0;
+        while (rig.Loop.Counters.ScanCount == scans) worst = Math.Max(worst, rig.StepAfter());
+        Assert.Equal(100, rig.Game.InspectCalls);
+        Assert.True(worst <= LootLoop.StepBudgetMicros + 1000, $"a step spent {worst} us");
+    }
+
+    [Fact]
+    public void An_opened_game_window_during_preparation_prevents_prepared_loot()
+    {
+        var rig = BigWorld(hasMod: false);
+        var twig = rig.Game.Add(LoopRig.Twig, 2, [], pickupItem: 1);
+        rig.StepAfter();
+        rig.Game.PlayerList[0] = rig.Game.PlayerList[0] with { UiOpen = true };
+        var scans = rig.Loop.Counters.ScanCount;
+        while (rig.Loop.Counters.ScanCount == scans) rig.StepAfter();
+        Assert.DoesNotContain(rig.Game.Loots, l => l.Host == twig.Id);
+    }
+
 }

@@ -68,4 +68,27 @@ public sealed class NearReportTests
         Assert.Contains("window or a game window is open", log[0]);
         Assert.Contains("window or a game window is open", chat[0]);
     }
+    [Fact]
+    public void A_time_sliced_scan_reports_its_pauses_and_the_current_final_decisions()
+    {
+        var rig = new LoopRig(s => s.OpenDelay = 0);
+        for (var i = 0; i < 12_000; i++) rig.Game.Add(LoopRig.Unknown, 100, [LootLoop.InventoryComponent]);
+        var twig = rig.Game.Add(LoopRig.Twig, 2, [], pickupItem: 1);
+        List<string>? log = null;
+        var report = NearReport.Around(rig.Game, rig.Player, new WorldPosition(0, 0, 0), 15, [],
+            (l, _) => log = l.ToList());
+        rig.Loop.Explain(report);
+        rig.Game.PositionCostMicros = 2;
+        rig.StepAfter();
+        Assert.Null(log);  // discovery is not complete; the report is not prematurely finished
+        rig.Loop.SetWindowOpen(rig.Player, true);
+        for (var i = 0; i < 100 && log is null; i++) rig.StepAfter();
+        Assert.NotNull(log);
+        Assert.Contains("scan paused at its time budget", log![0]);
+        Assert.Contains("window or a game window is open", log[0]);
+        Assert.DoesNotContain(rig.Game.Loots, l => l.Host == twig.Id);
+        Assert.Null(ProbeTrace.Watching);
+        Assert.Null(ProbeTrace.Sink);
+    }
+
 }

@@ -78,11 +78,14 @@ internal sealed class LootLoop
     private int _budget, _rotate;
     private long _sightUnknownUntil;   // line of sight answered "not known" (not loaded yet): the height window decides until then
     private readonly Func<long> _micros;
+    private readonly CandidateIndex _index;   // this scan's candidate lists and shared positions
     // the scan in progress: every (player, target) to look at, and how far it got; Spot: a fishing spot for its kiln.log
     // line (FishingSpot), else a target
     private readonly List<(PlayerLoot P, GamePlayer Gp, EntityId E, bool Spot)> _work = [];
     private int _workAt;
     private bool _scanOpen;
+    private IEnumerator<bool>? _preparing;
+    private IReadOnlyList<GamePlayer> _livePlayers = [];
     private long _scanMicros;
     private int _scanSteps;
     private StepWork _step;
@@ -91,8 +94,8 @@ internal sealed class LootLoop
     /// <summary>What one server step of the scan did (the "slow scan" line).</summary>
     private struct StepWork
     {
-        public long StartMicros, EnemyMicros, TargetMicros, InspectMicros, SlowestInspect;
-        public int Players, Lists, Candidates, InReach, Targets, New;
+        public long StartMicros, EnemyMicros, TargetMicros, InspectMicros, SlowestInspect, FindMicros, ReadMicros, SlowestFind, SlowestRead, PlayerMicros;
+        public int Players, Finds, Candidates, Reads, InReach, Targets, New;
         public EntityId SlowestEntity;
     }
 
@@ -106,6 +109,7 @@ internal sealed class LootLoop
         Func<long>? micros = null)
     {
         _micros = micros ?? StopwatchMicros;
+        _index = new CandidateIndex(game, _micros);
         _game = game;
         _clock = clock;
         _data = data;
@@ -343,6 +347,10 @@ internal sealed class LootLoop
         _work.Clear();
         _workAt = 0;
         _scanOpen = false;
+        _preparing?.Dispose();
+        _preparing = null;
+        _livePlayers = [];
+        _index.Reset();
     }
 
     internal static long StopwatchMicros() =>
@@ -436,7 +444,8 @@ internal sealed class LootLoop
     }
 
     /// <summary>One whole scan of every player at once, without the step budget (tests, and a caller that wants it
-    /// done now). A scan in progress is finished first.</summary>
+    /// done now): the same incremental discovery and target decisions, run to completion. A scan in progress is finished
+    /// first.</summary>
     public void Scan()
     {
         var started = _micros();
@@ -449,11 +458,9 @@ internal sealed class LootLoop
         Continue(started, long.MaxValue);
     }
 
-    /// <summary>Starts a scan: the players, their window and enemy checks, and every target in reach of each, in the
-    /// order they are looked at (players rotated, each player's targets nearest first).</summary>
+    /// <summary>Starts a scan. Discovery, ordering and enemy checks are resumed by Continue, not done here.</summary>
     private void Begin()
     {
-        var started = _micros();
         var now = _clock.NowMs;
         _scanNumber++;
         _scanOpen = true;
@@ -462,57 +469,104 @@ internal sealed class LootLoop
         _work.Clear();
         _workAt = 0;
         _budget = MaxInjectsPerScan;
-        if (_ignoreVersion != _data.Items.Version)   // the item table was filled again: match every skip list anew
-            foreach (var player in _players.Values) Recompute(player);
         Counters.Scans++;
-        if (_near is { Scan: 0 } near) near.Scan = _scanNumber;   // the scan "/autoloot near" reports on
+        if (_near is { Scan: 0 } near) near.Scan = _scanNumber;
         _spotsDue = now - _lastBlink >= BlinkMs;
         if (_spotsDue)
         {
             _lastBlink = now;
             Counters.Rechecks++;
         }
-
-        var players = _game.Players();
-        var lists = new Candidates(_game);
-        _playerIds.Clear();
-        foreach (var gp in players) _playerIds.Add(gp.Entity);
-        for (var i = 0; i < players.Count; i++)
-        {
-            // fairness under the cap: a different player goes first each scan
-            var gp = players[(i + _rotate) % players.Count];
-            ScanPlayer(Join(gp.Entity), gp, lists);
-        }
-        if (players.Count > 0) _rotate = (_rotate + 1) % players.Count;
-        _step.Players = players.Count;
-        _step.Lists = lists.Fetched;
-        _step.Candidates = lists.Entities;
-        _step.InReach = _work.Count;
-        _step.StartMicros = _micros() - started - _step.EnemyMicros - _step.InspectMicros;
-        _step.TargetMicros = 0;
+        _preparing = Prepare().GetEnumerator();
     }
 
-    /// <summary>Looks at the scan's targets until <paramref name="budget"/> microseconds since <paramref name="stepStart"/>
-    /// are spent (at least one target per step); the scan ends when all were looked at.</summary>
+    private IEnumerable<bool> Prepare()
+    {
+        if (_ignoreVersion != _data.Items.Version)
+            foreach (var player in _players.Values.ToArray())
+            {
+                Recompute(player);
+                yield return true;
+            }
+        // Snapshot the players for discovery. Continue refreshes live state each step before using prepared work.
+        var players = _livePlayers;
+        _playerIds.Clear();
+        foreach (var gp in players)
+        {
+            _playerIds.Add(gp.Entity);
+            Join(gp.Entity);
+            yield return true;
+        }
+        _index.Begin(players.Select(gp => (gp.Position, Reach(Join(gp.Entity).Settings))));
+        _step.Players = players.Count;
+        // Lazy per-player discovery below avoids searching at all while everybody is paused/off.
+        for (var i = 0; i < players.Count; i++)
+        {
+            var gp = players[(i + _rotate) % players.Count];
+            foreach (var turn in ScanPlayer(Join(gp.Entity), gp)) yield return turn;
+        }
+        if (players.Count > 0) _rotate = (_rotate + 1) % players.Count;
+    }
+
+    /// <summary>At most one indivisible operation beyond the deadline, including preparation. No minimum target
+    /// after expensive preparation: the first target can wait for the next step.</summary>
     private void Continue(long stepStart, long budget)
     {
         _scanSteps++;
-        var targetsStart = _micros();
-        var inspectBefore = _step.InspectMicros;
-        while (_workAt < _work.Count)
+        _index.Step();
+        var t0 = _micros();
+        _livePlayers = _game.Players();
+        _step.PlayerMicros = _micros() - t0;
+        _step.Players = _livePlayers.Count;
+        _step.StartMicros += _step.PlayerMicros;
+        var turns = 0;
+        while (_preparing is not null && (turns == 0 || _micros() - stepStart < budget))
         {
-            if (_step.Targets > 0 && _micros() - stepStart >= budget) break;
-            var (p, gp, e, spot) = _work[_workAt++];
-            // a player who left, switched looting off or opened a window since the scan started is passed over
+            t0 = _micros();
+            var inspectBefore = _step.InspectMicros;
+            var enemyBefore = _step.EnemyMicros;
+            var more = _preparing.MoveNext();
+            _step.StartMicros += _micros() - t0 - (_step.InspectMicros - inspectBefore) - (_step.EnemyMicros - enemyBefore);
+            turns++;
+            if (!more)
+            {
+                _preparing.Dispose();
+                _preparing = null;
+            }
+        }
+        _step.Finds = _index.Finds;
+        _step.FindMicros = _index.FindMicros;
+        _step.Candidates = _index.Entities;
+        _step.Reads = _index.Reads;
+        _step.ReadMicros = _index.ReadMicros;
+        _step.SlowestFind = _index.SlowestFind;
+        _step.SlowestRead = _index.SlowestRead;
+        _step.InReach = _work.Count;
+        var targetsStart = _micros();
+        var inspected = _step.InspectMicros;
+        while (_preparing is null && _workAt < _work.Count && _micros() - stepStart < budget)
+        {
+            var (p, _, e, spot) = _work[_workAt++];
             if (!_players.TryGetValue(p.Entity, out var current) || !ReferenceEquals(current, p)) continue;
-            if (!p.Settings.Looting || (p.ReportsWindow && p.WindowOpen)) continue;
+            var gp = _livePlayers.FirstOrDefault(g => g.Entity == p.Entity);
+            if (gp.Entity.IsNone)
+            {
+                ProbeTrace.Note(p.Entity, "player: no longer alive and in the world");
+                continue;
+            }
+            if (!Ready(p, gp)) continue;
             _step.Targets++;
             if (spot) FishingSpot(p, gp, e);
             else Target(p, gp, e);
         }
-        _step.TargetMicros = _micros() - targetsStart - (_step.InspectMicros - inspectBefore);
+        _step.TargetMicros = _micros() - targetsStart - (_step.InspectMicros - inspected);
         _scanMicros += _micros() - stepStart;
-        if (_workAt < _work.Count) return;   // the rest in the next step
+        if (_preparing is not null || _workAt < _work.Count)
+        {
+            foreach (var gp in _livePlayers)
+                ProbeTrace.Note(gp.Entity, $"player: scan paused at its time budget ({(_preparing is not null ? "candidate discovery/order or enemy checks" : "targets")}); resumes next server step");
+            return;
+        }
 
         _scanOpen = false;
         _work.Clear();
@@ -532,15 +586,17 @@ internal sealed class LootLoop
         var w = _step;
         var phases = new (long Micros, string Name)[]
         {
-            (w.StartMicros, "the scan's start (Players, World.Find, Nearby.Within)"),
+            (w.StartMicros, "candidate discovery/order (Players, World.Find, positions)"),
             (w.EnemyMicros, "the enemy check"),
             (w.InspectMicros, "Spawn.Inspect of targets new to the mod"),
             (w.TargetMicros, "the target rules and game reads"),
         };
         var top = phases.MaxBy(x => x.Micros);
-        var left = _scanOpen ? $"{_work.Count - _workAt} targets left for the next steps" : "the scan is done";
+        var left = _preparing is not null ? "candidate discovery/order or enemy checks left for the next steps"
+            : _scanOpen ? $"{_work.Count - _workAt} targets left for the next steps" : "the scan is done";
         _keyLine($"slow scan: {Ms(spent)} ms in one server step, most in {top.Name} ({Ms(top.Micros)} ms). " +
-                 $"start {Ms(w.StartMicros)} ms: {w.Players} player(s), {w.Lists} lists of {w.Candidates} entities, {w.InReach} in reach; " +
+                 $"start {Ms(w.StartMicros)} ms: {w.Players} player(s), Players {Ms(w.PlayerMicros)} ms, {w.Finds} World.Find ({Ms(w.FindMicros)} ms, slowest call {Ms(w.SlowestFind)} ms), " +
+                 $"{w.Candidates} candidates in the lists, {w.Reads} positions read ({Ms(w.ReadMicros)} ms, slowest call {Ms(w.SlowestRead)} ms), {w.InReach} in reach; " +
                  $"enemy check {Ms(w.EnemyMicros)} ms; Spawn.Inspect {Ms(w.InspectMicros)} ms: {w.New} new, slowest call {Ms(w.SlowestInspect)} ms" +
                  $"{(w.New > 0 ? $" (entity {w.SlowestEntity.Value})" : "")}; targets {Ms(w.TargetMicros)} ms: {w.Targets} looked at; " +
                  $"scan step {_scanSteps}, {left}");
@@ -557,89 +613,96 @@ internal sealed class LootLoop
 
     internal static string Ms(long micros) => (micros / 1000).ToString(System.Globalization.CultureInfo.InvariantCulture);
 
-    /// <summary>The shared World.Find lists of one scan, each fetched on first need.</summary>
-    private sealed class Candidates(IGame game)
-    {
-        private IReadOnlyList<EntityId>? _pickups, _offers, _inventories, _markers, _enemies, _spots;
-        public IReadOnlyList<EntityId> Pickups => _pickups ??= Fetch(PickupComponent);
-        public IReadOnlyList<EntityId> Offers => _offers ??= Fetch(OfferComponent);
-        public IReadOnlyList<EntityId> Inventories => _inventories ??= Fetch(InventoryComponent);
-        public IReadOnlyList<EntityId> Markers => _markers ??= Fetch(LootMarkerComponent);
-        public IReadOnlyList<EntityId> Enemies => _enemies ??= Fetch(EnemyComponent);
-        public IReadOnlyList<EntityId> FishingSpots => _spots ??= Fetch(FishingSpotComponent);
-        public int Fetched { get; private set; }
-        public int Entities { get; private set; }
+    /// <summary>How far a player's scan looks: the largest target radius and the enemy check's distance.</summary>
+    private static double Reach(PersonalSettings s) => Math.Max(LootRules.SearchRadius(s), s.EnemyPause ? s.EnemyDistance : 0);
 
-        private IReadOnlyList<EntityId> Fetch(string component)
-        {
-            var list = game.Find(component);
-            Fetched++;
-            Entities += list.Count;
-            return list;
-        }
-    }
-
-    private void ScanPlayer(PlayerLoot p, GamePlayer gp, Candidates lists)
+    private bool Ready(PlayerLoot p, GamePlayer gp)
     {
-        var s = p.Settings;
-        Counters.PlayerScans++;
-        // nothing until the player's own settings are here (or the wait for them is over)
         p.FirstSeenMs ??= _clock.NowMs;
         if (!Settled(p, _clock.NowMs))
         {
             Counters.SettingsWaits++;
             ProbeTrace.Note(gp.Entity, "player: waiting for the player's settings");
-            return;
+            return false;
         }
-        // a game window or the F8 window is open: no accept, no loot-all for this player.
         var window = p.ReportsWindow ? p.WindowOpen : gp.UiOpen;
         if (window)
         {
             Counters.WindowPauses++;
             ProbeTrace.Note(gp.Entity, p.ReportsWindow ? "player: the F8 window or a game window is open (the player's game says so)"
                 : "player: a game window is open (inventory, map, a container)");
-            return;
+            return false;
         }
-        if (!s.Looting)
+        if (!p.Settings.Looting)
         {
             ProbeTrace.Note(gp.Entity, "player: auto loot is off (F9)");
-            return;   // only what the player takes by hand (E)
+            return false;
         }
+        return true;
+    }
 
-        // the mod's own search, exactly enemyDistance, not capped by the loot radius.
+    private IEnumerable<bool> ScanPlayer(PlayerLoot p, GamePlayer gp)
+    {
+        var s = p.Settings;
+        Counters.PlayerScans++;
+        if (!Ready(p, gp)) yield break;
+        // Preparation also slices enemy classification, radius filtering and priority-queue insertion/removal.
         if (s.EnemyPause)
         {
-            var enemyStart = _micros();
-            var inspectBefore = _step.InspectMicros;
-            foreach (var e in _game.Within(lists.Enemies, gp.Position, s.EnemyDistance))
-                if (Classify(e) is { Rule: { } er } && Release.IsPausingEnemy(er, _game.IsDead(e)))
+            foreach (var turn in _index.Prepare(EnemyComponent)) yield return turn;
+            foreach (var (e, at) in _index.Near(EnemyComponent))
+            {
+                var enemyStart = _micros();
+                var inspectBefore = _step.InspectMicros;
+                var pauses = at.DistanceTo(gp.Position) <= s.EnemyDistance &&
+                    Classify(e) is { Rule: { } er } && Release.IsPausingEnemy(er, _game.IsDead(e));
+                _step.EnemyMicros += _micros() - enemyStart - (_step.InspectMicros - inspectBefore);
+                if (pauses)
                 {
                     p.Enemy.EnemySeen();
                     Counters.EnemyNear++;
-                    break;
                 }
-            _step.EnemyMicros += _micros() - enemyStart - (_step.InspectMicros - inspectBefore);
+                yield return true;
+                if (pauses) break;
+            }
         }
         if (p.Enemy.Paused(s.EnemyPause))
         {
             Counters.EnemyPauses++;
             ProbeTrace.Note(gp.Entity, "player: paused, an enemy is near (Pause near enemies)");
-            return;
+            yield break;
         }
         ProbeTrace.Note(gp.Entity, "player: looked around");
         Counters.PlayersLooting++;
-        // the fishing spots in reach go first, looked at within the step budget as targets are (their line reads the
-        // template: Spawn.Inspect)
+        var ordered = new PriorityQueue<(EntityId Id, bool Spot), (int Kind, double Distance, int Order)>();
+        var order = 0;
         if (s.Fish && _spotsDue)
-            foreach (var e in _game.Within(lists.FishingSpots, gp.Position, s.Radius))
-                if (!_spotsSaid.Contains(e)) _work.Add((p, gp, e, true));
-
-        var radius = LootRules.SearchRadius(s);   // the largest of the general and the group radii
+        {
+            foreach (var turn in _index.Prepare(FishingSpotComponent)) yield return turn;
+            foreach (var (e, at) in _index.Near(FishingSpotComponent))
+            {
+                var d = at.DistanceTo(gp.Position);
+                if (d <= s.Radius && !_spotsSaid.Contains(e)) ordered.Enqueue((e, true), (0, d, order++));
+                yield return true;
+            }
+        }
+        var radius = LootRules.SearchRadius(s);
         var seen = new HashSet<EntityId>();
-        foreach (var list in new Func<IReadOnlyList<EntityId>>[] { () => lists.Pickups, () => lists.Offers, () => lists.Inventories, () => lists.Markers })
-            foreach (var e in _game.Within(list(), gp.Position, radius))
-                if (!_playerIds.Contains(e) && seen.Add(e))
-                    _work.Add((p, gp, e, false));
+        foreach (var component in new[] { PickupComponent, OfferComponent, InventoryComponent, LootMarkerComponent })
+        {
+            foreach (var turn in _index.Prepare(component)) yield return turn;
+            foreach (var (e, at) in _index.Near(component))
+            {
+                var d = at.DistanceTo(gp.Position);
+                if (d <= radius && !_playerIds.Contains(e) && seen.Add(e)) ordered.Enqueue((e, false), (1, d, order++));
+                yield return true;
+            }
+        }
+        while (ordered.TryDequeue(out var next, out _))
+        {
+            _work.Add((p, gp, next.Id, next.Spot));
+            yield return true;
+        }
     }
 
     private void Target(PlayerLoot p, GamePlayer gp, EntityId e)
