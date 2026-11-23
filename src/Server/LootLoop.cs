@@ -615,13 +615,15 @@ internal sealed class LootLoop
         var dy = at.Y - gp.Position.Y;
         var d2 = DistanceSquared(gp.Position, at);
         var classified = Classify(e);
-        // critters (fishing bait swarms), and fish while Fish is on: one kiln.log line each, taken or why not (CritterWatch)
+        // critters (fishing bait swarms), and fish while Fish is on: one kiln.log line each, taken or why not
+        // (CritterWatch)
         if (classified is { Rule: { } wr, Key: var wk } && WatchOf(p, wr) is { } watch)
         {
             var critter = wr.Group == Group.Critter;
             if (watch.Seen(wk) && critter) Counters.CrittersSeen++;
             if (watch.Again(wk, _clock.NowMs, ms => WatchLine(p, wr, d2, dy,
-                    $"still there {ms} ms after its take was sent: the game did not hand the {Thing(wr)} over ({LiveState(e)})")) is { } still)
+                    $"still there {ms} ms after its take was sent: the game did not hand the {Thing(wr)} over " +
+                    $"({LiveState(e)})")) is { } still)
             {
                 if (critter) Counters.CrittersStuck++;
                 _keyLine(still);
@@ -680,8 +682,10 @@ internal sealed class LootLoop
             }
             rule = live;
         }
-        // a fish is grabbed as the pickup it is; without one the game shows nothing to grab (the container path holds it)
-        if (rule.Group == Group.Fish && !hasPickup) WatchLeft(p, key, rule, d2, dy, $"the game shows no pickup on it ({LiveState(e)})");
+        // a fish is grabbed as the pickup it is; without one the game shows nothing to grab (the container path holds
+        // it)
+        if (rule.Group == Group.Fish && !hasPickup)
+            WatchLeft(p, key, rule, d2, dy, $"the game shows no pickup on it ({LiveState(e)})");
         var container = Release.IsContainerTarget(rule, hasPickup);
         ProbeTrace.Note(e, $"seen: {rule.Group} {rule.Flags}, {(container ? "container path" : $"pickup path, item {item}")}");
         if (container) Counters.ContainersSeen++;
@@ -692,8 +696,8 @@ internal sealed class LootLoop
 
     // ---------------------------------------------------------------- critter and fish lines
 
-    /// <summary>The kiln.log watch of a target: critters always; fish only while the player's Fish switch is on (it is off
-    /// by default: no line for every fish a player swims past); null = no lines.</summary>
+    /// <summary>The kiln.log watch of a target: critters always; fish only while the player's Fish switch is on (it is
+    /// off by default: no line for every fish a player swims past); null = no lines.</summary>
     private CritterWatch? WatchOf(PlayerLoot p, TemplateRule rule) => rule.Group switch
     {
         Group.Critter => _critters,
@@ -713,8 +717,9 @@ internal sealed class LootLoop
     }
 
     /// <summary>Fish on: one kiln.log line per fishing spot within the main radius (the radius fish use). Its fish are
-    /// not in the water: the rod's minigame makes one from the spot's fish table when it bites, and its item exists only
-    /// once caught, so there is nothing to take. Looked for every <see cref="BlinkMs"/>.</summary>
+    /// not in the water: the spot's effect draws them, the rod's minigame makes one from the spot's fish table when it
+    /// bites, and its item exists only once caught, so there is nothing to take. Looked for every
+    /// <see cref="BlinkMs"/>.</summary>
     private void FishingSpotsNear(PlayerLoot p, GamePlayer gp, Candidates lists)
     {
         foreach (var e in _game.Within(lists.FishingSpots, gp.Position, p.Settings.Radius))
@@ -726,9 +731,9 @@ internal sealed class LootLoop
             var key = KeyOf(e, inspected?.Serial ?? 0) | (1UL << 63);   // never a fish's key
             var line = _fish.Left(key,
                 $"fish: player {p.Entity} is {Math.Sqrt(DistanceSquared(gp.Position, at)):0.0} m from a fishing spot" +
-                $"{(name is null ? "" : $" ({name})")}: its fish come only with a fishing rod (the game makes the fish when one " +
-                "bites), so Kiln Auto Loot cannot take them. It takes fish swimming free, the ones you can grab by hand " +
-                "while swimming (in the Veilwater Basin's lakes)");
+                $"{(name is null ? "" : $" ({name})")}: its fish come only with a fishing rod (the game makes the " +
+                "fish when one bites), so Kiln Auto Loot cannot take them. It takes fish swimming free, the ones you " +
+                "can grab by hand while swimming (mostly in the Veilwater Basin's lakes)");
             if (line is not null) _keyLine(line);
         }
     }
@@ -1176,7 +1181,8 @@ internal sealed class LootLoop
         if (watch is not null)
         {
             var line = watch.Sent(key, _clock.NowMs, WatchLine(p, rule, d2, dy,
-                $"loot sent ({Thing(rule)} {ItemText(item)}; the game shows {LiveState(e)}, live pickup item {liveItem})"), out var first);
+                $"loot sent ({Thing(rule)} {ItemText(item)}; the game shows {LiveState(e)}, live pickup item {liveItem})"),
+                out var first);
             if (first && rule.Group == Group.Critter) Counters.CrittersSent++;
             if (line is not null) _keyLine(line);
         }

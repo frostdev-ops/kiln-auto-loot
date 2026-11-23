@@ -11,8 +11,8 @@
   said nothing about fish. The fish you see at a fishing spot are not in the water until one bites your rod: the game
   makes the fish when it bites, and its item only once you land it, so there was never anything to take there and the
   mod never saw a fish. What the mod takes are the fish swimming free, the ones you can grab by hand while swimming
-  (Shimmerfin and Lakehopper in the Veilwater Basin's lakes), within your main radius and the height window. The
-  setting's text says so now.
+  (Shimmerfin and Lakehopper, mostly in the Veilwater Basin's lakes), within your main radius and the height window.
+  The setting's text says so now.
 - With Fish on, kiln.log has one `fish:` line for each fish you pass (taken, or why not: too deep or too high for the
   height window, beyond the main radius, a list), one when the game did not hand a taken fish over, and one for each
   fishing spot in your reach, saying its fish come only with a rod.

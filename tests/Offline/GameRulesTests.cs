@@ -284,14 +284,14 @@ public class TemplateRulesTests
         Assert.Equal((Group.Fish, TemplateFlags.Animal), (fish!.Group, fish.Flags));
     }
 
-    // the fish of the game data of 0.2.0-dev.30.6 (as the mod reads it), shortened to what the rules read and what tells
-    // them apart. A fish swimming free (Animal_wildlife_Fish_T1_common_01 and _02 from 554 water spawners, nearly all in
-    // the Veilwater Basin's lakes; the Fish Cutlet fish of the same basin's 8 Only_Fish spawners) is a creature built as a
+    // the fish of the game data of 0.2.0-dev.30.6 (as the mod reads it), shortened to what the rules read and what
+    // tells them apart. A fish swimming free (Animal_wildlife_Fish_T1_common_01 and _02 from 554 water spawners, nearly
+    // all in the Veilwater Basin's lakes; the Fish Cutlet fish of 8 Only_Fish spawners there) is a creature built as a
     // pickup: the game's own loot_pickup_item set (InteractionOfferRuntime, PickupItem, DestroyOnLoot) with the pickup
-    // sequence, so a swimming player grabs it with E. The fish a player lets go (a raw fish's UseItem_Drop_Fish_Into_World
-    // spawns "..._tame") is the same but tame. A fish on the hook (Fish_T1_common_01) is an actor of the rod's minigame
-    // (Fishable, DoNotSave) with no pickup, and a fishing spot is an effect with a fish table (FishingSpot): their fish is
-    // an item only once the rod catches it.
+    // sequence, so a swimming player grabs it with E. The fish a player releases into a pond (a raw fish's
+    // UseItem_Drop_Fish_Into_World spawns "..._tame") is the same but tame. A fish on the hook (Fish_T1_common_01) is
+    // an actor of the rod's minigame (Fishable, DoNotSave) with no pickup, and a fishing spot is an effect with a fish
+    // table (FishingSpot): their fish is an item only once the rod catches it.
     private const uint Shimmerfin = 2004880509;
     private static readonly string[] WildFish =
         ["Actor", "DestroyOnLoot", "Destructible", "DisableDestructible", "Faction", "FleeSensor", "Health", "HealthBar",

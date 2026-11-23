@@ -2,7 +2,7 @@
 // After 0.2.6: a player (Nexus) had Fish on and saw no fish taken, and no line about fish in kiln.log, even swimming
 // through a fishing spot. The fish of a fishing spot are not in the water until one bites the rod (the game makes the
 // fish from the spot's fish table, and its item only once caught), so there is nothing to take; the fish swimming free
-// (the Veilwater Basin's lakes) are pickups a swimming player grabs with E, and the mod takes those. With Fish on,
+// (mostly in the Veilwater Basin's lakes) are pickups a swimming player grabs with E, and the mod takes those. With Fish on,
 // kiln.log now has one line per fish a player passes (taken or why not, and whether the game handed it over) and one
 // per fishing spot in reach, saying its fish come only with a rod.
 using KilnAutoLoot.Core;
