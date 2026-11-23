@@ -4,7 +4,7 @@
 // and one per bait-like template the mod's table does not know. So a player's report shows what happened to the frogs
 // and maggots they walked past. At most MaxLines per world, then one line saying the rest is left out. Pure; the loop
 // writes the lines. A second watch ("fish") does the same for the fish a player with Fish on passes, and for the
-// fishing spots in their reach.
+// fishing spots in their reach; a third ("loot") says what a corpse, chest or creature pile kept, and why.
 namespace KilnAutoLoot.Core;
 
 public sealed class CritterWatch
@@ -43,13 +43,20 @@ public sealed class CritterWatch
 
     /// <summary>A critter left for a lasting reason (a switch, a list, the radius ...): a line the first time for this
     /// swarm, unless its take was sent already.</summary>
-    public string? Left(ulong key, string text)
+    public string? Left(ulong key, string text) => Left(key, () => text);
+
+    /// <summary>As <see cref="Left(ulong, string)"/>, with the text made only when the line is written.</summary>
+    public string? Left(ulong key, Func<string> text)
     {
         if (!_byKey.TryGetValue(key, out var e)) Remember(key, e = new Entry());
         if (e.LeftLogged || e.SentLogged) return null;
         e.LeftLogged = true;
-        return Line(text);
+        return Line(text());
     }
+
+    /// <summary>A line was written for this key already ("left" or "sent"): <see cref="Left(ulong, string)"/> would
+    /// write none.</summary>
+    public bool Told(ulong key) => _byKey.TryGetValue(key, out var e) && (e.LeftLogged || e.SentLogged);
 
     /// <summary>The take was sent: a line the first time for this swarm (also after an earlier "left" line).
     /// <paramref name="first"/>: this is the swarm's first take.</summary>

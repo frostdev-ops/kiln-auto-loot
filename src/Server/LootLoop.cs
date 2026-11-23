@@ -57,6 +57,9 @@ internal sealed class LootLoop
     private readonly Dictionary<EntityId, (ulong Serial, TemplateRule? Rule, long Scan, Guid? Template)> _templates = new();
     private readonly CritterWatch _critters = new();
     private readonly CritterWatch _fish = new("fish");
+    // what a corpse, chest or creature pile kept and why: one kiln.log line per target (a report of corpses "never
+    // looted" was corpses keeping skipped stacks, which the game removes only once they are empty)
+    private readonly CritterWatch _left = new("loot");
     private readonly HashSet<EntityId> _spotsSaid = [];
     private bool _spotsDue;   // this scan looks for fishing spots (every BlinkMs)
     private readonly HashSet<EntityId> _playerIds = [];
@@ -322,6 +325,7 @@ internal sealed class LootLoop
         _templates.Clear();
         _critters.Reset();
         _fish.Reset();
+        _left.Reset();
         _spotsSaid.Clear();
         _lastScan = long.MinValue;
         _work.Clear();
@@ -878,7 +882,7 @@ internal sealed class LootLoop
             // item filter judged a crystal's yield before, a pile's is judged here, and a bag rule that cannot see the
             // amounts leaves it (as for a harvest)
             ProbeTrace.Note(e, "loot: unread ground loot or drop, loot-all like a harvest");
-            TakeUnread(p, gp, e, key, rule, offer);
+            TakeUnread(p, gp, e, key, rule, offer, readEmpty: false);
             return;
         }
         if (slots is null)
@@ -896,40 +900,53 @@ internal sealed class LootLoop
         // planned on a copy of the bag: each slot's amount is reserved at once, so later slots see shared group limits
         // and the free slots earlier ones use; the real bag counts only what is actually sent
         var plan = BagRules.NeedsBag(s, p.Limits) ? BagOf(p, gp)?.Clone() : null;
+        // what stays and why, for the target's kiln.log line (collected only until that line is written)
+        var left = _left.Told(key) ? null : new List<(uint Item, int Count, string Why)>();
         foreach (var slot in slots)
             switch (LootRules.Slot(slot.Item, slot.Rarity, s, _data.Quest, p.Filter, _data.Items))   // quest, filter, rarity, take
             {
                 case SlotRule.KeepQuest:
                     Counters.QuestKept++;
                     kept = true;
+                    left?.Add((slot.Item, slot.Count, "a quest item"));
                     break;
                 case SlotRule.KeepIgnored:
                     Counters.SkippedInContainers++;
                     kept = true;
+                    left?.Add((slot.Item, slot.Count, "on the skip list"));
                     LeftBehind(p, slot.Item);
                     break;
                 case SlotRule.KeepNotListed:
                     Counters.NotListed++;
                     kept = true;
+                    left?.Add((slot.Item, slot.Count, "not on the only list"));
                     break;
                 case SlotRule.KeepNotFocus:
                     Counters.NotFocus++;
                     kept = true;
+                    left?.Add((slot.Item, slot.Count, "not the gather focus"));
                     break;
                 case SlotRule.KeepRarity:
                     Counters.RarityLow++;
                     kept = true;
+                    left?.Add((slot.Item, slot.Count, "gear below \"Gear from this rarity on\""));
                     break;
                 default:
                     var allowed = BagRules.Allowance(slot.Item, s, plan, p.Limits, out var why);
                     if (allowed <= 0)
                     {
-                        CountBag(why == BagRefusal.None ? BagRefusal.NoRoom : why);
+                        var refusal = why == BagRefusal.None ? BagRefusal.NoRoom : why;
+                        CountBag(refusal);
                         kept = true;
+                        left?.Add((slot.Item, slot.Count, BagText(refusal)));
                         break;
                     }
                     var count = allowed >= slot.Count ? 0 : allowed;   // 0 = the whole slot
-                    if (count > 0) kept = true;                         // part of the slot stays
+                    if (count > 0)
+                    {
+                        kept = true;                                    // part of the slot stays
+                        left?.Add((slot.Item, slot.Count - count, "the rest of the stack, past a bag rule"));
+                    }
                     var moving = count == 0 ? slot.Count : count;
                     plan?.Took(slot.Item, moving);
                     take.Add((slot, count));
@@ -938,12 +955,13 @@ internal sealed class LootLoop
             }
 
         ProbeTrace.Note(e, $"loot: {take.Count} slots to take, something kept: {kept}");
+        if (left is { Count: > 0 }) LeftLine(p, key, rule, left, take);
         if (take.Count == 0)
         {
             // nothing to take: corpses and chests stay as they are; others still get the loot-all (harvest-like), a
             // creature's pile as when it cannot be read (its default inventory comes with the loot-all)
             if (kept || Release.SkipWhenEmpty(rule)) return;
-            if (Release.IsDrop(rule)) TakeUnread(p, gp, e, key, rule, offer);
+            if (Release.IsDrop(rule)) TakeUnread(p, gp, e, key, rule, offer, readEmpty: true);
             else SendLoot(p, gp, e, key, offer);
             return;
         }
@@ -1027,8 +1045,9 @@ internal sealed class LootLoop
     /// The crystal's yield was judged by LootRules.Decide. A pile's is judged here, as it comes whole: in skip mode one
     /// whose yield holds a skipped item stays; a picking filter (only list, gather focus) needs a yield item it takes
     /// (Decide lets a corpse without a known yield through for its slots, which cannot be seen here). With a bag rule on
-    /// the live contents have to fit (HarvestFits).</summary>
-    private void TakeUnread(PlayerLoot p, GamePlayer gp, EntityId e, ulong key, TemplateRule rule, Offer offer)
+    /// the live contents have to fit (HarvestFits). A pile left whole says so once in kiln.log (PileLine).
+    /// <paramref name="readEmpty"/>: its inventory was read and empty (else it cannot be read).</summary>
+    private void TakeUnread(PlayerLoot p, GamePlayer gp, EntityId e, ulong key, TemplateRule rule, Offer offer, bool readEmpty)
     {
         if (Release.IsDrop(rule))
         {
@@ -1037,8 +1056,12 @@ internal sealed class LootLoop
                 if (!rule.Yield.Any(p.Filter.Allows))
                 {
                     ProbeTrace.Note(e, "loot: the pile gives nothing the filter takes");
-                    if (p.Filter.Focus != 0) Counters.NotFocus++;
+                    var focus = p.Filter.Focus != 0;
+                    if (focus) Counters.NotFocus++;
                     else Counters.NotListed++;
+                    PileLine(p, key, rule, readEmpty, rule.Yield.Count == 0
+                        ? $"what it gives is not known, and {(focus ? "the gather focus" : "the only list")} takes a pile only for an item it can give"
+                        : focus ? "nothing it can give is the gather focus" : "nothing it can give is on the only list");
                     return;
                 }
             }
@@ -1047,11 +1070,50 @@ internal sealed class LootLoop
                 ProbeTrace.Note(e, $"loot: the pile's yield holds skipped item {skipped}");
                 Counters.YieldSkipped++;
                 LeftBehind(p, skipped);
+                PileLine(p, key, rule, readEmpty, $"it can give {ItemName(skipped)} (on the skip list)");
                 return;
             }
         }
         if (HarvestFits(p, gp, e, rule, out _)) SendLoot(p, gp, e, key, offer);
+        else PileLine(p, key, rule, readEmpty, "a bag rule is on, and it needs the amounts");
     }
+
+    /// <summary>The kiln.log line of a target that keeps something (once per target): what stays and why, and what is
+    /// taken. A corpse or creature pile stays in the world while it holds anything.</summary>
+    private void LeftLine(PlayerLoot p, ulong key, TemplateRule rule, List<(uint Item, int Count, string Why)> left,
+        List<(ContainerSlot Slot, int Count)> take)
+    {
+        var line = _left.Left(key, () =>
+        {
+            var stays = string.Join(", ", left.Select(x => $"{ItemName(x.Item)} x{x.Count} ({x.Why})"));
+            var taking = take.Count == 0
+                ? "nothing else to take"
+                : "taking " + string.Join(", ", take.Select(x => $"{ItemName(x.Slot.Item)} x{(x.Count == 0 ? x.Slot.Count : x.Count)}"));
+            var stay = rule.Group is Group.Corpse or Group.Enemy
+                ? $"; the game removes a {(Release.IsDrop(rule) ? "creature pile" : "corpse")} only once it is empty, so this one stays"
+                : "";
+            return $"loot: player {p.Entity} {rule.Name}: left {stays}; {taking}{stay}";
+        });
+        if (line is not null) _keyLine(line);
+    }
+
+    /// <summary>The kiln.log line of a creature pile left whole (once per pile): its contents cannot be seen, only its
+    /// loot-all takes them, all at once, and <paramref name="why"/> that cannot go out.</summary>
+    private void PileLine(PlayerLoot p, ulong key, TemplateRule rule, bool readEmpty, string why)
+    {
+        var line = _left.Left(key, () =>
+            $"loot: player {p.Entity} {rule.Name}: left whole: its inventory {(readEmpty ? "reads empty" : "cannot be read")}, " +
+            $"so only its loot-all can take it, all at once, and {why}");
+        if (line is not null) _keyLine(line);
+    }
+
+    private static string BagText(BagRefusal why) => why == BagRefusal.CarryLimit ? "your carry limit" : "no room under your bag rules";
+
+    /// <summary>An item's name for kiln.log: English, else the internal name, else the id.</summary>
+    private string ItemName(uint item) =>
+        _data.Items.TryGet(item, out var row) && (row.English.Length > 0 ? row.English : row.Internal) is { Length: > 0 } name
+            ? name
+            : item.ToString(System.Globalization.CultureInfo.InvariantCulture);
 
     /// <summary>Returns whether the loot-all went out (false: the per-scan cap is reached).</summary>
     private bool SendLoot(PlayerLoot p, GamePlayer gp, EntityId e, ulong key, Offer offer)
