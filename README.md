@@ -13,7 +13,8 @@ notes run in each player's game.
 - **Picks things up around you** (radius 1-50 m, 15 m by default): loose things in the open (rocks, sticks, ore,
   mushrooms, dropped potions and arrows), finds you collect (fossils, urns, gnomes ...), what grows on plants
   (berries, herbs, fibre, reeds), the critters you use as fishing bait (fireflies, moths, grasshoppers, scarabs,
-  pillbugs, frogs, maggots; never animals or pets), ripe crops from farm beds, and fish if you want them. Each group
+  pillbugs, frogs, maggots; never animals or pets), ripe crops from farm beds, and fish swimming free if you want
+  them (see "Fish" below). Each group
   has its own switch and, if you like, its own radius. Ripe crops have two switches: out in the world, and in or near
   a base, so the fields in your base can stay as decoration.
 - **Collects from your farm animals** (off by default, switch **Farm animal produce** on): the milk, wool and other
@@ -73,6 +74,11 @@ notes run in each player's game.
 - **Stacks**: if you remove the mod or lower the stack size, the game cuts every stack above its own size back the next
   time it handles it, and the rest is lost. Split big stacks first.
 - **Felled trees** may not grow back. Try tree felling in a test world, or back up your save.
+- **Fish** (off by default): the mod grabs fish swimming free, the ones you can grab by hand while swimming (Shimmerfin
+  and Lakehopper in the Veilwater Basin's lakes), within your main radius and the height window. It cannot take the
+  fish of a fishing spot: those are not in the water until one bites your rod (the game makes the fish then, and its
+  item only once you land it), so fishing stays a rod job. Fish you release into a pond stay there. With Fish on,
+  `kiln/logs/kiln.log` has a `fish:` line for each fish you pass (taken, or why not) and for each fishing spot in reach.
 - **Pulling items in**: with "take things where they lie" off, there is no flying-to-you animation (the game draws that
   in the player's own game); things are still picked up.
 - **Line of sight** ("only take what I can see") needs Kiln's line-of-sight checks, which a hosting game does not have
