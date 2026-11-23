@@ -102,18 +102,34 @@ internal sealed class KilnGame(Action<string> logOnce) : IGame
 
     public bool SightAvailable => _sight;
 
-    public Sight LineOfSight(EntityId player, EntityId target)
+    internal static readonly VoxelSightOptions CorpseSightOptions = new() { ToOffset = new(0, SightTrace.BodyHeight, 0) };
+
+    internal static readonly VoxelSightOptions CorpseUpperSightOptions = new() { ToOffset = new(0, SightTrace.UpperHeight, 0) };
+
+    public SightAnswer LineOfSight(EntityId player, EntityId target, SightSample sample = SightSample.Primary)
     {
-        var r = _sight ? Queries.VoxelLineOfSight(player, target) : null;
-        if (r is { Ok: true }) return r.Visible ? Sight.Visible : Sight.Hidden;
-        if (r?.Reason == "BudgetExceeded") return Sight.Later;
-        if (!_sightUnknownLogged)
+        var options = sample switch
+        {
+            SightSample.CorpseBody => CorpseSightOptions,
+            SightSample.CorpseUpper => CorpseUpperSightOptions,
+            _ => null,
+        };
+        var r = _sight ? Queries.VoxelLineOfSight(player, target, options) : null;
+        var answer = ReadSight(r);
+        // A lower sample's Unknown cannot override the primary's known voxel hit. Its reason goes only to the watched
+        // entity's /near trace, not the global "height fallback decides" line (which applies to primary Unknown).
+        if (answer.State == Sight.Unknown && sample == SightSample.Primary && !_sightUnknownLogged)
         {
             _sightUnknownLogged = true;
             logOnce(SightUnknownLine(r?.Reason, r is null ? Capabilities.Why("queries.line_of_sight") : ""));
         }
-        return Sight.Unknown;
+        return answer;
     }
+
+    internal static SightAnswer ReadSight(VoxelSightResult? r) => r is { Ok: true }
+        ? new(r.Visible ? Sight.Visible : Sight.Hidden,
+            r.Obstruction is { } h ? new SightHit(h.Position, h.Distance, h.Material, h.Voxel) : null)
+        : new(r?.Reason == "BudgetExceeded" ? Sight.Later : Sight.Unknown, Reason: r?.Reason);
 
     /// <summary>kiln.log's line (once a world) for line of sight without an answer: <paramref name="reason"/> is the
     /// check's own (NotLoaded while a world loads, ...), null when the server has no check (<paramref name="why"/>

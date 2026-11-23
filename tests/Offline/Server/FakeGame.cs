@@ -19,6 +19,11 @@ internal sealed class FakeEntity
     public bool Dead { get; set; }
     public List<ContainerSlot>? Slots { get; set; }
     public Sight Sight { get; set; } = Sight.Visible;
+    public Sight BodySight { get; set; } = Sight.Hidden;
+    public Sight UpperSight { get; set; } = Sight.Hidden;
+    public SightHit? SightObstruction { get; set; } = new SightHit(new WorldPosition(1, 1, 0), 1, 23, 0x34);
+    public SightHit? BodyObstruction { get; set; } = new SightHit(new WorldPosition(1, 1, 0), 1, 23, 0x34);
+    public SightHit? UpperObstruction { get; set; } = new SightHit(new WorldPosition(1, 1, 0), 1, 23, 0x34);
     public int PickupAmount { get; set; } = 1;
     /// <summary>The game's SpawnTime of the entity (0 = none, as for what the save loaded).</summary>
     public long SpawnStamp { get; set; }
@@ -39,7 +44,8 @@ internal sealed class FakeGame : IGame
     public int BagReads;
     public int StackWish;
     public bool SightOn = true;
-    public int SightCalls;
+    public int SightCalls, PrimarySightCalls, BodySightCalls, UpperSightCalls, ActualSightRays;
+    public int RaysLeft = int.MaxValue;
     /// <summary>What one line-of-sight call costs on the work clock (microseconds).</summary>
     public long SightCostMicros;
     public readonly Dictionary<string, int> FindCalls = new();
@@ -168,11 +174,20 @@ internal sealed class FakeGame : IGame
 
     public int FreeSlots(EntityId player) => FreeSlotCount;
 
-    public Sight LineOfSight(EntityId player, EntityId target)
+    public SightAnswer LineOfSight(EntityId player, EntityId target, SightSample sample = SightSample.Primary)
     {
         SightCalls++;
+        if (sample == SightSample.Primary) PrimarySightCalls++;
+        else if (sample == SightSample.CorpseBody) BodySightCalls++;
+        else UpperSightCalls++;
+        if (RaysLeft <= 0) return new(Sight.Later, Reason: "BudgetExceeded");
+        RaysLeft--;
         Micros += SightCostMicros;
-        return Entities.TryGetValue(target, out var e) ? e.Sight : Sight.Visible;
+        var state = Entities.TryGetValue(target, out var e) ? (sample == SightSample.Primary ? e.Sight : sample == SightSample.CorpseBody ? e.BodySight : e.UpperSight) : Sight.Visible;
+        if (state != Sight.Later) ActualSightRays++;
+        return new(state, state == Sight.Hidden && e is not null
+            ? sample == SightSample.Primary ? e.SightObstruction : sample == SightSample.CorpseBody ? e.BodyObstruction : e.UpperObstruction : null,
+            state == Sight.Later ? "BudgetExceeded" : state == Sight.Unknown ? "NotLoaded" : null);
     }
 
     public void Interact(EntityId guest, EntityId host, uint offerId) => Interacts.Add((guest, host, offerId));

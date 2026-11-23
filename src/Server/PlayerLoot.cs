@@ -101,7 +101,11 @@ internal sealed class PlayerLoot
     public EnemyPause Enemy { get; }
 
     /// <summary>Line-of-sight answers per target key, valid until the time given (about 1 s).</summary>
-    public Dictionary<ulong, (long Until, bool Visible)> Sight { get; } = new();
+    public Dictionary<ulong, (long Until, bool Visible, SightTrace Trace)> Sight { get; } = new();
+
+    /// <summary>A released corpse's primary ray hit a voxel; a body-column sample is still unanswered. Bounded by
+    /// SightCacheMs and validated against both current origins and the target's identity key before resuming.</summary>
+    public Dictionary<ulong, PendingCorpseSight> PendingSight { get; } = new();
 
     /// <summary>Containers with Items.Move still in flight: key -> moves pending.</summary>
     public Dictionary<ulong, int> PendingMoves { get; } = new();

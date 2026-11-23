@@ -117,8 +117,9 @@ internal interface IGame
     /// <summary>The server can check line of sight (capability queries.line_of_sight, and no call said otherwise).</summary>
     bool SightAvailable { get; }
 
-    /// <summary>Queries.VoxelLineOfSight from the player to the target.</summary>
-    Sight LineOfSight(EntityId player, EntityId target);
+    /// <summary>One Queries.VoxelLineOfSight ray: the ordinary standing-height target, or one of two explicit body-column
+    /// samples (same player start). Only the loot loop, after real voxel hits on a released corpse, asks for the latter.</summary>
+    SightAnswer LineOfSight(EntityId player, EntityId target, SightSample sample = SightSample.Primary);
 
     /// <summary>Gameplay.Inject.Interact: the AcceptOfferedInteractionEvent pressing E sends ("accept").</summary>
     void Interact(EntityId guest, EntityId host, uint offerId);

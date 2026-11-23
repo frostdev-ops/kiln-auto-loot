@@ -85,13 +85,15 @@ internal sealed class LootLoop
     // the scan in progress: every (player, target) to look at, and how far it got; Spot: a fishing spot for its kiln.log
     // line (FishingSpot), else a target
     private readonly List<(PlayerLoot P, GamePlayer Gp, EntityId E, bool Spot)> _work = [];
-    private int _workAt;
+    private int _workAt, _workSightRetries;
+    private bool _retrySightNextStep;
     private bool _scanOpen;
     private IEnumerator<bool>? _preparing;
     private IReadOnlyList<GamePlayer> _livePlayers = [];
     private long _scanMicros;
     private int _scanSteps;
     private StepWork _step;
+    private long _stepEnd = long.MaxValue;
     private long? _lastSlowLine;
     private readonly HashSet<(EntityId Player, ulong Key, ulong Slot, string State)> _moveNotes = [];
     private int _moveLines;
@@ -354,7 +356,7 @@ internal sealed class LootLoop
         if (_near is { } near) StopNear(near);
         _lastScan = long.MinValue;
         _work.Clear();
-        _workAt = 0;
+        _workAt = _workSightRetries = 0;
         _scanOpen = false;
         _preparing?.Dispose();
         _preparing = null;
@@ -476,7 +478,7 @@ internal sealed class LootLoop
         _scanMicros = 0;
         _scanSteps = 0;
         _work.Clear();
-        _workAt = 0;
+        _workAt = _workSightRetries = 0;
         _budget = MaxInjectsPerScan;
         Counters.Scans++;
         if (_near is { Scan: 0 } near) near.Scan = _scanNumber;
@@ -522,6 +524,7 @@ internal sealed class LootLoop
     private void Continue(long stepStart, long budget)
     {
         _scanSteps++;
+        _stepEnd = budget == long.MaxValue ? long.MaxValue : stepStart + budget;
         _index.Step();
         var t0 = _micros();
         _livePlayers = _game.Players();
@@ -556,6 +559,9 @@ internal sealed class LootLoop
         while (_preparing is null && _workAt < _work.Count && _micros() - stepStart < budget)
         {
             var (p, _, e, spot) = _work[_workAt++];
+            var sightRetries = _workSightRetries;
+            _workSightRetries = 0;
+            _retrySightNextStep = false;
             if (!_players.TryGetValue(p.Entity, out var current) || !ReferenceEquals(current, p)) continue;
             var gp = _livePlayers.FirstOrDefault(g => g.Entity == p.Entity);
             if (gp.Entity.IsNone)
@@ -567,6 +573,14 @@ internal sealed class LootLoop
             _step.Targets++;
             if (spot) FishingSpot(p, gp, e);
             else Target(p, gp, e);
+            if (_retrySightNextStep && budget != long.MaxValue && sightRetries < 2)
+            {
+                // Up to two next-step continuations finish the three actual ray stages even with one ray per step.
+                // A service that never has budget cannot pin the whole scan indefinitely: later work then gets a turn.
+                _workAt--;
+                _workSightRetries = sightRetries + 1;
+                break;
+            }
         }
         _step.TargetMicros = _micros() - targetsStart - (_step.InspectMicros - inspected);
         _scanMicros += _micros() - stepStart;
@@ -579,7 +593,7 @@ internal sealed class LootLoop
 
         _scanOpen = false;
         _work.Clear();
-        _workAt = 0;
+        _workAt = _workSightRetries = 0;
         if (_near is { } report && report.Scan == _scanNumber) FinishNear(report);
         ForgetUnseenTemplates();
         Counters.ScanMicros += _scanMicros;
@@ -786,8 +800,8 @@ internal sealed class LootLoop
         ProbeTrace.Note(e, $"seen: {rule.Group} {rule.Flags}, {(container ? "container path" : $"pickup path, item {item}")}");
         if (container) Counters.ContainersSeen++;
         else Counters.PickupsSeen++;
-        if (container) ContainerTarget(p, gp, e, key, rule, d2);
-        else PickupTarget(p, gp, e, key, rule, d2, item, liveItem, dy);
+        if (container) ContainerTarget(p, gp, e, key, rule, d2, at);
+        else PickupTarget(p, gp, e, key, rule, d2, item, at, liveItem, dy);
     }
 
     // ---------------------------------------------------------------- critter and fish lines
@@ -854,7 +868,7 @@ internal sealed class LootLoop
 
     // ---------------------------------------------------------------- container path
 
-    private void ContainerTarget(PlayerLoot p, GamePlayer gp, EntityId e, ulong key, TemplateRule rule, float d2)
+    private void ContainerTarget(PlayerLoot p, GamePlayer gp, EntityId e, ulong key, TemplateRule rule, float d2, WorldPosition at)
     {
         var s = p.Settings;
         var dead = rule.Group == Group.Enemy && _game.IsDead(e);
@@ -896,7 +910,8 @@ internal sealed class LootLoop
                 return;
             }
         }
-        if (!InSight(p, gp, e, key, rule))
+        var bodyCorpse = dead || (rule.Group == Group.Corpse && !Release.IsDrop(rule));
+        if (!InSight(p, gp, e, key, rule, at, bodyCorpse))
         {
             ProbeTrace.Note(e, "container: not in sight");
             if (HiddenNow(p, key))
@@ -1315,7 +1330,7 @@ internal sealed class LootLoop
 
     // ---------------------------------------------------------------- pickup path
 
-    private void PickupTarget(PlayerLoot p, GamePlayer gp, EntityId e, ulong key, TemplateRule rule, float d2, uint item,
+    private void PickupTarget(PlayerLoot p, GamePlayer gp, EntityId e, ulong key, TemplateRule rule, float d2, uint item, WorldPosition at,
         uint liveItem = 0, double dy = 0)
     {
         var s = p.Settings;
@@ -1373,7 +1388,7 @@ internal sealed class LootLoop
             wanted = false;
             why = "Take where it lies is off and it is more than 0.75 m away";
         }
-        if (wanted && !InSight(p, gp, e, key, rule))
+        if (wanted && !InSight(p, gp, e, key, rule, at))
         {
             wanted = false;
             // a check the step's shared ray budget could not answer yet is no reason to leave it (no line)
@@ -1523,14 +1538,45 @@ internal sealed class LootLoop
 
     /// <summary>Line of sight: only with visibleOnly; cached about 1 s per target; "not known" = visible, and the height
     /// window stands in for <see cref="SightRetryMs"/> (or until a check answers again).</summary>
-    private bool InSight(PlayerLoot p, GamePlayer gp, EntityId e, ulong key, TemplateRule rule)
+    private bool InSight(PlayerLoot p, GamePlayer gp, EntityId e, ulong key, TemplateRule rule, WorldPosition targetAt, bool bodyCorpse = false)
     {
-        if (!p.Settings.VisibleOnly) return true;
-        var now = _clock.NowMs;
-        if (p.Sight.TryGetValue(key, out var c) && c.Until > now) return c.Visible;
-        switch (_game.LineOfSight(gp.Entity, e))
+        if (!p.Settings.VisibleOnly)
         {
-            case Sight.Later: return false;
+            p.PendingSight.Remove(key);
+            return true;
+        }
+        var now = _clock.NowMs;
+        if (p.Sight.TryGetValue(key, out var c) && c.Until > now)
+        {
+            c.Trace.Note(e, cached: true);
+            return c.Visible;
+        }
+        SightTrace trace;
+        var nextSample = SightSample.CorpseBody;
+        var rays = 1; // the completed primary voxel hit; Unknown body answers also consume an attempt
+        var pendingUntil = now + SightCacheMs;
+        if (p.PendingSight.TryGetValue(key, out var pending) && bodyCorpse && pending.Until > now &&
+            pending.Trace.From == gp.Position && pending.Trace.To == targetAt)
+        {
+            trace = pending.Trace; // same entity/geometry: never repeat a completed ray while continuing
+            nextSample = pending.Next;
+            rays = pending.Rays;
+            pendingUntil = pending.Until;
+            trace.Note(e, cached: true);
+            return BodySamples();
+        }
+        p.PendingSight.Remove(key);
+        var primary = _game.LineOfSight(gp.Entity, e);
+        trace = new SightTrace(gp.Position, targetAt, primary);
+        trace.Note(e);
+        switch (primary.State)
+        {
+            case Sight.Later:
+                _retrySightNextStep = bodyCorpse;
+                return false;
+            case Sight.Hidden when bodyCorpse && primary.Obstruction is not null:
+                _sightUnknownUntil = 0;
+                return BodySamples();
             case Sight.Hidden:
                 _sightUnknownUntil = 0;
                 Counters.SightBlocked++;
@@ -1539,17 +1585,71 @@ internal sealed class LootLoop
             case Sight.Unknown:
                 _sightUnknownUntil = now + SightRetryMs;
                 Remember(true);
-                return _game.PositionOf(e) is { } at && HeightAllows(p, gp, e, rule, key, at);
+                return HeightAllows(p, gp, e, rule, key, targetAt);
             default:
                 _sightUnknownUntil = 0;
                 Remember(true);
                 return true;
         }
 
+        bool BodySamples()
+        {
+            while (true)
+            {
+                // Each completed hit advances the stage before the next budget check. A continuation therefore spends
+                // no more primary/low rays on a corpse whose remaining sample still needs the shared ray budget.
+                if (rays >= 3)
+                {
+                    SavePending();
+                    ProbeTrace.Note(e, "sight: three ray attempts spent; incomplete body check held until reevaluation, no take and no hidden cache");
+                    return false;
+                }
+                if (_micros() >= _stepEnd)
+                {
+                    SavePending();
+                    _retrySightNextStep = true;
+                    ProbeTrace.Note(e, $"sight: {nextSample} waits for a later step's time budget; completed voxel hits retained");
+                    return false;
+                }
+                var body = _game.LineOfSight(gp.Entity, e, nextSample);
+                if (body.State != Sight.Later) rays++; // BudgetExceeded did not cast a ray; Unknown is counted conservatively
+                trace = nextSample == SightSample.CorpseBody ? trace with { Body = body } : trace with { Upper = body };
+                trace.Sample(e, nextSample, body);
+                switch (body.State)
+                {
+                    case Sight.Visible:
+                        _sightUnknownUntil = 0;
+                        Remember(true);  // only a definitively clear ray can rescue the known voxel hits
+                        return true;
+                    case Sight.Hidden when nextSample == SightSample.CorpseBody && body.Obstruction is not null:
+                        nextSample = SightSample.CorpseUpper; // one more small height in the same body-origin column
+                        continue;
+                    case Sight.Hidden:
+                        _sightUnknownUntil = 0;
+                        Counters.SightBlocked++;
+                        Remember(false);
+                        return false;
+                    default:
+                        // BudgetExceeded/Unknown is neither "hidden" nor permission to loot through a known voxel.
+                        SavePending();
+                        _retrySightNextStep = body.State == Sight.Later;
+                        ProbeTrace.Note(e, $"sight: {nextSample} unanswered; completed voxel hits retained, no take and no hidden cache");
+                        return false;
+                }
+            }
+        }
+
+        void SavePending()
+        {
+            if (!p.PendingSight.ContainsKey(key) && p.PendingSight.Count >= 2048) p.PendingSight.Clear();
+            p.PendingSight[key] = new(pendingUntil, trace, nextSample, rays);
+        }
+
         void Remember(bool visible)
         {
+            p.PendingSight.Remove(key);
             if (p.Sight.Count > 2048) p.Sight.Clear();
-            p.Sight[key] = (now + SightCacheMs, visible);
+            p.Sight[key] = (now + SightCacheMs, visible, trace);
         }
     }
 
