@@ -17,6 +17,7 @@ using Kiln;
 using KilnAutoLoot.Core;
 using KilnAutoLoot.Net;
 using KilnAutoLoot.Server;
+using KilnAutoLoot.Server.GameData;
 
 // a developer's tool for a hosting game with every service on
 #pragma warning disable KILN121
@@ -221,6 +222,8 @@ internal sealed class ProbeConsole
                 case "info": Info(args); break;
                 case "accept": Accept(args); break;
                 case "lootall": LootAll(args); break;
+                case "take": Take(args); break;
+                case "comps": Comps(args); break;
                 case "destroy": Destroy(args); break;
                 case "clear": Clear(); break;
                 case "stash": Stash(); break;
@@ -251,6 +254,8 @@ internal sealed class ProbeConsole
         "unwatch | status                        stop watching | the watched entities now",
         "info <id>                               components, offer, slots, pickup, rule, smash kind of one entity",
         "accept <id> | lootall <id>              send the game's accept (E) | loot-all to an entity as the player",
+        "take <id>                               move every slot of an entity's inventory into the player's bag (Items.Move)",
+        "comps <name part>                       game data components and values of matching templates (first 8)",
         "destroy <id> | clear                    remove one entity | every entity the probe spawned (stash chests stay)",
         "stash                                   move every backpack slot into new silver chests next to the player (saved)",
         "inv [name part]                         the player's bag; bag changes are logged every second anyway",
@@ -481,6 +486,46 @@ internal sealed class ProbeConsole
         if (EntityArg(a) is not { } e || Host() is not { } p) return;
         _game.Loot(p.Entity, e);
         Say($"loot-all sent to #{e.Value}");
+    }
+
+    private void Take(string[] a)
+    {
+        if (EntityArg(a) is not { } e || Host() is not { } p) return;
+        var slots = _game.Slots(e);
+        if (slots is null || slots.Count == 0)
+        {
+            Say($"#{e.Value}: {(slots is null ? "no readable inventory" : "nothing in it")}");
+            return;
+        }
+        foreach (var s in slots)
+        {
+            var what = $"{ItemName(s.Item)} x{s.Count}";
+            _game.Move(e, s.Id, p.Entity, 0, outcome => Say($"take #{e.Value}: {what} -> {outcome}"));
+        }
+        Say($"take #{e.Value}: {slots.Count} move(s) sent");
+    }
+
+    private void Comps(string[] a)
+    {
+        if (a.Length == 0)
+        {
+            Say("comps <name part>");
+            return;
+        }
+        if (GameDataLoader.Facts is not { } facts)
+        {
+            Say("the game data is not in yet");
+            return;
+        }
+        var hits = facts.Templates.Where(t => t.Name.Contains(a[0], StringComparison.OrdinalIgnoreCase)).OrderBy(t => t.Name).ToList();
+        Say($"{hits.Count} templates with '{a[0]}'{(hits.Count > 8 ? ", the first 8" : "")}");
+        foreach (var t in hits.Take(8))
+        {
+            Say($"  {t.Name} ({t.Guid}, family {t.Family}): {Describe(t.Guid)}");
+            Say($"    components: {string.Join(", ", t.Components)}");
+            if (t.Values.Count > 0) Say($"    values: {string.Join(", ", t.Values.Select(v => $"{v.Key}={v.Value}"))}");
+            if (t.Yield.Count > 0) Say($"    yield: {string.Join(", ", t.Yield.Select(ItemName))}");
+        }
     }
 
     private void Destroy(string[] a)
