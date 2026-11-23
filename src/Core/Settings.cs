@@ -18,7 +18,7 @@ public sealed class PersonalSettings
     [Comment("Pick things up by walking past them (F9). false = only what you take yourself with E, and nothing is smashed.")] public bool Looting { get; set; } = true;
     [Comment("How far around you the mod reaches, in meters (also how far smashing reaches)."), Range(1, 50)] public float Radius { get; set; } = 15f;
     [Comment("Take things where they lie. false = the game's short pull range; mushrooms and other fixed pickups need to be within reach.")] public bool TakeInPlace { get; set; } = true;
-    [Comment("Only take what is in plain view from where you stand.")] public bool VisibleOnly { get; set; }
+    [Comment("Only take what is in plain view from where you stand. Where the game or server can check line of sight, this decides what is in reach; elsewhere heightAbove and heightBelow do.")] public bool VisibleOnly { get; set; } = true;
     [Comment("Loose things in the open world: rocks, sticks, ore, mushrooms, dropped potions and arrows. Off: boulders are not smashed either.")] public bool GroundLoot { get; set; } = true;
     [Comment("Stones and stone piles. Also decides whether boulders and stone carts get smashed. Needs groundLoot (off: no stones, no boulders).")] public bool Stones { get; set; } = true;
     [Comment("Old books lying in villages and ruins (they give Old Books). Off by default; never in or near a base. Needs groundLoot.")] public bool OldBooks { get; set; } = false;
@@ -41,9 +41,10 @@ public sealed class PersonalSettings
     [Comment("Weapons, armor, rings and shields below this rarity stay where they are: common, uncommon, rare, epic or legendary.")]
     public GearRarity MinGearRarity { get; set; } = GearRarity.Common;
 
-    // Where: a height window around you, so a cave's loot stays in the cave
-    [Comment("Only take what is at most this many meters above you (critters: the main radius instead). 0 = no limit."), Range(0, 50)] public float HeightAbove { get; set; } = 4f;
-    [Comment("Only take what is at most this many meters below you (critters: the main radius instead). 0 = no limit."), Range(0, 50)] public float HeightBelow { get; set; } = 4f;
+    // Where: a height window around you, the fallback where line of sight cannot decide (0.2.8; it was the only check
+    // before Kiln had line of sight)
+    [Comment("Where line of sight cannot be checked (or visibleOnly is off): only take what is at most this many meters above you (critters: the main radius instead). 0 = no limit."), Range(0, 50)] public float HeightAbove { get; set; }
+    [Comment("Where line of sight cannot be checked (or visibleOnly is off): only take what is at most this many meters below you (critters: the main radius instead). 0 = no limit."), Range(0, 50)] public float HeightBelow { get; set; }
 
     // The bag
     [Comment("Only top up stacks you already carry, up to full; never start a new stack.")] public bool FillCarriedStacks { get; set; }
@@ -86,6 +87,10 @@ public sealed class PersonalSettings
 
     // The window
     [Comment("Language of the window and the notes: auto, en or de.")] public string Language { get; set; } = "auto";
+
+    // Bookkeeping
+    [Comment("Which defaults these settings started from (Kiln Auto Loot keeps it up to date; leave it as it is).")]
+    public int SettingsVersion { get; set; } = SettingsMigration.CurrentVersion;
 
     public PersonalSettings Clone() => (PersonalSettings)MemberwiseClone();
 }

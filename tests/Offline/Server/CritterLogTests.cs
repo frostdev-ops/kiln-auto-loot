@@ -103,7 +103,8 @@ public sealed class CritterLogTests
     [Fact]
     public void A_non_critter_6_m_above_is_still_left_by_the_height_window()
     {
-        var rig = Rig();
+        var rig = Rig(s => s.HeightAbove = 4);
+        rig.Game.SightOn = false;   // the height window: the fallback where line of sight cannot decide (0.2.8)
         var twig = rig.Game.Add(LoopRig.Twig, 0, [LootLoop.PickupComponent], pickupItem: 1, y: 6);
         rig.ScanFor(1000);
         Assert.DoesNotContain(rig.Game.Loots, l => l.Host == twig.Id);

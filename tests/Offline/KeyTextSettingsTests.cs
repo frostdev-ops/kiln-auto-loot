@@ -25,7 +25,7 @@ public class TextsTests
     public void Every_setting_has_a_label_and_help_in_both_languages()
     {
         var keys = AllSettingKeys();
-        Assert.Equal(54, keys.Count);
+        Assert.Equal(55, keys.Count);
         foreach (var k in keys)
             foreach (var g in new[] { false, true })
             {

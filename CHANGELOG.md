@@ -1,6 +1,17 @@
 # Changelog
 
 ## Unreleased
+- **What you can see now decides what is in reach.** "Only what I can see" is on by default, and wherever your game or
+  server can check line of sight (Kiln's line-of-sight checks, on hosted games and dedicated servers), it decides what
+  Auto Loot takes and smashes: nothing behind walls or rocks, nothing in a cave under you, but a corpse down a slope
+  in plain view is taken. The height window ("Height above me", "Depth below me") was the stand-in until line of sight
+  was there; it is now off by default (0 = no limit) and only used where line of sight can't be checked (or with "Only
+  what I can see" off), and the F8 window says so. Fishing bait still ignores the height window. This is likely what
+  HadToRegister saw with Vukah corpses that were never touched: a corpse more than 4 m below or above you (down a
+  slope, on a camp's platform) was outside the old height window, so Auto Loot never looked into it.
+- Your saved settings move to the new defaults where they still hold the old ones (4 m above, 4 m below, "Only what I
+  can see" off), in your settings file, every profile and a server's defaults for players without the mod. Anything
+  you changed yourself stays as you set it.
 - **Corpses that keep a skipped item stay where they fell** (reported by HadToRegister): with Twigs on the skip
   list, Vukah corpses looked as if they were never looted. They are looted: Auto Loot takes the Animal Fur and
   everything else you want from them, one stack at a time, and leaves the Twigs in the corpse, as the skip list says.
@@ -11,6 +22,13 @@
   the game hands their contents over only all at once) that it leaves whole get a line too, with the reason: an item
   they can give is on your skip list, nothing they can give is on your only list, or a bag rule needs the amounts.
   At most 200 such lines per world.
+- kiln.log also says why a corpse in reach was not looked into, once for each: out of sight, outside the height
+  window, beyond the corpse radius, Corpses off, Bosses off for a boss, mini boss or elite corpse, or nothing it can
+  give is wanted. At most 200 such lines per world.
+- Fishing bait that Auto Loot does not know (reported by Tyrion67: maggots "not in the mod's table") now gets a
+  kiln.log line that says what your game's data showed of it, so the next log tells us why. In the game data we
+  checked, all nine kinds of bait swarm (fireflies, moths, grasshoppers, scarabs, pillbugs, frogs, maggots) are
+  known.
 
 ## 0.2.7
 - **Farm animal produce** (new switch, off by default; contributed by potter420, pull request #3): the milk, wool and

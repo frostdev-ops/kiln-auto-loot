@@ -109,8 +109,10 @@ rules and what a dedicated server can show without a player. Everything below ne
 - [ ] Only list: "Only this" on an item switches to it; the skip list is kept and comes back when you switch to skip.
 - [ ] Gather focus: take a stick by hand, press F11: "Gathering only: ..."; only sticks are collected; F11 again ends
       it; F11 before taking anything by hand shows the hint.
-- [ ] Height: standing on a hill above a cave, nothing in the cave is taken or smashed; inside the cave, nothing on the
-      surface above. 0 = no limit.
+- [ ] Line of sight (Only what I can see, on by default): standing on a hill above a cave, nothing in the cave is taken
+      or smashed; inside the cave, nothing on the surface above; a corpse down a slope in plain view is taken.
+- [ ] Height (the fallback: switch Only what I can see off, set Depth below me 4): nothing more than 4 m below is taken
+      or smashed. 0 = no limit.
 - [ ] Fill carried stacks: with 30 of 50 sticks in your bag, a pickup of 15 is taken, one of 25 stays; from a chest of
       40 sticks, 20 move and 20 stay.
 - [ ] Keep 2 free slots: when only 2 are left, only stacks you carry are topped up.

@@ -44,7 +44,7 @@ internal static class SettingCatalog
     private static SettingSpec C(string key) => new(key, WidgetKind.Choice, SettingOwner.Personal);
 
     /// <summary>Settings kept out of the window: they live only in the files.</summary>
-    public static readonly IReadOnlyList<string> FileOnly = ["language", "counterLog"];
+    public static readonly IReadOnlyList<string> FileOnly = ["language", "counterLog", "settingsVersion"];
 
     public static readonly IReadOnlyList<PageSpec> Pages =
     [

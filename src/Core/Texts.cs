@@ -81,8 +81,8 @@ public static class Texts
             "Things are taken on the spot instead of flying over to you. Off: the game pulls them in, and mushrooms and other fixed things are only taken when you stand right next to them.",
             "Dinge landen sofort bei dir, statt erst heranzufliegen. Aus: das Spiel zieht sie heran, und Pilze und andere feste Dinge gibt es nur, wenn du direkt danebenstehst."),
         new("visibleOnly", "where", "Only what I can see", "Nur, was ich sehe",
-            "Leaves out things hidden behind walls, rocks or leaves. Where the server cannot check the view, everything counts as visible.",
-            "Lässt aus, was hinter Wänden, Felsen oder Laub versteckt ist. Kann der Server die Sicht nicht prüfen, gilt alles als sichtbar."),
+            "Takes only what you can see from where you stand: nothing behind walls or rocks, nothing in a cave under you. This decides what is in reach wherever the game or server can check line of sight; where it can't, Height above me and Depth below me decide instead.",
+            "Nimmt nur, was du von deinem Platz aus siehst: nichts hinter Wänden oder Felsen, nichts in einer Höhle unter dir. Das entscheidet, was in Reichweite ist, wo das Spiel oder der Server die Sichtlinie prüfen kann; wo nicht, entscheiden stattdessen Höhe über mir und Tiefe unter mir."),
         new("groundLoot", "looting", "Things on the ground", "Dinge am Boden",
             "Loose things out in the world: rocks, sticks, wood, ore, mushrooms, fallen berries, potions, arrows and enemy drops. Off: the mod leaves them and boulders stay whole; you can still take them yourself with E.",
             "Lose Sachen draußen in der Welt: Steine, Stöcke, Holz, Erz, Pilze, heruntergefallene Beeren, Tränke, Pfeile und Gegner-Drops. Aus: die Mod lässt alles liegen, und Felsbrocken bleiben ganz; mit E kannst du es trotzdem selbst nehmen."),
@@ -164,11 +164,11 @@ public static class Texts
 
         // Where and the bag
         new("heightAbove", "where", "Height above me", "Höhe über mir",
-            "Only takes things at most this many meters above your feet, so loot on the floor above you stays there. Fishing bait (critters) is taken within your main radius instead. 0 = no limit.",
-            "Nimmt nur, was höchstens so viele Meter über deinen Füßen liegt; Beute im Stockwerk über dir bleibt also dort. Angelköder (Krabbeltiere) nimmt es stattdessen im Hauptradius. 0 = keine Grenze."),
+            "Only used where line of sight can't be checked, or with Only what I can see off: then only things at most this many meters above your feet are taken, so loot on the floor above you stays there. Fishing bait (critters) is taken within your main radius instead. 0 = no limit (the default).",
+            "Gilt nur, wo die Sichtlinie nicht geprüft werden kann, oder wenn Nur, was ich sehe aus ist: dann nimmt es nur, was höchstens so viele Meter über deinen Füßen liegt; Beute im Stockwerk über dir bleibt also dort. Angelköder (Krabbeltiere) nimmt es stattdessen im Hauptradius. 0 = keine Grenze (Standard)."),
         new("heightBelow", "where", "Depth below me", "Tiefe unter mir",
-            "Only takes things at most this many meters below your feet, so a cave under you keeps its loot until you go down. Fishing bait (critters) is taken within your main radius instead. 0 = no limit.",
-            "Nimmt nur, was höchstens so viele Meter unter deinen Füßen liegt; eine Höhle unter dir behält ihre Beute also, bis du hinuntergehst. Angelköder (Krabbeltiere) nimmt es stattdessen im Hauptradius. 0 = keine Grenze."),
+            "Only used where line of sight can't be checked, or with Only what I can see off: then only things at most this many meters below your feet are taken, so a cave under you keeps its loot until you go down. Fishing bait (critters) is taken within your main radius instead. 0 = no limit (the default).",
+            "Gilt nur, wo die Sichtlinie nicht geprüft werden kann, oder wenn Nur, was ich sehe aus ist: dann nimmt es nur, was höchstens so viele Meter unter deinen Füßen liegt; eine Höhle unter dir behält ihre Beute also, bis du hinuntergehst. Angelköder (Krabbeltiere) nimmt es stattdessen im Hauptradius. 0 = keine Grenze (Standard)."),
         new("fillCarriedStacks", "where", "Only fill stacks I carry", "Nur getragene Stapel auffüllen",
             "Only takes items you already have in your bag, and only until that stack is full. Nothing new starts a stack. Handy with a few sticks in the bag: you gather sticks until the stack is full, and nothing else.",
             "Nimmt nur Gegenstände, die du schon im Rucksack hast, und nur, bis der Stapel voll ist. Nichts Neues fängt einen Stapel an. Praktisch mit ein paar Stöcken im Rucksack: du sammelst Stöcke, bis der Stapel voll ist, und sonst nichts."),
@@ -249,6 +249,9 @@ public static class Texts
         new("counterLog", "file", "Counter log", "Zähler-Log",
             "Writes the mod's counters to kiln-auto-loot.log every 5 seconds, for finding problems.",
             "Schreibt alle 5 Sekunden die Zähler der Mod in kiln-auto-loot.log, zur Fehlersuche."),
+        new("settingsVersion", "file", "Settings version", "Version der Einstellungen",
+            "Which defaults these settings started from. Kiln Auto Loot keeps it up to date; leave it as it is.",
+            "Von welchen Standardwerten diese Einstellungen ausgingen. Kiln Auto Loot hält das aktuell; bitte so lassen."),
     };
 
     private static readonly Dictionary<string, SettingText> BySetting = Settings.ToDictionary(t => t.Key, StringComparer.Ordinal);
@@ -342,8 +345,10 @@ public static class Texts
         // where and the bag
         ["noLimit"] = ("no limit", "keine Grenze"),
         ["zeroOff"] = ("off", "aus"),
-        ["lineOfSightMissing"] = ("This game or server can't check what you see yet, so this has no effect for now.",
-            "Dieses Spiel oder dieser Server kann noch nicht prüfen, was du siehst; das wirkt also vorerst nicht."),
+        ["lineOfSightMissing"] = ("This game or server can't check what you see, so Height above me and Depth below me decide what is in reach instead.",
+            "Dieses Spiel oder dieser Server kann nicht prüfen, was du siehst; was in Reichweite ist, entscheiden hier stattdessen Höhe über mir und Tiefe unter mir."),
+        ["heightFallbackOnly"] = ("Not used here: line of sight decides what is in reach (Only what I can see). These limits apply only where it can't be checked.",
+            "Hier nicht verwendet: die Sichtlinie entscheidet, was in Reichweite ist (Nur, was ich sehe). Diese Grenzen gelten nur, wo sie nicht geprüft werden kann."),
         // the carry-limits editor
         ["carrySearchHint"] = ("Add an item (3+ letters)", "Gegenstand hinzufügen (ab 3 Zeichen)"),
         ["carryAddGroup"] = ("Add a limit for this group", "Grenze für diese Gruppe"),

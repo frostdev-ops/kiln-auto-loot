@@ -2,6 +2,7 @@
 // 0.2.3 split "crops" into crops out in the world (the old key) and crops in a base (cropsInBase), and gave the critters
 // (fishing bait swarms, under plants before) their own switch. A file or message from before keeps its choices: a
 // missing cropsInBase takes the old crops value, a missing critters the plants value.
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using KilnAutoLoot.Client;
 using KilnAutoLoot.Core;
@@ -84,5 +85,62 @@ public sealed class SettingsMigrationTests
         Assert.Empty(SettingsMigration.FromFile(null, null));
         Assert.Empty(SettingsMigration.FromFile("{ broken", null));
         Assert.Empty(SettingsMigration.FromFile("""{"defaults": 3}""", "defaults"));
+    }
+
+    // ---- 0.2.8: line of sight decides what is in reach; the height window (4 m each way) and "Only what I can see"
+    // (off) had other defaults before. A settings object without settingsVersion was written before: the old defaults
+    // it still holds become the new ones, values the player changed stay.
+
+    [Fact]
+    public void Old_settings_holding_the_old_defaults_get_the_line_of_sight_defaults()
+    {
+        var o = JsonNode.Parse("""{"heightAbove": 4, "heightBelow": 4.0, "visibleOnly": false, "radius": 9}""")!.AsObject();
+        Assert.Equal([("heightAbove", (object)0f), ("heightBelow", 0f), ("visibleOnly", true)], SettingsMigration.Moved(o));
+        SettingsMigration.Apply(o);
+        var s = o.Deserialize<PersonalSettings>(SettingsRules.JsonOptions)!;
+        Assert.Equal((0f, 0f, true, 9f), (s.HeightAbove, s.HeightBelow, s.VisibleOnly, s.Radius));
+        Assert.Equal(SettingsMigration.CurrentVersion, s.SettingsVersion);
+    }
+
+    [Fact]
+    public void Values_a_player_changed_stay_and_new_settings_are_left_alone()
+    {
+        var changed = JsonNode.Parse("""{"heightAbove": 6, "heightBelow": 4, "visibleOnly": false}""")!.AsObject();
+        Assert.Equal([("heightBelow", (object)0f), ("visibleOnly", true)], SettingsMigration.Moved(changed));
+        var chose = JsonNode.Parse("""{"heightAbove": 4, "heightBelow": 4, "visibleOnly": true}""")!.AsObject();
+        Assert.Equal([("heightAbove", (object)0f), ("heightBelow", 0f)], SettingsMigration.Moved(chose));
+        // written by 0.2.8 or later: a player who sets 4 m and visibleOnly off now keeps that
+        var current = JsonNode.Parse("""{"heightAbove": 4, "heightBelow": 4, "visibleOnly": false, "settingsVersion": 2}""")!.AsObject();
+        Assert.Empty(SettingsMigration.Moved(current));
+        Assert.Empty(SettingsMigration.Moved(JsonNode.Parse("{}")!.AsObject()));
+        Assert.Empty(SettingsMigration.Moved(null));
+    }
+
+    [Fact]
+    public void The_settings_files_and_an_old_players_message_and_profiles_get_the_new_defaults()
+    {
+        var client = """
+            {
+              // old file
+              "visibleOnly": false,
+              "heightAbove": 4,
+              "heightBelow": 2,
+            }
+            """;
+        Assert.Equal([("heightAbove", (object)0f), ("visibleOnly", true)], SettingsMigration.MovedInFile(client, null));
+        var server = """{ "defaults": { "visibleOnly": false, "heightAbove": 4, "heightBelow": 4 } }""";
+        Assert.Equal([("defaults.heightAbove", (object)0f), ("defaults.heightBelow", 0f), ("defaults.visibleOnly", true)],
+            SettingsMigration.MovedInFile(server, "defaults"));
+        Assert.Empty(SettingsMigration.MovedInFile("""{ "defaults": { "heightAbove": 4, "settingsVersion": 2 } }""", "defaults"));
+
+        var sent = SettingsJson.Read("""{"heightAbove": 4, "heightBelow": 4, "visibleOnly": false}""")!;
+        Assert.Equal((0f, 0f, true), (sent.HeightAbove, sent.HeightBelow, sent.VisibleOnly));
+
+        var book = ProfileBook.FromJson("""
+            {"format": "kiln-auto-loot-profiles", "version": 1, "active": "mine", "profiles": [
+              {"id": "mine", "settings": {"heightAbove": 4, "heightBelow": 8, "visibleOnly": false}}]}
+            """)!;
+        var mine = book.SettingsOf("mine")!;
+        Assert.Equal((0f, 8f, true), (mine.HeightAbove, mine.HeightBelow, mine.VisibleOnly));
     }
 }

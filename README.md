@@ -44,8 +44,11 @@ notes run in each player's game.
 - **Gather focus**: take one item by hand, press **F11**, and only that item is collected around you until you press
   F11 again.
 - **Rarity**: weapons, armor, rings and shields below a rarity you choose stay where they are.
-- **Height window**: only what is within a few meters above or below you (4 m each by default), so a cave's loot stays
-  in the cave and the cave doesn't empty the hill above it. Critters (fishing bait) are the exception: they hover above
+- **Only what you can see** (on by default): wherever the game or server can check line of sight, what you can see
+  from where you stand decides what is in reach, so a cave's loot stays in the cave and the cave doesn't empty the hill
+  above it, while a corpse down a slope in plain view is taken.
+- **Height window** (off by default): where line of sight can't be checked, or with "Only what I can see" off, only
+  what is within the meters you set above or below you. Critters (fishing bait) are the exception: they hover above
   the ground, so they are taken anywhere within your main radius, above or below you.
 - **Salvage** (new in 0.2.0): turn gear into runes, as many as the game's own Trash gives. In F8's Salvage tab, mark
   what can go (marked rows are red) and salvage it in one go, with a confirm that lists the items and the runes. Keep
@@ -76,15 +79,17 @@ notes run in each player's game.
   time it handles it, and the rest is lost. Split big stacks first.
 - **Felled trees** may not grow back. Try tree felling in a test world, or back up your save.
 - **Fish** (off by default): the mod grabs fish swimming free, the ones you can grab by hand while swimming
-  (Shimmerfin and Lakehopper, mostly in the Veilwater Basin's lakes), within your main radius and the height window.
+  (Shimmerfin and Lakehopper, mostly in the Veilwater Basin's lakes), within your main radius, in sight (or within the
+  height window where line of sight can't be checked).
   It cannot take the fish of a fishing spot: those are not in the water until one bites your rod (the game makes the
   fish then, and its item only once you land it), so fishing stays a rod job. Fish you release into a pond stay there.
   With Fish on, `kiln/logs/kiln.log` has a `fish:` line for each fish you pass (taken, or why not) and for each
   fishing spot in reach.
 - **Pulling items in**: with "take things where they lie" off, there is no flying-to-you animation (the game draws that
   in the player's own game); things are still picked up.
-- **Line of sight** ("only take what I can see") needs Kiln's line-of-sight checks, which a hosting game does not have
-  yet in 0.2.0-dev.28; the window says so. The height window covers caves meanwhile.
+- **Line of sight** ("only take what I can see") needs Kiln's line-of-sight checks (queries.line_of_sight). Where a
+  game or server doesn't have them, or they don't answer yet while a world loads, the height window decides instead,
+  and the window says so.
 
 ## Requirements
 Kiln 0.2.0-dev.30.6 or later, on the server and (for the window, the keys and the notes) in each player's game.

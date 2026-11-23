@@ -312,6 +312,7 @@ public sealed class RulesWaveTests
     public void The_height_window_holds_looting_both_ways(double y, bool taken)
     {
         var rig = Rig(s => { s.HeightAbove = 4; s.HeightBelow = 4; });
+        rig.Game.SightOn = false;   // since 0.2.8 the height window is the fallback where line of sight cannot decide
         var twig = rig.Game.Add(LoopRig.Twig, 1, Pickup, pickupItem: Twigs, y: y);
         rig.ScanAfter(100);
         Assert.Equal(taken, Took(rig, twig));
@@ -321,6 +322,7 @@ public sealed class RulesWaveTests
     public void A_height_of_0_is_no_limit_on_that_side()
     {
         var rig = Rig(s => { s.HeightAbove = 0; s.HeightBelow = 4; });
+        rig.Game.SightOn = false;   // the height window: the fallback where line of sight cannot decide
         var high = rig.Game.Add(LoopRig.Twig, 1, Pickup, pickupItem: Twigs, y: 10);
         var low = rig.Game.Add(LoopRig.Twig, 1, Pickup, pickupItem: Twigs, y: -10);
         rig.ScanAfter(100);
@@ -341,6 +343,8 @@ public sealed class RulesWaveTests
         public bool InSaveZone(EntityId player) => false;
         public bool NearBuildZone(EntityId player) => false;
         public void Hit(EntityId player, in SmashTarget target, SmashKind kind) => Hits.Add(target.Entity);
+        public bool SightAvailable => false;   // the height window is the fallback where line of sight cannot decide
+        public Sight LineOfSight(EntityId player, EntityId target) => Sight.Unknown;
     }
 
     [Fact]

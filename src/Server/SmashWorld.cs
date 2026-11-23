@@ -21,6 +21,10 @@ internal interface ISmashWorld
     bool NearBuildZone(EntityId player);
     /// <summary>One smash hit from <paramref name="player"/> on the target (fire and forget).</summary>
     void Hit(EntityId player, in SmashTarget target, SmashKind kind);
+    /// <summary>The server can check line of sight (capability queries.line_of_sight).</summary>
+    bool SightAvailable { get; }
+    /// <summary>Queries.VoxelLineOfSight from the player to the target.</summary>
+    Sight LineOfSight(EntityId player, EntityId target);
 }
 
 internal sealed class KilnSmashWorld : ISmashWorld
@@ -60,4 +64,15 @@ internal sealed class KilnSmashWorld : ISmashWorld
     public bool NearBuildZone(EntityId player) => PlayerStates.Is(player, PlayerStateId.IsNearBuildingZone);
 
     public void Hit(EntityId player, in SmashTarget target, SmashKind kind) => SmashHit.Hit(player, target, kind);
+
+    public bool SightAvailable => Capabilities.Is("queries.line_of_sight");
+
+#pragma warning disable KILN121 // checked in SightAvailable, which Smash asks first
+    public Sight LineOfSight(EntityId player, EntityId target)
+    {
+        var r = Queries.VoxelLineOfSight(player, target);
+        if (r is { Ok: true }) return r.Visible ? Sight.Visible : Sight.Hidden;
+        return r?.Reason == "BudgetExceeded" ? Sight.Later : Sight.Unknown;
+    }
+#pragma warning restore KILN121
 }

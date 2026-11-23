@@ -26,6 +26,7 @@ internal sealed class LootLoop
     public const int MaxInjectsPerScan = 64;       // for the whole mod
     public const long BlinkMs = 2000;              // the 2 s re-evaluation (counted only)
     public const long SightCacheMs = 1000;         // about 1 s per target
+    public const long SightRetryMs = 5000;         // line of sight did not answer: the height window stands in this long
     public const long StallRetryMs = 1000;         // a container the full player cannot take from
     public const float StaticPickupNearSquared = 0.5625f;   // the game's own 0.75 m, squared
     public const long SettingsGapMs = 500;         // one settings application per player per 500 ms
@@ -72,6 +73,7 @@ internal sealed class LootLoop
     private PersonalSettings _defaults = new();
     private long _lastScan = long.MinValue, _lastBlink, _scanNumber;
     private int _budget, _rotate;
+    private long _sightUnknownUntil;   // line of sight answered "not known" (not loaded yet): the height window decides until then
     private readonly Func<long> _micros;
     // the scan in progress: every (player, target) to look at, and how far it got; Spot: a fishing spot for its kiln.log
     // line (FishingSpot), else a target
@@ -642,8 +644,10 @@ internal sealed class LootLoop
                 _keyLine(still);
             }
         }
-        // critters ignore the height window: the main radius holds them in 3D (LootRules.Decide, d2 is 3D)
-        if ((classified is not { Rule: { } hr } || HeightWindow.AppliesTo(hr.Group)) && !HeightWindow.Allows(dy, p.Settings))
+        // the height window is the fallback where line of sight does not decide (SightDecides); critters ignore it: the
+        // main radius holds them in 3D (LootRules.Decide, d2 is 3D)
+        if ((classified is not { Rule: { } hr } || HeightWindow.AppliesTo(hr.Group)) && !SightDecides(p) &&
+            !HeightWindow.Allows(dy, p.Settings))
         {
             ProbeTrace.Note(e, $"height: outside the height window (dy {dy:0.0} m)");
             Counters.HeightOut++;   // above or below the player's height window: as if out of range
@@ -1357,7 +1361,13 @@ internal sealed class LootLoop
         }
     }
 
-    /// <summary>Line of sight: only with visibleOnly; cached about 1 s per target; "not known" = visible.</summary>
+    /// <summary>Line of sight decides what is in reach for this player (0.2.8): "Only what I can see" is on, the server
+    /// can check it, and it answered lately. Otherwise the height window stands in (Target).</summary>
+    private bool SightDecides(PlayerLoot p) =>
+        p.Settings.VisibleOnly && _game.SightAvailable && _clock.NowMs >= _sightUnknownUntil;
+
+    /// <summary>Line of sight: only with visibleOnly; cached about 1 s per target; "not known" = visible, and the height
+    /// window stands in for <see cref="SightRetryMs"/> (or until a check answers again).</summary>
     private bool InSight(PlayerLoot p, GamePlayer gp, EntityId e, ulong key)
     {
         if (!p.Settings.VisibleOnly) return true;
@@ -1367,10 +1377,16 @@ internal sealed class LootLoop
         {
             case Sight.Later: return false;
             case Sight.Hidden:
+                _sightUnknownUntil = 0;
                 Counters.SightBlocked++;
                 Remember(false);
                 return false;
+            case Sight.Unknown:
+                _sightUnknownUntil = now + SightRetryMs;
+                Remember(true);
+                return true;
             default:
+                _sightUnknownUntil = 0;
                 Remember(true);
                 return true;
         }

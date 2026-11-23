@@ -43,7 +43,8 @@ internal enum Sight
 {
     Visible,
     Hidden,
-    /// <summary>The service cannot answer (held on a hosting game in dev.28, or off): treat as visible.</summary>
+    /// <summary>The service cannot answer (not loaded yet while a world loads, or off): treat as visible, and let the
+    /// height window decide meanwhile (LootLoop.SightDecides).</summary>
     Unknown,
     /// <summary>The shared ray budget of this step is spent: ask again next scan.</summary>
     Later,

@@ -91,7 +91,7 @@ public sealed record NoticeMsg(NoticeKind Kind, uint ItemId) : INetMessage<Notic
 /// <summary>Server to player's game: what the server applies for this player after its limits (EffectiveJson, a
 /// PersonalSettings), the limits themselves, and the world settings the window shows read-only. Enabled: the world runs
 /// with the mod on (the value read at the world's start, the one in effect). LineOfSight: the server can check what a
-/// player sees (otherwise visibleOnly has no effect, and the window says so). FocusItem: the item the player's gather
+/// player sees (otherwise the height window decides what is in reach, and the window says so). FocusItem: the item the player's gather
 /// focus is on, 0 = none.</summary>
 public sealed record ServerInfoMsg(string EffectiveJson, string LimitsJson, int MaxStack, bool BackpackCheat, bool Hosted,
     bool Enabled, bool LineOfSight, uint FocusItem) : INetMessage<ServerInfoMsg>

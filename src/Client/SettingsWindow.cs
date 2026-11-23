@@ -292,6 +292,9 @@ internal sealed class SettingsWindow(Data data, SettingsLink link, WindowKeys ke
         }
         if (spec.Key == "visibleOnly" && link.Info is { LineOfSight: false })
             ui.TextWrapped(T("lineOfSightMissing"));
+        // 0.2.8: the height window is the fallback where line of sight does not decide
+        if (spec.Key == "heightBelow" && link.Info is { LineOfSight: true } && _edit.VisibleOnly)
+            ui.TextWrapped(T("heightFallbackOnly"));
     }
 
     /// <summary>The skip list or the only list. The one that decides now (itemFilter) is open; the other is folded under

@@ -38,6 +38,8 @@ internal sealed class FakeGame : IGame
     public int StackWish;
     public bool SightOn = true;
     public int SightCalls;
+    /// <summary>What one line-of-sight call costs on the work clock (microseconds).</summary>
+    public long SightCostMicros;
     public readonly Dictionary<string, int> FindCalls = new();
     public readonly Dictionary<Guid, string> TemplateNames = new();
     public int FreeSlotCount = 10;
@@ -136,6 +138,7 @@ internal sealed class FakeGame : IGame
     public Sight LineOfSight(EntityId player, EntityId target)
     {
         SightCalls++;
+        Micros += SightCostMicros;
         return Entities.TryGetValue(target, out var e) ? e.Sight : Sight.Visible;
     }
 

@@ -36,11 +36,25 @@ public sealed class SmashRunTests
         public long Micros, InspectCostMicros;
         public int InspectCalls;
 
-        public EntityId Add(Guid template, double x, ulong serial = 1)
+        public EntityId Add(Guid template, double x, ulong serial = 1, double y = 0)
         {
             var e = new EntityId((uint)(100 + Entities.Count));
-            Entities.Add(new SmashTarget(e, template, serial, new WorldPosition(x, 0, 0)));
+            Entities.Add(new SmashTarget(e, template, serial, new WorldPosition(x, y, 0)));
             return e;
+        }
+
+        /// <summary>Line of sight: on unless SightOn is false; each target visible unless SightOf says otherwise; each
+        /// call costs SightCostMicros on the work clock.</summary>
+        public bool SightOn = true;
+        public readonly Dictionary<EntityId, Sight> SightOf = new();
+        public int SightCalls;
+        public long SightCostMicros;
+        public bool SightAvailable => SightOn;
+        public Sight LineOfSight(EntityId player, EntityId target)
+        {
+            SightCalls++;
+            Micros += SightCostMicros;
+            return SightOf.TryGetValue(target, out var v) ? v : Sight.Visible;
         }
 
         public IReadOnlyList<EntityId> Candidates() { CandidateCalls++; return Entities.Select(t => t.Entity).ToList(); }
@@ -132,6 +146,48 @@ public sealed class SmashRunTests
     }
 
     [Fact] public void Smash_kind_is_hit() => Assert.True(HitOnce(TSmash, S()));
+
+    // ---- 0.2.8: line of sight decides what is in reach; the height window is the fallback
+
+    [Fact]
+    public void A_prop_out_of_sight_is_not_smashed_where_line_of_sight_decides()
+    {
+        var hidden = _world.Add(TSmash, 2);
+        _world.SightOf[hidden] = Sight.Hidden;
+        var seen = _world.Add(TSmash, 3);
+        Run(S());
+        Assert.Equal([seen], _world.Hits.Select(h => h.Target));
+    }
+
+    [Fact]
+    public void A_prop_below_in_plain_view_is_smashed_and_the_height_window_holds_only_without_line_of_sight()
+    {
+        var below = _world.Add(TSmash, 2, y: -6);
+        Run(S(s => s.HeightBelow = 4));
+        Assert.Contains(_world.Hits, h => h.Target == below);
+
+        _world.Hits.Clear();
+        _world.SightOn = false;   // a game or server that cannot check line of sight
+        _now += 60_000;
+        Run(S(s => s.HeightBelow = 4));
+        Assert.Empty(_world.Hits);
+    }
+
+    [Fact]
+    public void Smash_line_of_sight_checks_stay_inside_the_run_budget_and_are_kept_a_moment()
+    {
+        const long cost = 600;
+        _world.SightCostMicros = cost;
+        for (var i = 0; i < 300; i++) _world.SightOf[_world.Add(TSmash, 1 + i * 0.04)] = Sight.Hidden;
+        var before = _world.Micros;
+        Run(S());
+        Assert.True(_world.Micros - before <= global::KilnAutoLoot.Server.Smash.RunBudgetMicros + cost, $"{_world.Micros - before} us");
+        var calls = _world.SightCalls;
+        _now += 500;
+        Run(S());                 // half a second later: the answers are kept, the run goes on past them
+        Assert.True(_world.SightCalls - calls <= calls, $"{_world.SightCalls - calls} new calls after {calls}");
+        Assert.Empty(_world.Hits);
+    }
 
     [Fact] public void Unknown_template_is_never_hit() => Assert.False(HitOnce(TUnknown, S()));
 

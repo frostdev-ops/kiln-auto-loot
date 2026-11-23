@@ -65,7 +65,8 @@ public sealed class FishTests
     [Fact]
     public void A_fish_left_says_why_once()
     {
-        var deep = Rig();   // the depth window: 4 m below by default
+        var deep = Rig(s => s.HeightBelow = 4);   // the depth window, the fallback where line of sight cannot decide
+        deep.Game.SightOn = false;
         AddFish(deep, 3, y: -7);
         deep.ScanFor(3000);
         Assert.Empty(deep.Game.Loots);
