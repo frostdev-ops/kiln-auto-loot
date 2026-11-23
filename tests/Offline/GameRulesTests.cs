@@ -280,8 +280,42 @@ public class TemplateRulesTests
         Assert.Equal(TemplateFlags.Elite, One(Facts.T("Enemy_Skeleton_Elite_Melee01", Facts.Enemy))?.Flags);
         Assert.Equal(TemplateFlags.Animal, One(Facts.T("Animal_Wildlife_T1_Goat", ["Actor", "Health", "Faction", "Wildlife", "HealthBar"]))?.Flags);
         Assert.Null(One(Facts.T("ProjectileSpawner_Turret", ["Actor", "Health", "Faction", "Enemy01BehaviorState"])));   // no health bar: no creature
-        var fish = One(Facts.T("Animal_Wildlife_Fish_Small01", ["Actor", "Health", "Faction", "Wildlife"], new() { ["Faction.faction"] = "Environment" }));
+        var fish = One(Facts.T("Animal_wildlife_Fish_T1_common_01", WildFish, Faction("Environment"), yield: [Shimmerfin]));
         Assert.Equal((Group.Fish, TemplateFlags.Animal), (fish!.Group, fish.Flags));
+    }
+
+    // the fish of the game data of 0.2.0-dev.30.6 (as the mod reads it), shortened to what the rules read and what
+    // tells them apart. A fish swimming free (Animal_wildlife_Fish_T1_common_01 and _02 from 554 water spawners, nearly
+    // all in the Veilwater Basin's lakes; the Fish Cutlet fish of 8 Only_Fish spawners there) is a creature built as a
+    // pickup: the game's own loot_pickup_item set (InteractionOfferRuntime, PickupItem, DestroyOnLoot) with the pickup
+    // sequence, so a swimming player grabs it with E. The fish a player releases into a pond (a raw fish's
+    // UseItem_Drop_Fish_Into_World spawns "..._tame") is the same but tame. A fish on the hook (Fish_T1_common_01) is
+    // an actor of the rod's minigame (Fishable, DoNotSave) with no pickup, and a fishing spot is an effect with a fish
+    // table (FishingSpot): their fish is an item only once the rod catches it.
+    private const uint Shimmerfin = 2004880509;
+    private static readonly string[] WildFish =
+        ["Actor", "DestroyOnLoot", "Destructible", "DisableDestructible", "Faction", "FleeSensor", "Health", "HealthBar",
+         "InteractionOfferRuntime", "InteractionPause", "ModelComponent", "ModelResource", "PickupItem", "RandomLoot",
+         "RandomLootContainer", "RandomLootSlotCount", "ServerSubmerge", "Wildlife"];
+    private static readonly string[] ReleasedFish = [.. WildFish.Except(["RandomLoot"]), "IsTame"];
+    private static readonly string[] HookedFish =
+        ["Actor", "ActorInput", "DoNotSave", "Fishable", "ModelComponent", "ModelResource", "NetworkActor", "VfxComponentResource"];
+    private static readonly string[] FishingSpot = ["FishingSpot", "RandomLoot", "StaticTransform", "VfxComponent", "VfxComponentResource"];
+
+    [Fact]
+    public void Fish_are_the_ones_swimming_free_never_one_let_go_on_the_hook_or_at_a_fishing_spot()
+    {
+        foreach (var n in new[] { "Animal_wildlife_Fish_T1_common_01", "Animal_wildlife_Fish_T1_common_02", "Animal_Wildlife_Fish_Big01_GreenYellow" })
+            Assert.Equal((Group.Fish, TemplateFlags.Animal),
+                One(Facts.T(n, WildFish, Faction("Environment"), yield: [Shimmerfin])) is { } r ? (r.Group, r.Flags) : default);
+        // a fish a player let go stays free, as a pet does
+        Assert.Null(One(Facts.T("Animal_wildlife_Fish_T1_common_01_tame", ReleasedFish, Faction("Environment"), yield: [Shimmerfin])));
+        // nothing to grab: a fish on the hook, a fishing spot, a "fish" creature without the game's pickup
+        Assert.Null(One(Facts.T("Fish_T1_common_01", HookedFish)));
+        Assert.Null(One(Facts.T("_FishingLocation_Generic_MoreFish", FishingSpot)));
+        Assert.Null(One(Facts.T("Animal_Wildlife_Fish_Small01", ["Actor", "Health", "Faction", "Wildlife"], Faction("Environment"))));
+        // and a fish never counts as an enemy, whatever its faction says
+        Assert.Null(One(Facts.T("Animal_Wildlife_Fish_Small01", ["Actor", "Health", "Faction", "Wildlife", "HealthBar"], Faction("Wildlife"))));
     }
 
     [Fact]

@@ -44,6 +44,9 @@ internal sealed class LootLoop
     public const string InventoryComponent = "Inventory";
     public const string LootMarkerComponent = "DisableColliderModeChanges";
     public const string EnemyComponent = "EnemySettings";
+    /// <summary>A fishing spot (the fish shoal the rod is cast at): looked for every <see cref="BlinkMs"/>, only for
+    /// players with Fish on, for its kiln.log line.</summary>
+    public const string FishingSpotComponent = "FishingSpot";
 
     private readonly IGame _game;
     private readonly IClock _clock;
@@ -53,6 +56,9 @@ internal sealed class LootLoop
     private readonly Dictionary<EntityId, PlayerLoot> _players = new();
     private readonly Dictionary<EntityId, (ulong Serial, TemplateRule? Rule, long Scan, Guid? Template)> _templates = new();
     private readonly CritterWatch _critters = new();
+    private readonly CritterWatch _fish = new("fish");
+    private readonly HashSet<EntityId> _spotsSaid = [];
+    private bool _spotsDue;   // this scan looks for fishing spots (every BlinkMs)
     private readonly HashSet<EntityId> _playerIds = [];
     private readonly Dictionary<string, IgnoreList> _ignoreCache = new(StringComparer.Ordinal);
     private readonly HashSet<string> _ignoreReported = new(StringComparer.Ordinal);
@@ -62,8 +68,9 @@ internal sealed class LootLoop
     private long _lastScan = long.MinValue, _lastBlink, _scanNumber;
     private int _budget, _rotate;
     private readonly Func<long> _micros;
-    // the scan in progress: every (player, target) to look at, and how far it got
-    private readonly List<(PlayerLoot P, GamePlayer Gp, EntityId E)> _work = [];
+    // the scan in progress: every (player, target) to look at, and how far it got; Spot: a fishing spot for its kiln.log
+    // line (FishingSpot), else a target
+    private readonly List<(PlayerLoot P, GamePlayer Gp, EntityId E, bool Spot)> _work = [];
     private int _workAt;
     private bool _scanOpen;
     private long _scanMicros;
@@ -314,6 +321,8 @@ internal sealed class LootLoop
         _players.Clear();
         _templates.Clear();
         _critters.Reset();
+        _fish.Reset();
+        _spotsSaid.Clear();
         _lastScan = long.MinValue;
         _work.Clear();
         _workAt = 0;
@@ -440,7 +449,8 @@ internal sealed class LootLoop
         if (_ignoreVersion != _data.Items.Version)   // the item table was filled again: match every skip list anew
             foreach (var player in _players.Values) Recompute(player);
         Counters.Scans++;
-        if (now - _lastBlink >= BlinkMs)
+        _spotsDue = now - _lastBlink >= BlinkMs;
+        if (_spotsDue)
         {
             _lastBlink = now;
             Counters.Rechecks++;
@@ -475,12 +485,13 @@ internal sealed class LootLoop
         while (_workAt < _work.Count)
         {
             if (_step.Targets > 0 && _micros() - stepStart >= budget) break;
-            var (p, gp, e) = _work[_workAt++];
+            var (p, gp, e, spot) = _work[_workAt++];
             // a player who left, switched looting off or opened a window since the scan started is passed over
             if (!_players.TryGetValue(p.Entity, out var current) || !ReferenceEquals(current, p)) continue;
             if (!p.Settings.Looting || (p.ReportsWindow && p.WindowOpen)) continue;
             _step.Targets++;
-            Target(p, gp, e);
+            if (spot) FishingSpot(p, gp, e);
+            else Target(p, gp, e);
         }
         _step.TargetMicros = _micros() - targetsStart - (_step.InspectMicros - inspectBefore);
         _scanMicros += _micros() - stepStart;
@@ -531,12 +542,13 @@ internal sealed class LootLoop
     /// <summary>The shared World.Find lists of one scan, each fetched on first need.</summary>
     private sealed class Candidates(IGame game)
     {
-        private IReadOnlyList<EntityId>? _pickups, _offers, _inventories, _markers, _enemies;
+        private IReadOnlyList<EntityId>? _pickups, _offers, _inventories, _markers, _enemies, _spots;
         public IReadOnlyList<EntityId> Pickups => _pickups ??= Fetch(PickupComponent);
         public IReadOnlyList<EntityId> Offers => _offers ??= Fetch(OfferComponent);
         public IReadOnlyList<EntityId> Inventories => _inventories ??= Fetch(InventoryComponent);
         public IReadOnlyList<EntityId> Markers => _markers ??= Fetch(LootMarkerComponent);
         public IReadOnlyList<EntityId> Enemies => _enemies ??= Fetch(EnemyComponent);
+        public IReadOnlyList<EntityId> FishingSpots => _spots ??= Fetch(FishingSpotComponent);
         public int Fetched { get; private set; }
         public int Entities { get; private set; }
 
@@ -589,13 +601,18 @@ internal sealed class LootLoop
             return;
         }
         Counters.PlayersLooting++;
+        // the fishing spots in reach go first, looked at within the step budget as targets are (their line reads the
+        // template: Spawn.Inspect)
+        if (s.Fish && _spotsDue)
+            foreach (var e in _game.Within(lists.FishingSpots, gp.Position, s.Radius))
+                if (!_spotsSaid.Contains(e)) _work.Add((p, gp, e, true));
 
         var radius = LootRules.SearchRadius(s);   // the largest of the general and the group radii
         var seen = new HashSet<EntityId>();
         foreach (var list in new Func<IReadOnlyList<EntityId>>[] { () => lists.Pickups, () => lists.Offers, () => lists.Inventories, () => lists.Markers })
             foreach (var e in _game.Within(list(), gp.Position, radius))
                 if (!_playerIds.Contains(e) && seen.Add(e))
-                    _work.Add((p, gp, e));
+                    _work.Add((p, gp, e, false));
     }
 
     private void Target(PlayerLoot p, GamePlayer gp, EntityId e)
@@ -604,14 +621,17 @@ internal sealed class LootLoop
         var dy = at.Y - gp.Position.Y;
         var d2 = DistanceSquared(gp.Position, at);
         var classified = Classify(e);
-        // critters (fishing bait swarms): one kiln.log line each, taken or why not (CritterWatch)
-        if (classified is { Rule: { Group: Group.Critter } cr, Key: var ck })
+        // critters (fishing bait swarms), and fish while Fish is on: one kiln.log line each, taken or why not
+        // (CritterWatch)
+        if (classified is { Rule: { } wr, Key: var wk } && WatchOf(p, wr) is { } watch)
         {
-            if (_critters.Seen(ck)) Counters.CrittersSeen++;
-            if (_critters.Again(ck, _clock.NowMs, ms => CritterLine(p, cr, d2, dy,
-                    $"still there {ms} ms after its take was sent: the game did not hand the bait over ({LiveState(e)})")) is { } still)
+            var critter = wr.Group == Group.Critter;
+            if (watch.Seen(wk) && critter) Counters.CrittersSeen++;
+            if (watch.Again(wk, _clock.NowMs, ms => WatchLine(p, wr, d2, dy,
+                    $"still there {ms} ms after its take was sent: the game did not hand the {Thing(wr)} over " +
+                    $"({LiveState(e)})")) is { } still)
             {
-                Counters.CrittersStuck++;
+                if (critter) Counters.CrittersStuck++;
                 _keyLine(still);
             }
         }
@@ -620,6 +640,10 @@ internal sealed class LootLoop
         {
             ProbeTrace.Note(e, $"height: outside the height window (dy {dy:0.0} m)");
             Counters.HeightOut++;   // above or below the player's height window: as if out of range
+            if (classified is { Rule: { Group: Group.Fish } fr, Key: var fk })
+                WatchLeft(p, fk, fr, d2, dy, dy < 0
+                    ? $"{-dy:0.0} m below you, deeper than Depth below me ({p.Settings.HeightBelow:0} m)"
+                    : $"{dy:0.0} m above you, higher than Height above me ({p.Settings.HeightAbove:0} m)");
             return;
         }
         if (classified is not { Rule: { } rule, Key: var key })
@@ -647,7 +671,7 @@ internal sealed class LootLoop
             if (item == 0)
             {
                 ProbeTrace.Note(e, "critter: left, no known bait");
-                CritterLeft(p, key, rule, d2, dy, "no known bait in the game data");
+                WatchLeft(p, key, rule, d2, dy, "no known bait in the game data");
                 return;
             }
         }
@@ -664,6 +688,10 @@ internal sealed class LootLoop
             }
             rule = live;
         }
+        // a fish is grabbed as the pickup it is; without one the game shows nothing to grab (the container path holds
+        // it)
+        if (rule.Group == Group.Fish && !hasPickup)
+            WatchLeft(p, key, rule, d2, dy, $"the game shows no pickup on it ({LiveState(e)})");
         var container = Release.IsContainerTarget(rule, hasPickup);
         ProbeTrace.Note(e, $"seen: {rule.Group} {rule.Flags}, {(container ? "container path" : $"pickup path, item {item}")}");
         if (container) Counters.ContainersSeen++;
@@ -672,14 +700,44 @@ internal sealed class LootLoop
         else PickupTarget(p, gp, e, key, rule, d2, item, liveItem, dy);
     }
 
-    // ---------------------------------------------------------------- critter lines
+    // ---------------------------------------------------------------- critter and fish lines
 
-    private string CritterLine(PlayerLoot p, TemplateRule rule, float d2, double dy, string outcome) =>
-        $"critter: player {p.Entity} {rule.Name} {Math.Sqrt(d2):0.0} m away (dy {dy:+0.0;-0.0;0.0} m): {outcome}";
-
-    private void CritterLeft(PlayerLoot p, ulong key, TemplateRule rule, float d2, double dy, string why)
+    /// <summary>The kiln.log watch of a target: critters always; fish only while the player's Fish switch is on (it is
+    /// off by default: no line for every fish a player swims past); null = no lines.</summary>
+    private CritterWatch? WatchOf(PlayerLoot p, TemplateRule rule) => rule.Group switch
     {
-        if (_critters.Left(key, CritterLine(p, rule, d2, dy, "left: " + why)) is { } line) _keyLine(line);
+        Group.Critter => _critters,
+        Group.Fish when p.Settings.Fish => _fish,
+        _ => null,
+    };
+
+    private static string Thing(TemplateRule rule) => rule.Group == Group.Fish ? "fish" : "bait";
+
+    private string WatchLine(PlayerLoot p, TemplateRule rule, float d2, double dy, string outcome) =>
+        $"{(rule.Group == Group.Fish ? "fish" : "critter")}: player {p.Entity} {rule.Name} {Math.Sqrt(d2):0.0} m away " +
+        $"(dy {dy:+0.0;-0.0;0.0} m): {outcome}";
+
+    private void WatchLeft(PlayerLoot p, ulong key, TemplateRule rule, float d2, double dy, string why)
+    {
+        if (WatchOf(p, rule)?.Left(key, WatchLine(p, rule, d2, dy, "left: " + why)) is { } line) _keyLine(line);
+    }
+
+    /// <summary>Fish on: one kiln.log line per fishing spot within the main radius (the radius fish use). Its fish are
+    /// not in the water: the spot's effect draws them, the rod's minigame makes one from the spot's fish table when it
+    /// bites, and its item exists only once caught, so there is nothing to take. Spots are looked for every
+    /// <see cref="BlinkMs"/> and looked at in the scan's budgeted steps (<see cref="Classify"/>: Spawn.Inspect).</summary>
+    private void FishingSpot(PlayerLoot p, GamePlayer gp, EntityId e)
+    {
+        if (_spotsSaid.Count > 4096) _spotsSaid.Clear();
+        if (!_spotsSaid.Add(e) || _game.PositionOf(e) is not { } at) return;
+        var key = (Classify(e)?.Key ?? KeyOf(e, 0)) | (1UL << 63);   // never a fish's key
+        var name = TemplateOf(e) is { } g ? _game.TemplateName(g) : null;
+        var line = _fish.Left(key,
+            $"fish: player {p.Entity} is {Math.Sqrt(DistanceSquared(gp.Position, at)):0.0} m from a fishing spot" +
+            $"{(name is null ? "" : $" ({name})")}: its fish come only with a fishing rod (the game makes the " +
+            "fish when one bites), so Kiln Auto Loot cannot take them. It takes fish swimming free, the ones you " +
+            "can grab by hand while swimming (mostly in the Veilwater Basin's lakes)");
+        if (line is not null) _keyLine(line);
     }
 
     private string ItemText(uint item) =>
@@ -694,12 +752,12 @@ internal sealed class LootLoop
         return $"{pickup}, own inventory {(_game.HasInventory(e) ? "yes" : "no")}, {o}";
     }
 
-    private static string RefusalText(Verdict v, PersonalSettings s) => v switch
+    private static string RefusalText(Verdict v, PersonalSettings s, TemplateRule rule) => v switch
     {
-        Verdict.GroupOff => "Critters is off",
+        Verdict.GroupOff => rule.Group == Group.Fish ? "Fish is off" : "Critters is off",
         Verdict.RadiusOut => $"beyond the main radius ({s.Radius:0} m)",
-        Verdict.YieldIgnored => "the bait is on the skip list",
-        Verdict.NotListed => "the bait is not on the only list",
+        Verdict.YieldIgnored => $"the {Thing(rule)} is on the skip list",
+        Verdict.NotListed => $"the {Thing(rule)} is not on the only list",
         Verdict.NotFocus => "the gather focus is on another item",
         _ => v.ToString(),
     };
@@ -1025,15 +1083,15 @@ internal sealed class LootLoop
         uint liveItem = 0, double dy = 0)
     {
         var s = p.Settings;
-        var critter = rule.Group == Group.Critter;
-        string? why = null;   // a critter's lasting reason to stay (its kiln.log line)
+        var watch = WatchOf(p, rule);   // critters, and fish while Fish is on: one kiln.log line each
+        string? why = null;   // a watched target's lasting reason to stay (its kiln.log line)
         var verdict = LootRules.Decide(rule, released: false, d2, s, p.Filter, out var noticeItem, gp.NearBase);
         var wanted = verdict == Verdict.Allowed;
         if (!wanted)
         {
             ProbeTrace.Note(e, $"pickup: refused ({verdict})");
             CountRefusal(p, verdict, noticeItem);
-            why = RefusalText(verdict, s);
+            why = RefusalText(verdict, s, rule);
         }
         var details = _game.PickupDetails(e) ?? new GroundItem(1, GearRules.UnknownRarity);
         if (wanted)   // the pickup's own item: the item filter, then the rarity rule
@@ -1043,17 +1101,17 @@ internal sealed class LootLoop
                     wanted = false;
                     Counters.SkippedPickups++;
                     LeftBehind(p, item);
-                    why = RefusalText(Verdict.YieldIgnored, s);
+                    why = RefusalText(Verdict.YieldIgnored, s, rule);
                     break;
                 case ItemRefusal.NotListed:
                     wanted = false;
                     Counters.NotListed++;
-                    why = RefusalText(Verdict.NotListed, s);
+                    why = RefusalText(Verdict.NotListed, s, rule);
                     break;
                 case ItemRefusal.NotFocus:
                     wanted = false;
                     Counters.NotFocus++;
-                    why = RefusalText(Verdict.NotFocus, s);
+                    why = RefusalText(Verdict.NotFocus, s, rule);
                     break;
                 default:
                     if (GearRules.BelowMin(item, details.Rarity, s.MinGearRarity, _data.Items))
@@ -1084,7 +1142,7 @@ internal sealed class LootLoop
             wanted = false;
             why = "not in plain view (Only what I can see)";
         }
-        if (critter && why is not null) CritterLeft(p, key, rule, d2, dy, why);
+        if (watch is not null && why is not null) WatchLeft(p, key, rule, d2, dy, why);
         if (_budget <= 0)
         {
             if (wanted) Counters.CapReached++;
@@ -1122,11 +1180,12 @@ internal sealed class LootLoop
         ProbeTrace.Note(e, $"send: pickup loot ({item} x{details.Amount})");
         _game.Loot(gp.Entity, e);
         p.Pickups.Taken(key);
-        if (critter)
+        if (watch is not null)
         {
-            var line = _critters.Sent(key, _clock.NowMs, CritterLine(p, rule, d2, dy,
-                $"loot sent (bait {ItemText(item)}; the game shows {LiveState(e)}, live pickup item {liveItem})"), out var first);
-            if (first) Counters.CrittersSent++;
+            var line = watch.Sent(key, _clock.NowMs, WatchLine(p, rule, d2, dy,
+                $"loot sent ({Thing(rule)} {ItemText(item)}; the game shows {LiveState(e)}, live pickup item {liveItem})"),
+                out var first);
+            if (first && rule.Group == Group.Critter) Counters.CrittersSent++;
             if (line is not null) _keyLine(line);
         }
     }

@@ -7,6 +7,16 @@
   presses E on an animal, so babies are never grown up and nothing is petted. The skip list, the only list and the bag
   rules apply as for chests. Animals are looked at once every 5 s (they refill in minutes). On a server, only players
   whose user group may access inventories (canAccessInventories) get produce, the right the game asks for at a chest.
+- **Fish: the switch now says what it does** (reported by zaunfink): with Fish on, no fish were taken and kiln.log
+  said nothing about fish. The fish you see at a fishing spot are not in the water until one bites your rod: the game
+  makes the fish when it bites, and its item only once you land it, so there was never anything to take there and the
+  mod never saw a fish. What the mod takes are the fish swimming free, the ones you can grab by hand while swimming
+  (Shimmerfin and Lakehopper, mostly in the Veilwater Basin's lakes), within your main radius and the height window.
+  The setting's text says so now.
+- With Fish on, kiln.log has one `fish:` line for each fish you pass (taken, or why not: too deep or too high for the
+  height window, beyond the main radius, a list), one when the game did not hand a taken fish over, and one for each
+  fishing spot in your reach, saying its fish come only with a rod.
+- Fish you release into a pond (a raw fish's Release) stay there: with Fish on, the mod took them straight back.
 - Built for Kiln 0.2.0-dev.30.6.
 
 ## 0.2.6
