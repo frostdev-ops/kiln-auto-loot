@@ -76,6 +76,22 @@ public sealed class LivestockTests
     }
 
     [Fact]
+    public void An_animal_not_due_costs_no_sight_check_and_no_try()
+    {
+        // between two reads an animal is passed over before the line of sight (a ray each) and the container try
+        var rig = Rig(s => s.VisibleOnly = true);
+        var goat = Goat(rig, produce: (Apple, 2));
+        rig.ScanAfter(100);
+        Assert.Equal(1, LootsOf(rig, goat));
+        var (sight, tries) = (rig.Game.SightCalls, rig.Loop.Counters.ContainerTries);
+        rig.ScanFor(LootLoop.LivestockEveryMs - 200);
+        Assert.Equal((sight, tries), (rig.Game.SightCalls, rig.Loop.Counters.ContainerTries));
+        rig.ScanFor(400);   // due again: read once more
+        Assert.Equal(2, rig.Loop.Counters.LivestockReads);
+        Assert.Contains("livestock=2/0", rig.Loop.Counters.CountersLine());
+    }
+
+    [Fact]
     public void Skipped_produce_stays_and_the_rest_is_moved()
     {
         var rig = Rig(s => s.SkipList = "=Flint");

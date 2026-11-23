@@ -729,13 +729,22 @@ internal sealed class LootLoop
             ProbeTrace.Note(e, "container: the harvest does not fit the bag rules");
             return;   // checked before the accept too
         }
-        if (Release.IsLivestock(rule) && !gp.MayOpenInventories)
+        if (Release.IsLivestock(rule))
         {
             // farm animals live in a base: a player whose user group may not access inventories (the game gives it no
             // prompt at a chest) gets none of their produce; the slot moves would get past the game's own checks
-            ProbeTrace.Note(e, "livestock: left, the player's user group may not access inventories");
-            Counters.LivestockNoAccess++;
-            return;
+            if (!gp.MayOpenInventories)
+            {
+                ProbeTrace.Note(e, "livestock: left, the player's user group may not access inventories");
+                Counters.LivestockNoAccess++;
+                return;
+            }
+            // read less than LivestockEveryMs ago: not due yet, so no sight check and no try (a base keeps hundreds)
+            if (p.LivestockNext.TryGetValue(key, out var next) && _clock.NowMs < next)
+            {
+                ProbeTrace.Note(e, "livestock: read again later");
+                return;
+            }
         }
         if (!InSight(p, gp, e, key))
         {
@@ -755,11 +764,6 @@ internal sealed class LootLoop
             // a farm animal: its produce is read from its inventory and taken (loot-all, or slot moves when something
             // stays), never with an accept; it refills slowly, so it is read again every LivestockEveryMs, not "done"
             var now = _clock.NowMs;
-            if (p.LivestockNext.TryGetValue(key, out var next) && now < next)
-            {
-                ProbeTrace.Note(e, "livestock: read again later");
-                return;
-            }
             if (p.LivestockNext.Count >= LivestockMemory)
                 foreach (var old in p.LivestockNext.Where(x => x.Value <= now).Select(x => x.Key).ToList()) p.LivestockNext.Remove(old);
             p.LivestockNext[key] = now + LivestockEveryMs;

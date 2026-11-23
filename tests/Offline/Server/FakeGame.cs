@@ -37,6 +37,7 @@ internal sealed class FakeGame : IGame
     public int BagReads;
     public int StackWish;
     public bool SightOn = true;
+    public int SightCalls;
     public readonly Dictionary<string, int> FindCalls = new();
     public readonly Dictionary<Guid, string> TemplateNames = new();
     public int FreeSlotCount = 10;
@@ -132,8 +133,11 @@ internal sealed class FakeGame : IGame
 
     public int FreeSlots(EntityId player) => FreeSlotCount;
 
-    public Sight LineOfSight(EntityId player, EntityId target) =>
-        Entities.TryGetValue(target, out var e) ? e.Sight : Sight.Visible;
+    public Sight LineOfSight(EntityId player, EntityId target)
+    {
+        SightCalls++;
+        return Entities.TryGetValue(target, out var e) ? e.Sight : Sight.Visible;
+    }
 
     public void Interact(EntityId guest, EntityId host, uint offerId) => Interacts.Add((guest, host, offerId));
 
