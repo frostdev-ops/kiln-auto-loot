@@ -65,6 +65,7 @@ internal sealed class LootLoop
     private readonly CritterWatch _left = new("loot", "\"left\"");
     // corpses in reach the loop does not look into, and why (height window, radius, sight, a switch): one line per corpse
     private readonly CritterWatch _unread = new("loot", "\"not looked into\"");
+    private NearReport? _near;   // "/autoloot near": the notes of the next whole scan for one player's surroundings
     private readonly HashSet<EntityId> _spotsSaid = [];
     private bool _spotsDue;   // this scan looks for fishing spots (every BlinkMs)
     private readonly HashSet<EntityId> _playerIds = [];
@@ -229,6 +230,9 @@ internal sealed class LootLoop
     /// <summary>The player's gather focus item, 0 = off (or not a player here).</summary>
     public uint FocusOf(EntityId player) => _players.TryGetValue(player, out var p) ? p.Focus : 0;
 
+    /// <summary>The game layer the loop reads ("/autoloot near").</summary>
+    internal IGame Game => _game;
+
     /// <summary>The server can check line of sight (visibleOnly does something).</summary>
     public bool SightAvailable => _game.SightAvailable;
 
@@ -334,6 +338,7 @@ internal sealed class LootLoop
         _left.Reset();
         _unread.Reset();
         _spotsSaid.Clear();
+        if (_near is { } near) StopNear(near);
         _lastScan = long.MinValue;
         _work.Clear();
         _workAt = 0;
@@ -460,6 +465,7 @@ internal sealed class LootLoop
         if (_ignoreVersion != _data.Items.Version)   // the item table was filled again: match every skip list anew
             foreach (var player in _players.Values) Recompute(player);
         Counters.Scans++;
+        if (_near is { Scan: 0 } near) near.Scan = _scanNumber;   // the scan "/autoloot near" reports on
         _spotsDue = now - _lastBlink >= BlinkMs;
         if (_spotsDue)
         {
@@ -511,6 +517,7 @@ internal sealed class LootLoop
         _scanOpen = false;
         _work.Clear();
         _workAt = 0;
+        if (_near is { } report && report.Scan == _scanNumber) FinishNear(report);
         ForgetUnseenTemplates();
         Counters.ScanMicros += _scanMicros;
         Counters.ScanCount++;
@@ -581,6 +588,7 @@ internal sealed class LootLoop
         if (!Settled(p, _clock.NowMs))
         {
             Counters.SettingsWaits++;
+            ProbeTrace.Note(gp.Entity, "player: waiting for the player's settings");
             return;
         }
         // a game window or the F8 window is open: no accept, no loot-all for this player.
@@ -588,9 +596,15 @@ internal sealed class LootLoop
         if (window)
         {
             Counters.WindowPauses++;
+            ProbeTrace.Note(gp.Entity, p.ReportsWindow ? "player: the F8 window or a game window is open (the player's game says so)"
+                : "player: a game window is open (inventory, map, a container)");
             return;
         }
-        if (!s.Looting) return;   // only what the player takes by hand (E)
+        if (!s.Looting)
+        {
+            ProbeTrace.Note(gp.Entity, "player: auto loot is off (F9)");
+            return;   // only what the player takes by hand (E)
+        }
 
         // the mod's own search, exactly enemyDistance, not capped by the loot radius.
         if (s.EnemyPause)
@@ -609,8 +623,10 @@ internal sealed class LootLoop
         if (p.Enemy.Paused(s.EnemyPause))
         {
             Counters.EnemyPauses++;
+            ProbeTrace.Note(gp.Entity, "player: paused, an enemy is near (Pause near enemies)");
             return;
         }
+        ProbeTrace.Note(gp.Entity, "player: looked around");
         Counters.PlayersLooting++;
         // the fishing spots in reach go first, looked at within the step budget as targets are (their line reads the
         // template: Spawn.Inspect)
@@ -1447,6 +1463,32 @@ internal sealed class LootLoop
         _templates[e] = (serial, rule, _scanNumber, info.Template, stamp);
         return (KeyOf(e, serial), rule);
     }
+
+    /// <summary>"/autoloot near": the entities of <paramref name="report"/> are watched through the next whole scan, then
+    /// it gets the loop's notes and its view of each (tick thread). A report armed before replaces this one.</summary>
+    public void Explain(NearReport report)
+    {
+        if (_near is { } old) StopNear(old);
+        report.Arm(ProbeTrace.Watching, ProbeTrace.Sink);
+        ProbeTrace.Watching = report.Watches;
+        ProbeTrace.Sink = report.Note;
+        _near = report;
+    }
+
+    private void FinishNear(NearReport report)
+    {
+        StopNear(report);
+        report.Finish(this, _game, _data);
+    }
+
+    private void StopNear(NearReport report)
+    {
+        (ProbeTrace.Watching, ProbeTrace.Sink) = report.Restore();
+        _near = null;
+    }
+
+    /// <summary>The template and SpawnTime the loop has cached for an entity (null: none; "/autoloot near").</summary>
+    internal (Guid? Template, long Stamp)? Cached(EntityId e) => _templates.TryGetValue(e, out var c) ? (c.Template, c.Stamp) : null;
 
     /// <summary>The template behind an entity <see cref="Classify"/> looked at in this scan, or null.</summary>
     private Guid? TemplateOf(EntityId e) => _templates.TryGetValue(e, out var c) ? c.Template : null;

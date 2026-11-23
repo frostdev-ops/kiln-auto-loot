@@ -24,6 +24,13 @@
   each stack. Before, a corpse whose listed loot was all on your skip list (or had nothing on your only list or gather
   focus) was never looked into. Creature piles (bones, bat fur) still go by what they can give, as their contents can't
   always be read.
+- **A corpse the game spawned under a reused id is looted** (seen on the owner's game: a Vukah corpse holding Animal
+  Fur and Resin, right next to him, never looked into). The game hands the id of something that just went (a pickup
+  Auto Loot took, an enemy) to the next new thing, and Auto Loot kept taking the corpse for the thing before while it
+  stayed in reach. It now tells them apart by when the game spawned each.
+- **New command `/autoloot near`** (in chat): lists everything within your reach, what it is, what Auto Loot made of
+  it and why, in your chat and in `kiln/logs/kiln.log` (lines starting with "near:"), so a corpse or chest that is not
+  looted can be explained on the spot.
 - kiln.log now says what a corpse, chest or creature pile kept, and why, once for each: for example "left Twigs x2
   (on the skip list); taking Animal Fur x6". Creature piles the mod cannot look into (bones, bat fur, critter parts:
   the game hands their contents over only all at once) that it leaves whole get a line too, with the reason: an item

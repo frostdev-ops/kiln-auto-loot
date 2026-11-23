@@ -69,6 +69,8 @@ internal sealed class LootServer(Data data)
     private string? _limitsJson;
     private (EntityId Player, bool Open)? _hostWindow;
 
+    private CommandRegistration? _command;   // "/autoloot near"
+
     private static bool IsServerWorld => Kiln.Client.IsDedicatedServer || Kiln.Client.IsHosting;
 
     private Logger? Log => _context?.Log;
@@ -105,6 +107,7 @@ internal sealed class LootServer(Data data)
         StopWorld("the mod unloads");
         foreach (var s in _subscriptions) s.Dispose();
         _subscriptions.Clear();
+
         AutoLootMod.Hub.PersonalReceived -= OnPersonal;
         AutoLootMod.Hub.ClientStateReceived -= OnClientState;
         AutoLootMod.Hub.CommandReceived -= OnCommand;
@@ -210,6 +213,14 @@ internal sealed class LootServer(Data data)
         var s = RegisterConfig().Value;
         _enabled = s.Enabled;   // the file's value now; kept for this world, a change applies to the next one
         _running = true;
+        // "/autoloot near": what every entity in the player's reach is, and what the next scan decides for it (0.2.8);
+        // only where a world runs (a dedicated server, a hosting game)
+        try { _command ??= Commands.Register("autoloot", NearCommand, CommandPermission.Everyone, usage: "near",
+            description: "Kiln Auto Loot: what is around you and what Auto Loot does with each (also in kiln.log)"); }
+        catch (Exception e) when (e is KilnUnavailableException or InvalidOperationException or ArgumentException)
+        {
+            Log?.Info($"Kiln Auto Loot: no /autoloot command ({e.Message})");
+        }
         _clock.Advance(0);
         if (_context is not null) _diag ??= new DiagLog(Path.Combine(_context.DataDirectory, "kiln-auto-loot.log"));
         _loop = new LootLoop(new KilnGame(KeyLine), _clock, Data, SendNotice, KeyLine);
@@ -258,6 +269,8 @@ internal sealed class LootServer(Data data)
     {
         if (!_running) return;
         _running = false;
+        _command?.Dispose();
+        _command = null;
         if (_looting)
         {
 #pragma warning disable KILN121 // subscribed only when kiln.players was on
@@ -497,6 +510,33 @@ internal sealed class LootServer(Data data)
         _lastCountedScans = c.PlayerScans;
         _diag?.Write(c.CountersLine());
         _diag?.Write(c.TimingLine());
+    }
+
+    /// <summary>"/autoloot near" (tick thread): arms a NearReport for the player's surroundings; the next whole scan
+    /// answers in the player's chat and in kiln.log.</summary>
+    private void NearCommand(CommandContext ctx)
+    {
+        if (ctx.Count == 0 || !string.Equals(ctx.Arg(0), "near", StringComparison.OrdinalIgnoreCase))
+            ctx.Fail("usage: /autoloot near");
+        if (!_running || _loop is null || !_enabled || !_looting)
+            ctx.Fail("Kiln Auto Loot does not loot in this world now (no world, enabled=false, or a Kiln service is missing; see kiln.log)");
+        var player = ctx.Source.Player;
+        if (player.IsNone || Kiln.Players.Find(player) is not { Position: { } at })
+            ctx.Fail("run it as a player, in chat: it looks around you");
+        else
+        {
+            var s = _loop!.SettingsOf(player);
+            var reach = Math.Max(LootRules.SearchRadius(s), s.EnemyPause ? s.EnemyDistance : 0);
+            IReadOnlyList<EntityId> others = [];
+            if (Capabilities.Is("queries.overlap_origins") && Queries.EntitiesInSphere(at, reach, player) is { Ok: true } r)
+                others = r.Entities;
+            _loop.Explain(NearReport.Around(_loop.Game, player, at, reach, others, (log, chat) =>
+            {
+                foreach (var line in log) KeyLine(line);
+                foreach (var line in chat) Chat.Tell(player, line);
+            }));
+            ctx.Reply("Kiln Auto Loot: looking at what is around you in the next scan; the answer follows.");
+        }
     }
 
     private void KeyLine(string text)
