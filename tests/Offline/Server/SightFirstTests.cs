@@ -113,4 +113,18 @@ public sealed class SightFirstTests
         // about one second of steps: each twig asked at most once (cached for SightCacheMs), not once per scan
         Assert.True(rig.Game.SightCalls <= twigs.Count, $"{rig.Game.SightCalls} sight calls for {twigs.Count} targets");
     }
+
+    // kiln.log's one line a world when line of sight gives no answer: "not available" only where the server has no
+    // check; a check that did not answer (NotLoaded while a world loads) says so, and both say the height window decides
+    [Fact]
+    public void The_kiln_log_line_tells_no_line_of_sight_from_a_check_that_did_not_answer()
+    {
+        var missing = KilnGame.SightUnknownLine(null, "queries.line_of_sight is off");
+        Assert.Contains("not available here (queries.line_of_sight is off)", missing);
+        Assert.Contains("height window", missing);
+        var notLoaded = KilnGame.SightUnknownLine("NotLoaded", "");
+        Assert.Contains("did not answer (NotLoaded)", notLoaded);
+        Assert.DoesNotContain("not available", notLoaded);
+        Assert.Contains("height window", notLoaded);
+    }
 }

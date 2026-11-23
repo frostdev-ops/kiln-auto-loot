@@ -108,10 +108,20 @@ internal sealed class KilnGame(Action<string> logOnce) : IGame
         if (!_sightUnknownLogged)
         {
             _sightUnknownLogged = true;
-            logOnce($"line of sight is not available here ({r?.Reason ?? Capabilities.Why("queries.line_of_sight")}): every target counts as visible");
+            logOnce(SightUnknownLine(r?.Reason, r is null ? Capabilities.Why("queries.line_of_sight") : ""));
         }
         return Sight.Unknown;
     }
+
+    /// <summary>kiln.log's line (once a world) for line of sight without an answer: <paramref name="reason"/> is the
+    /// check's own (NotLoaded while a world loads, ...), null when the server has no check (<paramref name="why"/>
+    /// says why). Either way a target counts as visible, and the height window decides what is in reach (0.2.8).</summary>
+    internal static string SightUnknownLine(string? reason, string why) => reason is null
+        ? $"line of sight is not available here ({why}): every target counts as visible, and the height window " +
+          "(heightAbove, heightBelow; 0 = no limit) decides what is in reach"
+        : $"line of sight did not answer ({reason}): until it answers, a target counts as visible, " +
+          $"and the height window (heightAbove, heightBelow; 0 = no limit) decides what is in reach for up to " +
+          $"{LootLoop.SightRetryMs / 1000} s at a time";
 
     public void Interact(EntityId guest, EntityId host, uint offerId) => Gameplay.Inject.Interact(guest, host, offerId);
 
