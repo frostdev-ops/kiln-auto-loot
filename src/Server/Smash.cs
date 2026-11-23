@@ -33,9 +33,9 @@ internal sealed class Smash
 
     private readonly Func<long> _micros;
     // per target: its template and serial from its first Spawn.Inspect, and when a Run last saw it
-    private readonly Dictionary<uint, (Guid Template, ulong Serial, long SeenMs)> _known = new();
+    private readonly Dictionary<uint, (Guid Template, ulong Serial, long Stamp, long SeenMs)> _known = new();
     // per player and target: what line of sight said, until when
-    private readonly Dictionary<(uint Player, uint Target), (long Until, ulong Serial, bool Visible)> _sight = new();
+    private readonly Dictionary<(uint Player, uint Target), (long Until, ulong Serial, long Stamp, bool Visible)> _sight = new();
     private long _sightUnknownUntil;
     private long _lastKnownPrune;
 
@@ -54,6 +54,7 @@ internal sealed class Smash
     private sealed class Tries
     {
         public ulong Serial;
+        public long Stamp;
         public int Count;
         public long LastMs;
         public long IgnoreUntilMs;
@@ -137,11 +138,11 @@ internal sealed class Smash
             }
             looked++;
             SmashTarget? found;
-            if (_known.TryGetValue(e.Value, out var k))
+            if (_known.TryGetValue(e.Value, out var k) && k.Stamp == _world.SpawnStamp(e))
             {
-                found = _world.PositionOf(e) is { } here ? new SmashTarget(e, k.Template, k.Serial, here) : null;
+                found = _world.PositionOf(e) is { } here ? new SmashTarget(e, k.Template, k.Serial, here, k.Stamp) : null;
                 if (found is null) _known.Remove(e.Value);
-                else _known[e.Value] = (k.Template, k.Serial, now);
+                else _known[e.Value] = (k.Template, k.Serial, k.Stamp, now);
             }
             else
             {
@@ -151,7 +152,7 @@ internal sealed class Smash
                 fresh++;
                 inspectMicros += took;
                 if (took > slowest) slowest = took;
-                if (found is { } f) _known[e.Value] = (f.Template, f.Serial, now);
+                if (found is { } f) _known[e.Value] = (f.Template, f.Serial, f.Stamp, now);
             }
             if (found is not { } target || !table.TryGet(target.Template, out var kind))
             {
@@ -200,7 +201,7 @@ internal sealed class Smash
     private bool Visible(EntityId player, in SmashTarget t, long now)
     {
         var key = (player.Value, t.Entity.Value);
-        if (_sight.TryGetValue(key, out var c) && c.Until > now && c.Serial == t.Serial) return c.Visible;
+        if (_sight.TryGetValue(key, out var c) && c.Until > now && c.Serial == t.Serial && c.Stamp == t.Stamp) return c.Visible;
         bool visible;
         switch (_world.LineOfSight(player, t.Entity))
         {
@@ -209,21 +210,21 @@ internal sealed class Smash
             case Sight.Unknown: _sightUnknownUntil = now + SightRetryMs; visible = true; break;
             default: _sightUnknownUntil = 0; visible = true; break;
         }
-        _sight[key] = (now + SightCacheMs, t.Serial, visible);
+        _sight[key] = (now + SightCacheMs, t.Serial, t.Stamp, visible);
         return visible;
     }
 
     private bool MayHit(in SmashTarget t, long now)
     {
-        if (!_tries.TryGetValue(t.Entity.Value, out var tr) || tr.Serial != t.Serial) return true;
+        if (!_tries.TryGetValue(t.Entity.Value, out var tr) || tr.Serial != t.Serial || tr.Stamp != t.Stamp) return true;
         if (now < tr.IgnoreUntilMs) return false;
         return now - tr.LastMs >= RetryMs;
     }
 
     private void Remember(in SmashTarget t, long now)
     {
-        if (!_tries.TryGetValue(t.Entity.Value, out var tr) || tr.Serial != t.Serial)
-            _tries[t.Entity.Value] = tr = new Tries { Serial = t.Serial };
+        if (!_tries.TryGetValue(t.Entity.Value, out var tr) || tr.Serial != t.Serial || tr.Stamp != t.Stamp)
+            _tries[t.Entity.Value] = tr = new Tries { Serial = t.Serial, Stamp = t.Stamp };
         if (tr.IgnoreUntilMs != 0 && now >= tr.IgnoreUntilMs) { tr.Count = 0; tr.IgnoreUntilMs = 0; }
         tr.Count++;
         tr.LastMs = now;

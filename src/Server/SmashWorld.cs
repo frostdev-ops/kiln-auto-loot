@@ -7,7 +7,7 @@ using Kiln;
 namespace KilnAutoLoot.Server;
 
 /// <summary>A candidate's template and position; <paramref name="Serial"/> tells a reused entity id apart.</summary>
-internal readonly record struct SmashTarget(EntityId Entity, Guid Template, ulong Serial, WorldPosition Position);
+internal readonly record struct SmashTarget(EntityId Entity, Guid Template, ulong Serial, WorldPosition Position, long Stamp = 0);
 
 internal interface ISmashWorld
 {
@@ -15,6 +15,8 @@ internal interface ISmashWorld
     IReadOnlyList<EntityId> Candidates();
     IReadOnlyList<EntityId> Within(IReadOnlyList<EntityId> candidates, WorldPosition at, double radius);
     SmashTarget? Inspect(EntityId entity);
+    /// <summary>SpawnTime: distinguishes game-spawned entities (whose Kiln serial is zero) under reused ids.</summary>
+    long SpawnStamp(EntityId entity);
     /// <summary>World.Position: where a target already inspected is now; null when it is gone.</summary>
     WorldPosition? PositionOf(EntityId entity);
     bool InSaveZone(EntityId player);
@@ -53,9 +55,11 @@ internal sealed class KilnSmashWorld : ISmashWorld
     {
         if (!Capabilities.Is("kiln.spawn")) return null;
         return Spawn.Inspect(entity) is { Template: { } template } info
-            ? new SmashTarget(entity, template, info.Serial, info.Position)
+            ? new SmashTarget(entity, template, info.Serial, info.Position, SpawnStamp(entity))
             : null;
     }
+
+    public long SpawnStamp(EntityId entity) => World.TryRead<long>(entity, "SpawnTime", out var stamp) ? stamp : 0;
 
     public WorldPosition? PositionOf(EntityId entity) => World.Position(entity);
 

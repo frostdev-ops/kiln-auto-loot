@@ -340,6 +340,7 @@ public sealed class RulesWaveTests
             c.Where(e => Inspect(e) is { } t && t.Position.DistanceTo(at) <= radius).ToList();
         public SmashTarget? Inspect(EntityId e) => Targets.Where(t => t.Entity == e).Select(t => (SmashTarget?)t).FirstOrDefault();
         public WorldPosition? PositionOf(EntityId e) => Inspect(e)?.Position;
+        public long SpawnStamp(EntityId e) => Inspect(e)?.Stamp ?? 0;
         public bool InSaveZone(EntityId player) => false;
         public bool NearBuildZone(EntityId player) => false;
         public void Hit(EntityId player, in SmashTarget target, SmashKind kind) => Hits.Add(target.Entity);

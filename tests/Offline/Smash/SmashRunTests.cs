@@ -35,11 +35,14 @@ public sealed class SmashRunTests
         /// <summary>The work clock (microseconds): each Inspect costs InspectCostMicros.</summary>
         public long Micros, InspectCostMicros;
         public int InspectCalls;
+        public readonly Dictionary<EntityId, long> SpawnStamps = new();
+        public long SpawnStamp(EntityId entity) => SpawnStamps.GetValueOrDefault(entity);
 
         public EntityId Add(Guid template, double x, ulong serial = 1, double y = 0)
         {
             var e = new EntityId((uint)(100 + Entities.Count));
             Entities.Add(new SmashTarget(e, template, serial, new WorldPosition(x, y, 0)));
+            SpawnStamps[e] = Entities.Count;
             return e;
         }
 
@@ -68,7 +71,7 @@ public sealed class SmashRunTests
         {
             InspectCalls++;
             Micros += InspectCostMicros;
-            return Find(entity);
+            return Find(entity) is { } target ? target with { Stamp = SpawnStamp(entity) } : null;
         }
 
         public WorldPosition? PositionOf(EntityId entity) => Find(entity)?.Position;
@@ -396,5 +399,19 @@ public sealed class SmashRunTests
         Assert.Empty(_world.Hits);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void A_reused_game_entity_id_does_not_keep_a_cached_smash_classification(bool wasSmashable)
+    {
+        var id = _world.Add(wasSmashable ? TSmash : TUnknown, 2, serial: 0, y: -6);
+        Run(S(s => { s.VisibleOnly = false; s.HeightBelow = 4; }));  // known, but not hit
+        Assert.Empty(_world.Hits);
+        _world.Entities[0] = new SmashTarget(id, wasSmashable ? TUnknown : TSmash, 0, new WorldPosition(2, 0, 0));
+        _world.SpawnStamps[id]++;
+        _now += 1000;
+        Run(S());
+        Assert.Equal(wasSmashable ? 0 : 1, _world.Hits.Count);
+    }
 
 }
