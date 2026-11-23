@@ -128,4 +128,23 @@ public sealed class SightFirstTests
         Assert.DoesNotContain("not available", notLoaded);
         Assert.Contains("height window", notLoaded);
     }
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void The_first_target_whose_sight_answer_is_unknown_already_uses_the_height_fallback(bool corpseTarget)
+    {
+        var (rig, corpse) = CorpseBelow(-6);
+        FakeEntity target = corpse;
+        if (!corpseTarget)
+        {
+            rig.Game.Remove(corpse);
+            target = rig.Game.Add(LoopRig.Twig, 2, [], pickupItem: 1, y: -6);
+        }
+        target.Sight = Sight.Unknown;
+        rig.ScanAfter(100);
+        Assert.Empty(rig.Game.Loots);
+        Assert.Empty(rig.Game.Moves);
+        Assert.True(rig.Loop.Counters.HeightOut > 0);
+    }
+
 }

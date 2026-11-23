@@ -119,7 +119,7 @@ internal sealed class Smash
 
         bool? near = null;
         bool NearBuildZone() => near ??= _world.NearBuildZone(player);
-        var sightDecides = s.VisibleOnly && now >= _sightUnknownUntil && _world.SightAvailable;
+        bool SightDecides() => s.VisibleOnly && now >= _sightUnknownUntil && _world.SightAvailable;
 
         var wanted = new List<(double Dist, SmashTarget Target, SmashKind Kind)>();
         var started = _micros();
@@ -158,7 +158,7 @@ internal sealed class Smash
                 ProbeTrace.Note(e, "smash: not a smash target");
                 continue;
             }
-            if (!sightDecides && !HeightWindow.Allows(target.Position.Y - position.Y, s))
+            if (!SightDecides() && !HeightWindow.Allows(target.Position.Y - position.Y, s))
             {
                 ProbeTrace.Note(e, $"smash: {kind}, outside the height window");
                 continue;   // the player's height window
@@ -166,9 +166,15 @@ internal sealed class Smash
             ProbeTrace.Note(e, $"smash: {kind}, wanted {SmashRules.Wants(kind, sw, NearBuildZone)} (stones {sw.Stones}, " +
                                $"buildables {sw.Buildables}, trees {sw.Trees}, hives {sw.Hives}), may hit {MayHit(target, now)}");
             if (!SmashRules.Wants(kind, sw, NearBuildZone) || !MayHit(target, now)) continue;
-            if (sightDecides && !Visible(player, target, now))
+            if (SightDecides() && !Visible(player, target, now))
             {
                 ProbeTrace.Note(e, $"smash: {kind}, not in plain view");
+                continue;
+            }
+            // This call may have been the first Unknown answer: the fallback applies to this prop already.
+            if (!SightDecides() && !HeightWindow.Allows(target.Position.Y - position.Y, s))
+            {
+                ProbeTrace.Note(e, "smash: sight did not answer, outside the height window fallback");
                 continue;
             }
             var dist = target.Position.DistanceTo(position);

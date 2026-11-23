@@ -387,4 +387,14 @@ public sealed class SmashRunTests
         Run(S());
         Assert.Equal(2, _world.Hits.Count);
     }
+    [Fact]
+    public void The_first_prop_with_an_unknown_sight_answer_already_uses_the_height_fallback()
+    {
+        var below = _world.Add(TSmash, 2, y: -6);
+        _world.SightOf[below] = Sight.Unknown;
+        Run(S(s => s.HeightBelow = 4));
+        Assert.Empty(_world.Hits);
+    }
+
+
 }

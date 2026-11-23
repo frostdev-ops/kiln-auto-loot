@@ -734,20 +734,7 @@ internal sealed class LootLoop
                 _keyLine(still);
             }
         }
-        // the height window is the fallback where line of sight does not decide (SightDecides); critters ignore it: the
-        // main radius holds them in 3D (LootRules.Decide, d2 is 3D)
-        if ((classified is not { Rule: { } hr } || HeightWindow.AppliesTo(hr.Group)) && !SightDecides(p) &&
-            !HeightWindow.Allows(dy, p.Settings))
-        {
-            ProbeTrace.Note(e, $"height: outside the height window (dy {dy:0.0} m)");
-            Counters.HeightOut++;   // above or below the player's height window: as if out of range
-            var outside = dy < 0
-                ? $"{-dy:0.0} m below you, deeper than Depth below me ({p.Settings.HeightBelow:0} m)"
-                : $"{dy:0.0} m above you, higher than Height above me ({p.Settings.HeightAbove:0} m)";
-            if (classified is { Rule: { Group: Group.Fish } fr, Key: var fk }) WatchLeft(p, fk, fr, d2, dy, outside);
-            if (classified is { Rule: { } ur, Key: var uk }) UnreadLine(p, e, uk, ur, d2, () => "it is " + outside);
-            return;
-        }
+        if (!HeightAllows(p, gp, e, classified?.Rule, classified?.Key ?? 0, at)) return;
         if (classified is not { Rule: { } rule, Key: var key })
         {
             ProbeTrace.Note(e, "table: not in the template table (never taken)");
@@ -909,7 +896,7 @@ internal sealed class LootLoop
                 return;
             }
         }
-        if (!InSight(p, gp, e, key))
+        if (!InSight(p, gp, e, key, rule))
         {
             ProbeTrace.Note(e, "container: not in sight");
             if (HiddenNow(p, key))
@@ -1386,7 +1373,7 @@ internal sealed class LootLoop
             wanted = false;
             why = "Take where it lies is off and it is more than 0.75 m away";
         }
-        if (wanted && !InSight(p, gp, e, key))
+        if (wanted && !InSight(p, gp, e, key, rule))
         {
             wanted = false;
             // a check the step's shared ray budget could not answer yet is no reason to leave it (no line)
@@ -1513,6 +1500,22 @@ internal sealed class LootLoop
         }
     }
 
+    /// <summary>The height fallback is checked both before sight and on the first Unknown answer itself.</summary>
+    private bool HeightAllows(PlayerLoot p, GamePlayer gp, EntityId e, TemplateRule? rule, ulong key, WorldPosition at)
+    {
+        var dy = at.Y - gp.Position.Y;
+        if ((rule is not null && !HeightWindow.AppliesTo(rule.Group)) || SightDecides(p) || HeightWindow.Allows(dy, p.Settings)) return true;
+        ProbeTrace.Note(e, $"height: outside the height window fallback (dy {dy:0.0} m)");
+        Counters.HeightOut++;
+        var outside = dy < 0
+            ? $"{-dy:0.0} m below you, deeper than Depth below me ({p.Settings.HeightBelow:0} m)"
+            : $"{dy:0.0} m above you, higher than Height above me ({p.Settings.HeightAbove:0} m)";
+        var d2 = DistanceSquared(gp.Position, at);
+        if (rule is { Group: Group.Fish }) WatchLeft(p, key, rule, d2, dy, outside);
+        if (rule is not null) UnreadLine(p, e, key, rule, d2, () => "it is " + outside);
+        return false;
+    }
+
     /// <summary>Line of sight decides what is in reach for this player (0.2.8): "Only what I can see" is on, the server
     /// can check it, and it answered lately. Otherwise the height window stands in (Target).</summary>
     private bool SightDecides(PlayerLoot p) =>
@@ -1520,7 +1523,7 @@ internal sealed class LootLoop
 
     /// <summary>Line of sight: only with visibleOnly; cached about 1 s per target; "not known" = visible, and the height
     /// window stands in for <see cref="SightRetryMs"/> (or until a check answers again).</summary>
-    private bool InSight(PlayerLoot p, GamePlayer gp, EntityId e, ulong key)
+    private bool InSight(PlayerLoot p, GamePlayer gp, EntityId e, ulong key, TemplateRule rule)
     {
         if (!p.Settings.VisibleOnly) return true;
         var now = _clock.NowMs;
@@ -1536,7 +1539,7 @@ internal sealed class LootLoop
             case Sight.Unknown:
                 _sightUnknownUntil = now + SightRetryMs;
                 Remember(true);
-                return true;
+                return _game.PositionOf(e) is { } at && HeightAllows(p, gp, e, rule, key, at);
             default:
                 _sightUnknownUntil = 0;
                 Remember(true);
