@@ -22,6 +22,9 @@ internal static class GameDataLoader
     private static string _reported = "";               // the last failure logged, so a retry every 2 s logs it once
     private static string _namesFrom = "";              // where the names came from (the naming step)
 
+    /// <summary>The game data as read (the probe's comps command), null until it is in.</summary>
+    public static GameFacts? Facts => _load?.Facts;
+
     /// <summary>A step runs on a worker now: poll each tick rather than every few seconds.</summary>
     public static bool Busy => _load?.Running is not null;
 

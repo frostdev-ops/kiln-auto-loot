@@ -56,6 +56,7 @@ public static class LootRules
             Group.Chest => !s.Chests,
             Group.Boss or Group.Enemy => true,
             Group.Fish => !s.Fish,
+            Group.Livestock => !s.AnimalProduce,
             _ => false,
         };
         if (off) return Verdict.GroupOff;

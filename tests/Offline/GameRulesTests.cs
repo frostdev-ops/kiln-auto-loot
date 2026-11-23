@@ -292,6 +292,50 @@ public class TemplateRulesTests
         Assert.Null(One(Facts.T("Animal_Pet_Cat_tame", ["Actor", "Health", "Faction", "Wildlife"])));
         Assert.Null(One(Facts.T("Prop_Training_Dummy", ["Actor", "Health"])));
     }
+
+    // the components of the game's own animals, shortened to what tells them (probed in a hosted world: goats and yaks in
+    // a base; the others as the mod reads the game data of 0.2.0-dev.30.6): a grown farm animal, a baby, a pet (of the
+    // FarmAnimal faction too, with nothing to give), a farm bunny (no produce) and a wild goat (the farm goat's inventory
+    // and refill, not tame, faction Wildlife)
+    private static readonly string[] Adult =
+        ["Actor", "Animal", "Faction", "Health", "HealthBar", "InteractionLootRefill", "InteractionOfferRuntime", "Inventory",
+         "InventorySetup", "IsTame", "RandomLoot", "Wildlife"];
+    private static readonly string[] Baby = ["Actor", "Animal", "BabyAnimal", "Faction", "InteractionOfferRuntime", "IsTame"];
+    private static readonly string[] Pet = ["Actor", "Animal", "Faction", "HealthBar", "InteractionOfferRuntime", "IsTame", "Wildlife"];
+    private static readonly string[] FarmBunny =
+        ["Actor", "Animal", "Faction", "Health", "HealthBar", "InteractionOfferRuntime", "IsTame", "RandomLoot", "Wildlife"];
+    private static readonly string[] WildGoat = [.. Adult.Except(["IsTame"])];
+    private static Dictionary<string, string> Faction(string f) => new() { ["Faction.faction"] = f };
+
+    [Fact]
+    public void Grown_farm_animals_are_livestock_whatever_their_placement_helper_name()
+    {
+        // the eight the game has; fae deer and capybaras carry no random loot
+        foreach (var n in new[] { "PLACEMENT_HELPER_T1_Animal_Farm_Goat", "PLACEMENT_HELPER_T3_Animal_Farm_Turkey",
+                     "PLACEMENT_HELPER_T4_Animal_Farm_Bird_Desert_AG2", "PLACEMENT_HELPER_T4_Animal_Farm_Sanddigger",
+                     "PLACEMENT_HELPER_T5_Animal_Farm_Goat_Coldheights_Variation_Mountaingoat", "PLACEMENT_HELPER_T5_Animal_Farm_Yak" })
+            Assert.Equal((Group.Livestock, TemplateFlags.None), One(Facts.T(n, Adult, Faction("FarmAnimal"))) is { } r ? (r.Group, r.Flags) : default);
+        foreach (var n in new[] { "PLACEMENT_HELPER_T2_Animal_Farm_Catdeer", "PLACEMENT_HELPER_T6_Animal_Farm_Capybara" })
+            Assert.Equal(Group.Livestock, One(Facts.T(n, [.. Adult.Except(["RandomLoot"])], Faction("FarmAnimal")))?.Group);
+    }
+
+    [Fact]
+    public void Baby_pet_bunny_wild_and_unfinished_animals_are_no_livestock()
+    {
+        Assert.Null(One(Facts.T("Animal_Baby_T1_Goat", Baby, Faction("PlayerAlly"))));
+        Assert.Null(One(Facts.T("Animal_Baby_T1_Goat", [.. Baby, "Inventory", "InteractionLootRefill"], Faction("FarmAnimal"))));
+        Assert.Null(One(Facts.T("PLACEMENT_HELPER_Animal_Pet_Dog_03_dark", Pet, Faction("FarmAnimal"))));
+        Assert.Null(One(Facts.T("PLACEMENT_HELPER_T2_Animal_Farm_Bunny", FarmBunny, Faction("FarmAnimal"))));
+        // a wild goat stays what it was: an animal to hunt, its remains looted once it is dead
+        Assert.Equal((Group.Enemy, TemplateFlags.Animal),
+            One(Facts.T("Animal_Wildlife_T1_Goat_AG2", WildGoat, Faction("Wildlife"))) is { } w ? (w.Group, w.Flags) : default);
+        // any other development word keeps a farm animal out, as rule 1 does for every template
+        Assert.Null(One(Facts.T("Z_PLACEMENT_HELPER_Animal_Farm_Yak_NOTFINISHED_DONOTUSE", Adult, Faction("FarmAnimal"))));
+        Assert.Null(One(Facts.T("PLACEMENT_HELPER_T1_Animal_Farm_Goat_DEPRECATED", Adult, Faction("FarmAnimal"))));
+        // not tame, or nothing the game refills: no livestock
+        Assert.Null(One(Facts.T("PLACEMENT_HELPER_Animal_Farm_Goat_Wild", [.. Adult.Except(["IsTame"])], Faction("FarmAnimal"))));
+        Assert.Null(One(Facts.T("PLACEMENT_HELPER_Animal_Farm_Goat_Empty", [.. Adult.Except(["InteractionLootRefill"])], Faction("FarmAnimal"))));
+    }
 }
 
 public class CropRulesTests

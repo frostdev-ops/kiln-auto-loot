@@ -1,4 +1,4 @@
-<Project Sdk="Kiln.Sdk/0.2.0-dev.29.18">
+<Project Sdk="Kiln.Sdk/0.2.0-dev.30.6">
   <!-- Kiln Auto Loot: automatic looting around each player, done on the server.
          dotnet build -m:2 -nodeReuse:false                                          (build)
          dotnet build -t:KilnDeploy -p:KilnServer=<server folder>                     (copy into a server)
@@ -29,7 +29,7 @@
          dotnet build -c Release -t:KilnPack -p:KilnAutoLootProbe=true -p:KilnPackageOutputPath=<folder>/ -->
   <PropertyGroup Condition="'$(KilnAutoLootProbe)' == 'true'">
     <DefineConstants>$(DefineConstants);KILN_AUTOLOOT_PROBE</DefineConstants>
-    <Version>$(Version).probe.3</Version>
+    <Version>$(Version)-probe.4</Version>
     <OutputPath>bin/probe/$(Configuration)/</OutputPath>
   </PropertyGroup>
   <ItemGroup Condition="'$(KilnAutoLootProbe)' != 'true'">

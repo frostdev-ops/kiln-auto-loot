@@ -16,6 +16,11 @@ notes run in each player's game.
   pillbugs, frogs, maggots; never animals or pets), ripe crops from farm beds, and fish if you want them. Each group
   has its own switch and, if you like, its own radius. Ripe crops have two switches: out in the world, and in or near
   a base, so the fields in your base can stay as decoration.
+- **Collects from your farm animals** (off by default, switch **Farm animal produce** on): the milk, wool and other
+  produce your grown farm animals have ready, within your main radius, as the game's Collect does (with its pickup
+  note). Babies are never grown up and no animal is petted: the mod takes only what waits in the animal. On a
+  server, only for players whose user group may access inventories (canAccessInventories), the right the game asks
+  for at a chest.
 - **Empties containers**: corpses of defeated enemies (bosses and elites too, or leave those to you), chests, coffins,
   cupboards and heaps out in the world. A fresh container waits a moment before it is opened (1 s by default), so the
   game has time to fill in its special loot.
@@ -74,7 +79,7 @@ notes run in each player's game.
   yet in 0.2.0-dev.28; the window says so. The height window covers caves meanwhile.
 
 ## Requirements
-Kiln 0.2.0-dev.29.18 or later, on the server and (for the window, the keys and the notes) in each player's game.
+Kiln 0.2.0-dev.30.6 or later, on the server and (for the window, the keys and the notes) in each player's game.
 
 ## Building
 ```sh
@@ -88,6 +93,8 @@ dotnet build -c Release -t:KilnPack -p:KilnPackageOutputPath=dist/   # the zip t
 ## Credits
 Salvage: ideas by **netjunk** (rules for new pickups, mark and salvage in bulk, the confirm) and **HadToRegister**
 (marked items shown in red, the optional "Are you sure?", the Salvage chest still to come).
+
+Farm animal produce: written by **potter420** (pull request #3, after their own request in issue #2).
 
 Inspired by **Auto Loot Plus** by cw (Nexus Mods, Enshrouded mod 170), whose open source showed how automatic looting
 can work in Enshrouded and served as our guide for its behaviour.

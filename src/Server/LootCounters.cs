@@ -54,6 +54,8 @@ internal sealed class LootCounters
     public long GenericLeft;      // ... left: no item yet, or a quest item
     public long DecorLeft;
     public long CrittersSeen, CrittersSent, CrittersStuck;   // critters seen, takes sent, still there after the take        // world furniture players also build (books) left: the player is in or near a base
+    public long LivestockReads;      // farm animals whose inventory was read for produce (counterLog livestock=reads/noAccess)
+    public long LivestockNoAccess;   // ... left: the player's user group may not access inventories
 
     // Kiln side: injects sent, moves, the per-scan cap, sight.
     public long Injects, Moves, CapReached, SightBlocked;
@@ -83,7 +85,7 @@ internal sealed class LootCounters
         $"| containers: tries={ContainerTries} waiting={Waiting} harvested={AlreadyHarvested} accepts={Accepts} " +
         $"lootAll={LootAlls}/{LootNoOffer}/{LootOfferOff} questKept={QuestKept} unreadable={Unreadable} skipped={SkippedInContainers}/{SkippedPickups} " +
         $"| pickups: waits={PickupWaits} fixed={FixedPickups} generic={GenericSeen}/{GenericLeft} decorLeft={DecorLeft} " +
-        $"critters={CrittersSeen}/{CrittersSent}/{CrittersStuck} " +
+        $"critters={CrittersSeen}/{CrittersSent}/{CrittersStuck} livestock={LivestockReads}/{LivestockNoAccess} " +
         $"| kiln: injects={Injects} moves={Moves} capReached={CapReached} sightBlocked={SightBlocked}";
 
     /// <summary>The timing line with the items taken; resets their 5 s parts.</summary>

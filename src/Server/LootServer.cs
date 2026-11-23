@@ -476,7 +476,7 @@ internal sealed class LootServer(Data data)
         var s = _loop.SettingsOf(player);
         _diag?.Write($"settings: player {player} ({how}): looting {B(s.Looting)}, groundLoot {B(s.GroundLoot)}, stones {B(s.Stones)}, oldBooks {B(s.OldBooks)}, " +
                      $"collectibles {B(s.Collectibles)}, plants {B(s.Plants)}, critters {B(s.Critters)}, crops {B(s.Crops)}, " +
-                     $"cropsInBase {B(s.CropsInBase)}, fish {B(s.Fish)}, " +
+                     $"cropsInBase {B(s.CropsInBase)}, animalProduce {B(s.AnimalProduce)}, fish {B(s.Fish)}, " +
                      $"corpses {B(s.Corpses)}, bosses {B(s.Bosses)}, chests {B(s.Chests)}, " +
                      $"smash {B(s.Smash)}, buildables {B(s.SmashBuildables)}, fellTrees {B(s.FellTrees)}, hives {B(s.SmashHives)}, radius {s.Radius:0} " +
                      $"(ground {s.GroundRadius:0}, collectibles {s.CollectiblesRadius:0}, plants {s.PlantsRadius:0}, " +

@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+- **Farm animal produce** (new switch, off by default; contributed by potter420, pull request #3): the milk, wool and
+  other produce your grown farm animals (goats, yaks, ...) have ready is collected within your main radius, the same
+  way the game's Collect does, with the game's own pickup note. The mod takes only what waits in the animal: it never
+  presses E on an animal, so babies are never grown up and nothing is petted. The skip list, the only list and the bag
+  rules apply as for chests. Animals are looked at once every 5 s (they refill in minutes). On a server, only players
+  whose user group may access inventories (canAccessInventories) get produce, the right the game asks for at a chest.
+- Built for Kiln 0.2.0-dev.30.6.
+
 ## 0.2.6
 - **No more multi-second freezes when you arrive somewhere new** (reported by HadToRegister): the first auto-loot look
   around after a fast travel (Flame Altar, with the map open for a while before) held the server for 5.3 s on a slower

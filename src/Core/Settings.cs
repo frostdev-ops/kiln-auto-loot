@@ -28,6 +28,7 @@ public sealed class PersonalSettings
     [Comment("Ripe crops from farm beds out in the world, away from any base. Seedlings are left alone.")] public bool Crops { get; set; } = true;
     [Comment("Ripe crops while you are in or near a base (fields there may be decoration), and there also the plants you can grow yourself (algae, wheat, pumpkins, bushes). Seedlings are left alone.")] public bool CropsInBase { get; set; } = true;
     [Comment("Fish swimming within the radius.")] public bool Fish { get; set; }
+    [Comment("What your grown farm animals have ready (milk, wool, ...), within the main radius. Babies and pets are never touched. On a server, only for players whose user group may access inventories. Off by default.")] public bool AnimalProduce { get; set; }
     [Comment("Items the mod leaves where they are, comma separated. =Name = that one item, #Group = a whole group, a plain word = every item whose name contains it.")]
     public string SkipList { get; set; } = "";
     [Comment("Show a short note when an item on the skip list stays behind.")] public bool SkipNotice { get; set; } = true;

@@ -14,8 +14,9 @@
 //   TextRules.cs                                    trim, number parsing and ASCII compare, shared by the above
 namespace KilnAutoLoot.Core;
 
-/// <summary>A template's loot group (TemplateRules). <see cref="Unknown"/>: a group word the fixtures do not know.</summary>
-public enum Group { Unknown, Ground, Collectible, Plant, Farm, Corpse, Chest, Boss, Enemy, Fish, Critter }
+/// <summary>A template's loot group (TemplateRules). <see cref="Unknown"/>: a group word the fixtures do not know.
+/// <see cref="Livestock"/>: a grown farm animal whose produce (milk, wool, ...) waits in its own inventory.</summary>
+public enum Group { Unknown, Ground, Collectible, Plant, Farm, Corpse, Chest, Boss, Enemy, Fish, Critter, Livestock }
 
 /// <summary>What else a template is (TemplateRules). <see cref="Drop"/>: a corpse group pile a creature leaves (bones,
 /// bat fur, critter parts) whose loot-all hands its default inventory over, as for the fog-nest crystals.

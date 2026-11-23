@@ -112,6 +112,10 @@ internal sealed class PlayerLoot
     /// <summary>Containers looted while the player had no free slot: key -> (takeable count then, time).</summary>
     public Dictionary<ulong, (int Takeable, long At)> Stalls { get; } = new();
 
+    /// <summary>Farm animals (group livestock): key -> the next time their inventory is read
+    /// (<see cref="LootLoop.LivestockEveryMs"/> after the last read).</summary>
+    public Dictionary<ulong, long> LivestockNext { get; } = new();
+
     /// <summary>Next time Smash.Run is due (once per second).</summary>
     public long NextSmashMs { get; set; }
 }

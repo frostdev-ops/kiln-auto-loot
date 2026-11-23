@@ -14,7 +14,7 @@
     <RootNamespace>KilnAutoLoot.Offline</RootNamespace>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="Kiln.TestKit" Version="0.2.0-dev.29.18" />
+    <PackageReference Include="Kiln.TestKit" Version="0.2.0-dev.30.6" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
     <PackageReference Include="xunit.v3" Version="3.1.0" />
     <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
