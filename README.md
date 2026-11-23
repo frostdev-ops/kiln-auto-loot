@@ -94,6 +94,8 @@ dotnet build -c Release -t:KilnPack -p:KilnPackageOutputPath=dist/   # the zip t
 Salvage: ideas by **netjunk** (rules for new pickups, mark and salvage in bulk, the confirm) and **HadToRegister**
 (marked items shown in red, the optional "Are you sure?", the Salvage chest still to come).
 
+Farm animal produce: written by **potter420** (pull request #3, after their own request in issue #2).
+
 Inspired by **Auto Loot Plus** by cw (Nexus Mods, Enshrouded mod 170), whose open source showed how automatic looting
 can work in Enshrouded and served as our guide for its behaviour.
 
