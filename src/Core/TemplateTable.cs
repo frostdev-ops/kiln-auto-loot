@@ -11,6 +11,7 @@ public sealed class TemplateTable
         public readonly List<TemplateRule> All = new();
         public readonly Dictionary<Guid, TemplateRule> ByGuid = new();
         public readonly HashSet<Guid> WorldLootOnly = new();
+        public readonly Dictionary<Guid, string> BaitNotes = new();
     }
 
     private volatile State _state = new();
@@ -27,10 +28,12 @@ public sealed class TemplateTable
     }
 
     /// <summary>Replaces the whole content, with the world loot the mod leaves (salvage only).</summary>
-    public void Fill(IEnumerable<TemplateRule> rules, IEnumerable<Guid> worldLootOnly)
+    public void Fill(IEnumerable<TemplateRule> rules, IEnumerable<Guid> worldLootOnly,
+        IReadOnlyDictionary<Guid, string>? baitNotes = null)
     {
         var s = new State();
         foreach (var g in worldLootOnly) s.WorldLootOnly.Add(g);
+        if (baitNotes is not null) foreach (var (g, note) in baitNotes) s.BaitNotes[g] = note;
         Fill(rules, s);
     }
 
@@ -85,6 +88,13 @@ public sealed class TemplateTable
     public IReadOnlyList<TemplateRule> All => _state.All;
 
     public bool TryGet(Guid template, out TemplateRule rule) => _state.ByGuid.TryGetValue(template, out rule!);
+
+    /// <summary>What the game data showed of a template named like a bait swarm (Classification.BaitNotes), null for one
+    /// the data had none of.</summary>
+    public string? BaitNote(Guid template) => _state.BaitNotes.TryGetValue(template, out var note) ? note : null;
+
+    /// <summary>Every bait note (the classification dump).</summary>
+    public IReadOnlyDictionary<Guid, string> BaitNotes => _state.BaitNotes;
 
     /// <summary>World loot for the salvage rules: a template the mod takes, or world loot it leaves to the player (a locked
     /// chest, a camp's heap: <see cref="TemplateRules.IsWorldLootOnly"/>).</summary>

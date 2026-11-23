@@ -153,6 +153,33 @@ public sealed class CritterLogTests
     }
 
     [Fact]
+    public void An_unknown_bait_template_line_names_its_guid_and_that_the_read_game_data_had_no_such_template()
+    {
+        var rig = Rig();
+        var g = Guid.NewGuid();
+        rig.Game.TemplateNames[g] = "Lootpickup_Scatter_VFX_Bait_T7_Maggots_Above";
+        rig.Game.Add(g, 3, Swarm);
+        rig.ScanFor(1000);
+        var line = Assert.Single(Critter(rig));
+        Assert.Contains(g.ToString(), line);
+        Assert.Contains("the game data the mod read has no bait template with this GUID", line);
+    }
+
+    [Fact]
+    public void An_unknown_bait_template_line_says_what_the_game_data_showed_of_it()
+    {
+        var rig = Rig();
+        var g = Guid.NewGuid();
+        rig.Game.TemplateNames[g] = "Lootpickup_Scatter_VFX_Bait_T7_Maggots_Above";
+        rig.Data.Templates.Fill(rig.Data.Templates.All.ToList(), [],
+            new Dictionary<Guid, string> { [g] = "no yield (its pickup names no item and its stock gave none); not taken" });
+        rig.Game.Add(g, 3, Swarm);
+        rig.ScanFor(1000);
+        var line = Assert.Single(Critter(rig));
+        Assert.Contains("not as fishing bait: no yield (its pickup names no item and its stock gave none); not taken", line);
+    }
+
+    [Fact]
     public void The_lines_stop_at_the_cap_with_one_line_saying_so()
     {
         var w = new CritterWatch();

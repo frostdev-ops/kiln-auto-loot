@@ -654,7 +654,8 @@ internal sealed class LootLoop
         {
             ProbeTrace.Note(e, "table: not in the template table (never taken)");
             Counters.UnknownTemplates++;   // a template not in templates.txt: never
-            if (TemplateOf(e) is { } g && _critters.Unknown(g, () => _game.TemplateName(g)) is { } unknown) _keyLine(unknown);
+            if (TemplateOf(e) is { } g && _critters.Unknown(g, () => _game.TemplateName(g), _data.Templates.BaitNote) is { } unknown)
+                _keyLine(unknown);
             return;
         }
         if ((rule.Flags & TemplateFlags.Decor) != 0 && p.Settings.OldBooks && gp.NearBase)

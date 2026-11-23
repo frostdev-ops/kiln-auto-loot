@@ -157,7 +157,7 @@ internal static class GameDataLoader
     {
         if (_load?.Facts is not { } facts) return;
         var text = ClassificationDump.Text(facts, new Classification(data.Templates.All, data.Items.All,
-            data.Quest.All.ToList(), data.Smash.All));
+            data.Quest.All.ToList(), data.Smash.All) { BaitNotes = data.Templates.BaitNotes });
         var path = Path.Combine(dataDirectory, "kiln-auto-loot-classification.txt");
         Task.Run(() =>
         {

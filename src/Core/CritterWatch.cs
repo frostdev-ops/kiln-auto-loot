@@ -82,11 +82,17 @@ public sealed class CritterWatch
     /// <summary>True once the swarm's take was sent and it is still around after <see cref="StillThereMs"/>.</summary>
     public bool Stuck(ulong key) => _byKey.TryGetValue(key, out var e) && e.StillLogged;
 
-    /// <summary>A template the table does not know: a line once per template when its name looks like a bait swarm.</summary>
-    public string? Unknown(Guid template, Func<string?> nameOf)
+    /// <summary>A template the table does not know: a line once per template when its name looks like a bait swarm, with
+    /// its GUID and what the game data the mod read showed of it (<paramref name="noteOf"/>: TemplateTable.BaitNote; null
+    /// = the data had no such template).</summary>
+    public string? Unknown(Guid template, Func<string?> nameOf, Func<Guid, string?>? noteOf = null)
     {
         if (!_templates.Add(template) || nameOf() is not { } name || !LooksLikeBait(name)) return null;
-        return Line($"critter: template {name} is not in the mod's table (never taken): the game data did not show it as fishing bait");
+        var why = noteOf?.Invoke(template) is { } note
+            ? $"the game data shows it, but not as fishing bait: {note}"
+            : "the game data the mod read has no bait template with this GUID (a resource it could not read, or a " +
+              "template the game added after the read)";
+        return Line($"critter: template {name} ({template}) is not in the mod's table (never taken): {why}");
     }
 
     public static bool LooksLikeBait(string name) =>

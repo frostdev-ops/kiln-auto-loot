@@ -149,7 +149,7 @@ internal sealed record Data(Core.TemplateTable Templates, Core.ItemTable Items, 
 
     public void Fill(Core.Classification c)
     {
-        Templates.Fill(c.Templates, c.WorldLootOnly);
+        Templates.Fill(c.Templates, c.WorldLootOnly, c.BaitNotes);
         Items.Fill(c.Items);
         Quest.Fill(c.QuestItems);
         Smash.Fill(c.Smash);

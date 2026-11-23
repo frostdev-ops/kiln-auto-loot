@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: MIT
 // The mod's whole classification as tab-separated text, for checking it against the game (written with counterLog on).
-// Sections: "template" lines (guid, group, flags, name, yield ids), "quest" lines (id, name), "smash" lines (guid,
-// kind, name), "item" lines (id, internal name, menu group, offered, English, German). Pure.
+// Sections: "template" lines (guid, group, flags, name, yield ids), "bait" lines (guid, name, what the data showed of a
+// template named like a bait swarm), "quest" lines (id, name), "smash" lines (guid, kind, name), "item" lines (id,
+// internal name, menu group, offered, English, German). Pure.
 using System.Text;
 using KilnAutoLoot.Server;
 
@@ -21,6 +22,8 @@ internal static class ClassificationDump
         foreach (var r in c.Templates.OrderBy(r => r.Group).ThenBy(r => r.Name, StringComparer.Ordinal))
             sb.Append("template\t").Append(r.Guid).Append('\t').Append(TemplateTable.WordOf(r.Group)).Append('\t')
               .Append(Flags(r.Flags)).Append('\t').Append(r.Name).Append('\t').Append(string.Join(",", r.Yield)).Append('\n');
+        foreach (var (g, note) in c.BaitNotes.OrderBy(p => names.GetValueOrDefault(p.Key, ""), StringComparer.Ordinal))
+            sb.Append("bait\t").Append(g).Append('\t').Append(names.GetValueOrDefault(g, "")).Append('\t').Append(note).Append('\n');
         foreach (var id in c.QuestItems.OrderBy(i => i))
             sb.Append("quest\t").Append(id).Append('\t').Append(items.TryGetValue(id, out var it) ? it.Name : "").Append('\n');
         foreach (var (g, k) in c.Smash.OrderBy(p => p.Value).ThenBy(p => names.GetValueOrDefault(p.Key, ""), StringComparer.Ordinal))

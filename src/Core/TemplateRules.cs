@@ -220,6 +220,23 @@ public static class TemplateRules
         t.Has("DefaultInventory") && !t.Has("ModelResource") && !t.Has("ModelComponent") &&
         item?.Value("ammunitionType") == "FishingBait";
 
+    /// <summary>What the game data shows of a template named like a bait swarm, for the kiln.log line of one the table
+    /// lacks (Tyrion67, 0.2.7: "T7_Maggots_Above is not in the mod's table"): its yield with each item's ammunitionType,
+    /// the components the swarm rule reads (<see cref="IsSwarm"/>), and what <paramref name="rule"/> made of it.</summary>
+    public static string BaitNote(TemplateFacts t, Context c, TemplateRule? rule)
+    {
+        var yield = t.Yield.Count == 0
+            ? "no yield (its pickup names no item and its stock gave none)"
+            : "yield " + string.Join(", ", t.Yield.Select(id => c.Items.TryGetValue(id, out var i)
+                ? $"{id} {i.Name} (ammunitionType {i.Value("ammunitionType") ?? "none"})"
+                : $"{id} (not in the item data)"));
+        string Has(string component) => t.Has(component) ? "yes" : "no";
+        var model = t.Has("ModelResource") || t.Has("ModelComponent") ? "yes" : "no";
+        var taken = rule is null ? "not taken" : $"taken as {TemplateTable.WordOf(rule.Group)}";
+        return $"{yield}; PickupItem {Has("PickupItem")}, DefaultInventory {Has("DefaultInventory")}, model {model}, " +
+               $"DestroyOnLoot {Has("DestroyOnLoot")}, Health {Has("Health")}; {taken}";
+    }
+
     /// <summary>Rock of the terrain (the stone, sandstone, limestone or granite each region is made of), as the game's
     /// terrain materials name it; not flint, ore, sand or dirt.</summary>
     public static bool IsStone(ItemFacts? item) => item is not null && IsStoneName(item.Name);
