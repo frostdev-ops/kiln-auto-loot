@@ -52,6 +52,13 @@ internal enum Sight
 
 internal enum MoveOutcome { Done, NoRoom, Failed }
 
+/// <summary>The service's actual answer, not the planned take. Confirmed is the committed source-slot ledger amount;
+/// -1 is an older fake's answer without a ledger (never used by KilnGame). Raw status/reason survive for diagnostics.</summary>
+internal readonly record struct MoveAnswer(MoveOutcome Outcome, int Confirmed = -1, string Status = "", string Detail = "", int Reported = -1)
+{
+    public static implicit operator MoveAnswer(MoveOutcome outcome) => new(outcome);
+}
+
 internal interface IGame
 {
     /// <summary>Players in game, alive, with a position (Players.All).</summary>
@@ -122,6 +129,6 @@ internal interface IGame
     /// <summary>Items.Move of a slot into the player's inventory, <paramref name="count"/> of it (0 = the whole slot);
     /// <paramref name="done"/> runs on the tick thread when the game answered; <paramref name="moved"/> (optional) gets
     /// the item entities the move brought (gear), before done.</summary>
-    void Move(EntityId from, ulong slot, EntityId to, int count, Action<MoveOutcome> done,
+    void Move(EntityId from, ulong slot, EntityId to, int count, Action<MoveAnswer> done,
         Action<IReadOnlyList<EntityId>>? moved = null);
 }

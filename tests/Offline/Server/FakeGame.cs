@@ -31,7 +31,7 @@ internal sealed class FakeGame : IGame
     public readonly List<GamePlayer> PlayerList = [];
     public readonly List<(EntityId Guest, EntityId Host, uint Offer)> Interacts = [];
     public readonly List<(EntityId Guest, EntityId Host)> Loots = [];
-    public readonly List<(EntityId From, ulong Slot, EntityId To, Action<MoveOutcome> Done, Action<IReadOnlyList<EntityId>>? Moved)> Moves = [];
+    public readonly List<(EntityId From, ulong Slot, EntityId To, Action<MoveAnswer> Done, Action<IReadOnlyList<EntityId>>? Moved)> Moves = [];
     /// <summary>The count of each move (0 = the whole slot), in the order of <see cref="Moves"/>.</summary>
     public readonly List<int> MoveCounts = [];
     /// <summary>The players' inventories (null = cannot be read); the free slots are <see cref="FreeSlotCount"/>.</summary>
@@ -179,7 +179,7 @@ internal sealed class FakeGame : IGame
 
     public void Loot(EntityId guest, EntityId host) => Loots.Add((guest, host));
 
-    public void Move(EntityId from, ulong slot, EntityId to, int count, Action<MoveOutcome> done,
+    public void Move(EntityId from, ulong slot, EntityId to, int count, Action<MoveAnswer> done,
         Action<IReadOnlyList<EntityId>>? moved = null)
     {
         Moves.Add((from, slot, to, done, moved));

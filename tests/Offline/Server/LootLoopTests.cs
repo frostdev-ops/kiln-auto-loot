@@ -616,6 +616,8 @@ public sealed class UnreadableInventoryTests
 
         rig.Game.Clear();
         rig.ScanAfter(100);
+        Assert.Empty(rig.Game.Moves);  // failure retries are delayed, not sent every 100 ms
+        rig.ScanAfter(LootLoop.MoveRetryMs);
         Assert.Single(rig.Game.Moves);
         Assert.Equal(3, Assert.Single(rig.Game.MoveCounts));
         Assert.Empty(rig.Game.Loots);
@@ -686,6 +688,8 @@ public sealed class UnreadableInventoryTests
 
         rig.Game.Clear();
         rig.ScanAfter(100);
+        Assert.Empty(rig.Game.Moves);  // failure retries are delayed, not sent every 100 ms
+        rig.ScanAfter(LootLoop.MoveRetryMs);
         Assert.Single(rig.Game.Moves);
         Assert.Equal(3, Assert.Single(rig.Game.MoveCounts));
         Assert.Empty(rig.Game.Loots);

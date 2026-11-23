@@ -130,38 +130,50 @@ internal sealed class KilnGame(Action<string> logOnce) : IGame
     public void Loot(EntityId guest, EntityId host) =>
         Gameplay.Inject.Loot(guest, host, 0, lootAll: true, bypassInteraction: true);
 
-    public void Move(EntityId from, ulong slot, EntityId to, int count, Action<MoveOutcome> done,
+    public void Move(EntityId from, ulong slot, EntityId to, int count, Action<MoveAnswer> done,
         Action<IReadOnlyList<EntityId>>? moved = null)
     {
         var scheduler = AutoLootMod.Scheduler;
-        if (!_moves)
+        if (!_moves || scheduler is null)
         {
-            done(MoveOutcome.Failed);
+            done(new(MoveOutcome.Failed, 0, "Unavailable", !_moves ? "items.move unavailable" : "no tick scheduler", 0));
             return;
         }
-        var task = Items.Move(from, new SlotId(slot), to, Math.Max(0, count));
+        Task<MoveResult> task;
+        try { task = Items.Move(from, new SlotId(slot), to, Math.Max(0, count)); }
+        catch (Exception ex) when (ex is InvalidOperationException or ArgumentException)
+        {
+            done(new(MoveOutcome.Failed, 0, ex.GetType().Name, ex.Message, 0));
+            return;
+        }
         task.ContinueWith(t =>
         {
-            var outcome = t.IsCompletedSuccessfully
-                ? t.Result.Status switch
-                {
-                    ItemsStatus.Done => MoveOutcome.Done,
-                    ItemsStatus.NoRoom => MoveOutcome.NoRoom,
-                    ItemsStatus.Partial => MoveOutcome.NoRoom,
-                    _ => MoveOutcome.Failed,
-                }
-                : MoveOutcome.Failed;
-            // gear keeps its item entity through a move: the entities that arrived (salvage rules look at them)
-            var entities = t.IsCompletedSuccessfully && outcome != MoveOutcome.Failed
-                ? t.Result.Changes.Select(c => c.ItemEntity).Where(x => !x.IsNone).Distinct().ToList()
+            var answer = t.IsCompletedSuccessfully ? Answer(t.Result, slot)
+                : new MoveAnswer(MoveOutcome.Failed, 0, t.IsCanceled ? "Canceled" : "Faulted", t.Exception?.GetBaseException().Message ?? "task canceled", 0);
+            // gear keeps its item entity through a committed move (never salvage a planned/rolled-back one)
+            var entities = t.IsCompletedSuccessfully && t.Result.Succeeded && !t.Result.DryRun
+                ? t.Result.Changes.Where(c => c.Amount > 0).Select(c => c.ItemEntity).Where(x => !x.IsNone).Distinct().ToList()
                 : new List<EntityId>();
-            if (scheduler is not null)
-                scheduler.Post(() =>
-                {
-                    moved?.Invoke(entities);
-                    done(outcome);
-                });
+            scheduler.Post(() =>
+            {
+                moved?.Invoke(entities);
+                done(answer);
+            });
         }, TaskScheduler.Default);
+    }
+
+    internal static MoveAnswer Answer(MoveResult result, ulong slot)
+    {
+        var outcome = result.Status switch
+        {
+            ItemsStatus.Done => MoveOutcome.Done,
+            ItemsStatus.NoRoom or ItemsStatus.Partial => MoveOutcome.NoRoom,
+            _ => MoveOutcome.Failed,
+        };
+        var confirmed = result.Succeeded && !result.DryRun
+            ? result.Changes.Where(c => c.From.Value == slot && c.Amount > 0).Sum(c => c.Amount) : 0;
+        return new(outcome, confirmed, result.Status.ToString(),
+            $"{result.Message} (game error {result.GameError}, canceled {result.Canceled}, steps {result.Steps}, dry run {result.DryRun})", result.Done);
     }
 
     private static bool Flag(bool b) => b;

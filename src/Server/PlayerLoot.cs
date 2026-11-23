@@ -106,6 +106,12 @@ internal sealed class PlayerLoot
     /// <summary>Containers with Items.Move still in flight: key -> moves pending.</summary>
     public Dictionary<ulong, int> PendingMoves { get; } = new();
 
+    /// <summary>When a container's pending move batch began, for the capped "still pending" diagnostic.</summary>
+    public Dictionary<ulong, long> PendingSince { get; } = new();
+
+    /// <summary>A failed/partial/no-op batch waits until this time, then reads the source again before retrying.</summary>
+    public Dictionary<ulong, long> MoveRetryAt { get; } = new();
+
     /// <summary>Items.Move amounts sent and not answered yet, per item (added to the next bag reads).</summary>
     public Dictionary<uint, int> MovesInFlight { get; } = new();
 

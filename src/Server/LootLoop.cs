@@ -27,6 +27,9 @@ internal sealed class LootLoop
     public const long BlinkMs = 2000;              // the 2 s re-evaluation (counted only)
     public const long SightCacheMs = 1000;         // about 1 s per target
     public const long SightRetryMs = 5000;         // line of sight did not answer: the height window stands in this long
+    public const long MoveRetryMs = 1000;          // a failed/partial/no-op move: fresh source read after a short delay
+    public const long MovePendingMs = 2000;        // a result that has not arrived: one diagnostic, never requeue it
+    public const int MaxMoveLines = 200;           // result/pending lines per world, then one cap line
     public const long StallRetryMs = 1000;         // a container the full player cannot take from
     public const float StaticPickupNearSquared = 0.5625f;   // the game's own 0.75 m, squared
     public const long SettingsGapMs = 500;         // one settings application per player per 500 ms
@@ -90,6 +93,9 @@ internal sealed class LootLoop
     private int _scanSteps;
     private StepWork _step;
     private long? _lastSlowLine;
+    private readonly HashSet<(EntityId Player, ulong Key, ulong Slot, string State)> _moveNotes = [];
+    private int _moveLines;
+    private bool _moveCapSaid;
 
     /// <summary>What one server step of the scan did (the "slow scan" line).</summary>
     private struct StepWork
@@ -340,6 +346,9 @@ internal sealed class LootLoop
         _critters.Reset();
         _fish.Reset();
         _left.Reset();
+        _moveNotes.Clear();
+        _moveLines = 0;
+        _moveCapSaid = false;
         _unread.Reset();
         _spotsSaid.Clear();
         if (_near is { } near) StopNear(near);
@@ -956,7 +965,24 @@ internal sealed class LootLoop
     /// <summary>Step 6: loot-all, or Items.Move per slot when the slot filter keeps something.</summary>
     private void TakeFromContainer(PlayerLoot p, GamePlayer gp, EntityId e, ulong key, TemplateRule rule, Offer offer)
     {
-        if (p.PendingMoves.ContainsKey(key)) return;   // the last moves have not answered yet
+        if (p.PendingMoves.ContainsKey(key))
+        {
+            var age = _clock.NowMs - p.PendingSince.GetValueOrDefault(key, _clock.NowMs);
+            ProbeTrace.Note(e, $"loot: Items.Move still pending ({age} ms); no duplicate queued");
+            if (age >= MovePendingMs)
+                MoveLine(p, key, 0, "pending", () => $"move: player {p.Entity} source {e} {rule.Name}: pending {age} ms; " +
+                    $"{p.PendingMoves[key]} result(s) not received; no duplicate queued");
+            return;
+        }
+        if (p.MoveRetryAt.TryGetValue(key, out var retry))
+        {
+            if (_clock.NowMs < retry)
+            {
+                ProbeTrace.Note(e, "loot: unsuccessful Items.Move waits for its retry delay");
+                return;
+            }
+            p.MoveRetryAt.Remove(key);
+        }
         var s = p.Settings;
         if (Release.IsHarvest(rule))
         {
@@ -1098,14 +1124,20 @@ internal sealed class LootLoop
             sent++;
             Counters.Moves++;
             var moving = count == 0 ? slot.Count : count;
-            Counters.CountLooted(slot.Item, moving);
             p.Bag?.Took(slot.Item, moving);
             p.PendingMoves[key] = p.PendingMoves.GetValueOrDefault(key) + 1;
+            p.PendingSince.TryAdd(key, _clock.NowMs);
             var item = slot.Item;
             p.MovesInFlight[item] = p.MovesInFlight.GetValueOrDefault(item) + moving;
             ProbeTrace.Note(e, $"send: move slot {slot.Id} ({item} x{moving})");
             var player = gp.Entity;
-            _game.Move(e, slot.Id, gp.Entity, count, outcome => MoveAnswered(p, key, outcome, item, moving),
+            var replied = false;
+            _game.Move(e, slot.Id, gp.Entity, count, answer =>
+                {
+                    if (replied) return;  // a duplicate callback cannot release another queued move's reservation
+                    replied = true;
+                    MoveAnswered(p, key, e, rule, slot.Id, answer, item, moving);
+                },
                 entities =>
                 {
                     if (entities.Count > 0) Moved?.Invoke(player, e, entities);
@@ -1114,14 +1146,14 @@ internal sealed class LootLoop
         if (sent > 0)
         {
             CountLootKind(offer);
-            // Ground and creature-pile slot moves can leave a remainder or fail: only their loot-all finishes the visit
-            // (they are harvested once per visit, Release.HarvestOnce).
-            if (rule.Group != Group.Ground && !Release.IsDrop(rule)) p.Visits.Looted(key);
+            // The result, not dispatch, counts a successful slot take. Ground/drop visits still need their loot-all.
         }
     }
 
-    private void MoveAnswered(PlayerLoot p, ulong key, MoveOutcome outcome, uint item, int count)
+    private void MoveAnswered(PlayerLoot p, ulong key, EntityId source, TemplateRule rule, ulong slot, MoveAnswer answer, uint item, int count)
     {
+        // A world stopped or the player left while the service was answering: no state/notice in the new session.
+        if (!_players.TryGetValue(p.Entity, out var current) || !ReferenceEquals(current, p)) return;
         if (p.MovesInFlight.TryGetValue(item, out var flying))
         {
             if (flying <= count) p.MovesInFlight.Remove(item);
@@ -1129,11 +1161,49 @@ internal sealed class LootLoop
         }
         if (p.PendingMoves.TryGetValue(key, out var n))
         {
-            if (n <= 1) p.PendingMoves.Remove(key);
+            if (n <= 1)
+            {
+                p.PendingMoves.Remove(key);
+                p.PendingSince.Remove(key);
+            }
             else p.PendingMoves[key] = n - 1;
         }
-        if (outcome == MoveOutcome.NoRoom && p.Full.MayNotify()) InventoryFull(p);
+        p.BagScan = -1;  // discard the speculative reservation; the next decision reads the actual bag
+        if (answer.Confirmed > 0) Counters.CountLooted(item, Math.Min(count, answer.Confirmed));
+        var unsuccessful = answer.Outcome != MoveOutcome.Done || (answer.Confirmed >= 0 && answer.Confirmed < count);
+        if (unsuccessful)
+        {
+            if (p.MoveRetryAt.Count >= 1024) p.MoveRetryAt.Clear();
+            p.MoveRetryAt[key] = _clock.NowMs + MoveRetryMs;
+        }
+        else if (rule.Group != Group.Ground && !Release.IsDrop(rule)) p.Visits.Looted(key);
+        var status = string.IsNullOrEmpty(answer.Status) ? answer.Outcome.ToString() : answer.Status;
+        var confirmed = answer.Confirmed < 0 ? "unknown" : answer.Confirmed.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        MoveLine(p, key, slot, status + "/" + confirmed, () => $"move: player {p.Entity} source {source} {rule.Name} slot {slot}, " +
+            $"{ItemName(item)} requested {count}: {CleanMoveText(status)}; confirmed by Items.Move ledger {confirmed}, service reported {answer.Reported}; " +
+            $"{CleanMoveText(answer.Detail)}; {(unsuccessful ? $"retry after {MoveRetryMs} ms with a fresh source read" : "answered")}");
+        ProbeTrace.Note(source, $"move result: {status}, ledger confirms {confirmed}/{count}");
+        if (answer.Outcome == MoveOutcome.NoRoom && p.Full.MayNotify()) InventoryFull(p);
     }
+
+    private void MoveLine(PlayerLoot p, ulong key, ulong slot, string state, Func<string> text)
+    {
+        if (_moveLines >= MaxMoveLines)
+        {
+            if (!_moveCapSaid)
+            {
+                _moveCapSaid = true;
+                _keyLine($"move: {MaxMoveLines} Items.Move result/pending lines in this world; the rest are left out");
+            }
+            return;
+        }
+        if (!_moveNotes.Add((p.Entity, key, slot, state))) return;
+        _moveLines++;
+        _keyLine(text());
+    }
+
+    private static string CleanMoveText(string text) => text.Replace('\r', ' ').Replace('\n', ' ') is { } clean
+        ? clean[..Math.Min(clean.Length, 240)] : "";
 
     /// <summary>The loot-all of a target whose contents cannot be seen (a fog-nest crystal, a creature's pile): taken whole.
     /// The crystal's yield was judged by LootRules.Decide. A pile's is judged here, as it comes whole: in skip mode one
@@ -1186,7 +1256,7 @@ internal sealed class LootLoop
             var stay = rule.Group is Group.Corpse or Group.Enemy
                 ? $"; the game removes a {(Release.IsDrop(rule) ? "creature pile" : "corpse")} only once it is empty, so this one stays"
                 : "";
-            return $"loot: player {p.Entity} {rule.Name}: left {stays}; {taking}{stay}";
+            return $"loot: player {p.Entity} {rule.Name}: left {stays}; {taking} (planned, not receipt; Items.Move result follows){stay}";
         });
         if (line is not null) _keyLine(line);
     }
