@@ -44,6 +44,8 @@ internal sealed class KilnGame(Action<string> logOnce) : IGame
 
     public string? TemplateName(Guid template) => Spawn.Template(template)?.Name;
 
+    public long SpawnStamp(EntityId entity) => World.TryRead<long>(entity, "SpawnTime", out var t) ? t : 0;
+
     public bool TryPickupItem(EntityId entity, out uint itemId)
     {
         if (Ecs.TryGet<Ecs.PickupItem>(entity, out var pi))

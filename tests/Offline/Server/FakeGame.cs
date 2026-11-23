@@ -20,6 +20,8 @@ internal sealed class FakeEntity
     public List<ContainerSlot>? Slots { get; set; }
     public Sight Sight { get; set; } = Sight.Visible;
     public int PickupAmount { get; set; } = 1;
+    /// <summary>The game's SpawnTime of the entity (0 = none, as for what the save loaded).</summary>
+    public long SpawnStamp { get; set; }
     public int Rarity { get; set; } = -1;
 }
 
@@ -51,6 +53,7 @@ internal sealed class FakeGame : IGame
     public readonly HashSet<EntityId> Inspected = [];
     public int InspectCalls;
     private uint _next = 100;
+    private long _stamp;
 
     public EntityId AddPlayer(double x = 0, double y = 0, double z = 0, bool uiOpen = false, bool nearBase = false)
     {
@@ -59,9 +62,22 @@ internal sealed class FakeGame : IGame
         return id;
     }
 
-    public FakeEntity Add(Guid template, double x, string[] components, uint? pickupItem = null, double y = 0)
+    public FakeEntity Add(Guid template, double x, string[] components, uint? pickupItem = null, double y = 0) =>
+        Add(new EntityId(_next++), template, x, components, pickupItem, y);
+
+    /// <summary>A new entity under the id of one that is gone: the game hands ids out again.</summary>
+    public FakeEntity Reuse(EntityId id, Guid template, double x, string[] components, uint? pickupItem = null, double y = 0)
     {
-        var e = new FakeEntity { Id = new EntityId(_next++), Position = new WorldPosition(x, y, 0), Template = template, PickupItem = pickupItem };
+        Entities.Remove(id);
+        return Add(id, template, x, components, pickupItem, y);
+    }
+
+    private FakeEntity Add(EntityId id, Guid template, double x, string[] components, uint? pickupItem, double y)
+    {
+        var e = new FakeEntity
+        {
+            Id = id, Position = new WorldPosition(x, y, 0), Template = template, PickupItem = pickupItem, SpawnStamp = ++_stamp * 16_666_667,
+        };
         foreach (var c in components) e.Components.Add(c);
         if (pickupItem is not null) e.Components.Add(LootLoop.PickupComponent);
         Entities[e.Id] = e;
@@ -95,6 +111,8 @@ internal sealed class FakeGame : IGame
         : PlayerList.FirstOrDefault(p => p.Entity == entity) is { Entity.IsNone: false } gp ? gp.Position : null;
 
     public string? TemplateName(Guid template) => TemplateNames.TryGetValue(template, out var n) ? n : null;
+
+    public long SpawnStamp(EntityId entity) => Entities.TryGetValue(entity, out var e) ? e.SpawnStamp : 0;
 
     public Inspected? Inspect(EntityId entity)
     {

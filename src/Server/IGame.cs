@@ -69,6 +69,11 @@ internal interface IGame
     /// <summary>Spawn.Inspect.</summary>
     Inspected? Inspect(EntityId entity);
 
+    /// <summary>The entity's SpawnTime component (ECS time in nanoseconds), 0 when it has none (what the save loaded).
+    /// With the id it names one entity: the game hands a freed id to the next new one, and Inspected.Serial is 0 for
+    /// whatever the game spawned itself (corpses, drops).</summary>
+    long SpawnStamp(EntityId entity);
+
     /// <summary>Spawn.Template(guid).Name: a template's name (diagnostics only), null when unknown.</summary>
     string? TemplateName(Guid template);
 

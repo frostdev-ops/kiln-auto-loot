@@ -55,7 +55,9 @@ internal sealed class LootLoop
     private readonly Action<EntityId, NoticeMsg> _notice;
     private readonly Action<string> _keyLine;
     private readonly Dictionary<EntityId, PlayerLoot> _players = new();
-    private readonly Dictionary<EntityId, (ulong Serial, TemplateRule? Rule, long Scan, Guid? Template)> _templates = new();
+    // per entity: what Spawn.Inspect said (its identity for the keys, the rule, the template) and its SpawnTime, which
+    // tells a new entity under a reused id from the one before
+    private readonly Dictionary<EntityId, (ulong Serial, TemplateRule? Rule, long Scan, Guid? Template, long Stamp)> _templates = new();
     private readonly CritterWatch _critters = new();
     private readonly CritterWatch _fish = new("fish");
     // what a corpse, chest or creature pile kept and why: one kiln.log line per target (a report of corpses "never
@@ -1416,9 +1418,11 @@ internal sealed class LootLoop
     /// never continues the old entity's visit or pickup episode.</summary>
     private (ulong Key, TemplateRule? Rule)? Classify(EntityId e)
     {
-        if (_templates.TryGetValue(e, out var c))
+        // the game hands a freed id to the next new entity (a corpse, a drop): a SpawnTime that changed is another one
+        var stamp = _game.SpawnStamp(e);
+        if (_templates.TryGetValue(e, out var c) && c.Stamp == stamp)
         {
-            _templates[e] = (c.Serial, c.Rule, _scanNumber, c.Template);
+            _templates[e] = (c.Serial, c.Rule, _scanNumber, c.Template, c.Stamp);
             return (KeyOf(e, c.Serial), c.Rule);
         }
         var inspectStart = _micros();
@@ -1431,10 +1435,17 @@ internal sealed class LootLoop
             _step.SlowestInspect = took;
             _step.SlowestEntity = e;
         }
-        if (inspected is not { } info) return null;
+        if (inspected is not { } info)
+        {
+            _templates.Remove(e);
+            return null;
+        }
         TemplateRule? rule = info.Template is { } g && _data.Templates.TryGet(g, out var r) ? r : null;
-        _templates[e] = (info.Serial, rule, _scanNumber, info.Template);
-        return (KeyOf(e, info.Serial), rule);
+        // Kiln's serial names what Kiln spawned; anything else is told apart by its SpawnTime (per-target state is keyed
+        // by both, so a new entity under an old id starts afresh)
+        var serial = info.Serial != 0 ? info.Serial : (ulong)(stamp ^ (stamp >> 32));
+        _templates[e] = (serial, rule, _scanNumber, info.Template, stamp);
+        return (KeyOf(e, serial), rule);
     }
 
     /// <summary>The template behind an entity <see cref="Classify"/> looked at in this scan, or null.</summary>
