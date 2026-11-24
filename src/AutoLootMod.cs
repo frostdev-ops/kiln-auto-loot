@@ -8,7 +8,7 @@ namespace KilnAutoLoot;
 
 public sealed class AutoLootMod : Mod
 {
-    internal const string Version = "0.2.8";
+    internal const string Version = "0.2.9";
     internal const string Id = "kiln-auto-loot";
 
     private Server.LootServer? _server;
@@ -35,12 +35,14 @@ public sealed class AutoLootMod : Mod
         _subscriptions.Add(Events.On<ServerStartedEvent>(_ => FillServerData(data)));
         if (Lifecycle.IsServerRunning) FillServerData(data);
         _server = new Server.LootServer(data);
+        var sightRays = Ui.Available ? new Client.SightRayOverlay() : null;
+        _server.SightRays = sightRays;
         _server.Start();
         // after the loot server's start: its settings are registered by then (the debug dump follows counterLog)
         _subscriptions.Add(Events.On<ServerStartedEvent>(_ => DumpData(data)));
-        if (Ui.Available)
+        if (sightRays is not null)
         {
-            _client = new Client.ClientPart(data, _server);
+            _client = new Client.ClientPart(data, _server, sightRays);
             _client.Start();
             // the player's game: the window and the notices need the item names. A worker reads them now, or as soon as
             // the game serves its resources; this frame does not wait for it (on a hard disk it took seconds)

@@ -47,6 +47,8 @@ notes run in each player's game.
 - **Only what you can see** (on by default): wherever the game or server can check line of sight, what you can see
   from where you stand decides what is in reach, so a cave's loot stays in the cave and the cave doesn't empty the hill
   above it, while a corpse down a slope in plain view is taken.
+- **Show corpse sight rays (debug)** (off by default, **Where & bag**): draws the actual corpse sight checks in
+  red, with an orange cross at a blocking voxel, in single-player or a world you host. This does not change looting.
 - **Height window** (off by default): where line of sight can't be checked, or with "Only what I can see" off, only
   what is within the meters you set above or below you. Critters (fishing bait) are the exception: they hover above
   the ground, so they are taken anywhere within your main radius, above or below you.

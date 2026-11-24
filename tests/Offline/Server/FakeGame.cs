@@ -174,7 +174,7 @@ internal sealed class FakeGame : IGame
 
     public int FreeSlots(EntityId player) => FreeSlotCount;
 
-    public SightAnswer LineOfSight(EntityId player, EntityId target, SightSample sample = SightSample.Primary)
+    public SightAnswer LineOfSight(EntityId player, EntityId target, SightSample sample = SightSample.Primary, bool corpse = false)
     {
         SightCalls++;
         if (sample == SightSample.Primary) PrimarySightCalls++;

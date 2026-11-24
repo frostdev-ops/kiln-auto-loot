@@ -49,6 +49,7 @@ internal sealed class LootServer(Data data)
     private ModConfig<ServerSettings>? _config;
     private ModContext? _context;
     private LootLoop? _loop;
+    internal Client.SightRayOverlay? SightRays { get; set; }
     private DiagLog? _diag;
     private bool _started, _looting, _subscribedConfig;
     private volatile bool _running, _enabled;   // read by the window (EnabledInWorld)
@@ -223,7 +224,8 @@ internal sealed class LootServer(Data data)
         }
         _clock.Advance(0);
         if (_context is not null) _diag ??= new DiagLog(Path.Combine(_context.DataDirectory, "kiln-auto-loot.log"));
-        _loop = new LootLoop(new KilnGame(KeyLine), _clock, Data, SendNotice, KeyLine);
+        var game = new KilnGame(KeyLine) { SightRays = SightRays };
+        _loop = new LootLoop(game, _clock, Data, SendNotice, KeyLine);
         _loop.Configure(s);
         _nextCounterLine = _clock.NowMs + CounterLineMs;
         _lastCountedScans = -1;
@@ -249,6 +251,7 @@ internal sealed class LootServer(Data data)
             KeyLine($"looting is off in this world: {MissingCapability()}");
             return;
         }
+        SightRays?.SetHosted(true);
 #pragma warning disable KILN121 // kiln.players is in Needed, checked above
         Kiln.Players.Joined += OnJoined;
         Kiln.Players.Left += OnLeft;
@@ -269,6 +272,7 @@ internal sealed class LootServer(Data data)
     {
         if (!_running) return;
         _running = false;
+        SightRays?.SetHosted(false);
         _command?.Dispose();
         _command = null;
         if (_looting)

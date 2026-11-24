@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.9
+- Fixed Vukah Rangers spawned from `Base_Enemy_Vukah_Ranger` being skipped before the sight check. Dead Rangers now use the normal corpse visibility and stack filters.
+- **F8 → Where & bag → Show corpse sight rays (debug)** draws red rays and marks voxel hits in single-player and worlds you host. Off by default; no extra rays or changes to loot rules when enabled.
+- Requires Kiln 0.2.0-dev.30.6 or later.
+
 ## 0.2.8
 - **Corpses and chests are checked stack by stack.** The skip list, only list and gather focus no longer rule out a readable container based on its expected loot. This lets Auto Loot take useful drops from a corpse even when its listed loot is on your skip list. Skipped items stay behind, so the corpse can remain visible. Creature piles whose contents the game only hands over all at once still use their listed loot.
 - **Corpse visibility checks several points, not just one.** If terrain or a wall blocks one point, a clear line to another point can still make the corpse lootable. “Only what I can see” now defaults to on. The height window defaults to no limit and applies when sight is disabled or a check can’t answer. Settings still using the old defaults migrate once; custom settings and settings received from older clients are preserved.

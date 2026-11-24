@@ -119,7 +119,7 @@ internal interface IGame
 
     /// <summary>One Queries.VoxelLineOfSight ray: the ordinary standing-height target, or one of two explicit body-column
     /// samples (same player start). Only the loot loop, after real voxel hits on a released corpse, asks for the latter.</summary>
-    SightAnswer LineOfSight(EntityId player, EntityId target, SightSample sample = SightSample.Primary);
+    SightAnswer LineOfSight(EntityId player, EntityId target, SightSample sample = SightSample.Primary, bool corpse = false);
 
     /// <summary>Gameplay.Inject.Interact: the AcceptOfferedInteractionEvent pressing E sends ("accept").</summary>
     void Interact(EntityId guest, EntityId host, uint offerId);

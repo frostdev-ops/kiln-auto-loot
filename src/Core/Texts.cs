@@ -347,6 +347,9 @@ public static class Texts
         ["zeroOff"] = ("off", "aus"),
         ["lineOfSightMissing"] = ("This game or server can't check what you see, so Height above me and Depth below me decide what is in reach instead.",
             "Dieses Spiel oder dieser Server kann nicht prüfen, was du siehst; was in Reichweite ist, entscheiden hier stattdessen Höhe über mir und Tiefe unter mir."),
+        ["debugSightRays"] = ("Show corpse sight rays (debug)", "Sichtstrahlen zu Leichen zeigen (Debug)"),
+        ["debugSightRaysHelp"] = ("Shows red rays and marks voxel hits while Only what I can see runs in single-player or a world you host. Does not change looting.",
+            "Zeigt rote Strahlen und markiert Voxeltreffer, wenn „Nur, was ich sehe“ im Einzelspieler oder in deiner gehosteten Welt aktiv ist. Ändert nicht, was geplündert wird."),
         ["heightFallbackOnly"] = ("Not used here: line of sight decides what is in reach (Only what I can see). These limits apply only where it can't be checked.",
             "Hier nicht verwendet: die Sichtlinie entscheidet, was in Reichweite ist (Nur, was ich sehe). Diese Grenzen gelten nur, wo sie nicht geprüft werden kann."),
         // the carry-limits editor

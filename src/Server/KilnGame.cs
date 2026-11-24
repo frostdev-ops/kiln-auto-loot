@@ -106,7 +106,9 @@ internal sealed class KilnGame(Action<string> logOnce) : IGame
 
     internal static readonly VoxelSightOptions CorpseUpperSightOptions = new() { ToOffset = new(0, SightTrace.UpperHeight, 0) };
 
-    public SightAnswer LineOfSight(EntityId player, EntityId target, SightSample sample = SightSample.Primary)
+    internal Client.SightRayOverlay? SightRays { get; init; }
+
+    public SightAnswer LineOfSight(EntityId player, EntityId target, SightSample sample = SightSample.Primary, bool corpse = false)
     {
         var options = sample switch
         {
@@ -116,6 +118,11 @@ internal sealed class KilnGame(Action<string> logOnce) : IGame
         };
         var r = _sight ? Queries.VoxelLineOfSight(player, target, options) : null;
         var answer = ReadSight(r);
+        // Only the hosting player's corpse checks. Observe the existing answer; never cast another ray.
+        if (corpse && SightRays is { Recording: true } overlay && Client.SightRayOverlay.CanDraw(answer) &&
+            Kiln.Client.IsHosting && Kiln.Client.HasLocalPlayer && player == Kiln.Client.LocalPlayer &&
+            World.TryGetPosition(player, out var from) && World.TryGetPosition(target, out var to))
+            overlay.Record(target, sample, answer, from, to, options, Environment.TickCount64);
         // A lower sample's Unknown cannot override the primary's known voxel hit. Its reason goes only to the watched
         // entity's /near trace, not the global "height fallback decides" line (which applies to primary Unknown).
         if (answer.State == Sight.Unknown && sample == SightSample.Primary && !_sightUnknownLogged)

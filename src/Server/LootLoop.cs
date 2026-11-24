@@ -1566,7 +1566,7 @@ internal sealed class LootLoop
             return BodySamples();
         }
         p.PendingSight.Remove(key);
-        var primary = _game.LineOfSight(gp.Entity, e);
+        var primary = _game.LineOfSight(gp.Entity, e, corpse: bodyCorpse);
         trace = new SightTrace(gp.Position, targetAt, primary);
         trace.Note(e);
         switch (primary.State)
@@ -1611,7 +1611,7 @@ internal sealed class LootLoop
                     ProbeTrace.Note(e, $"sight: {nextSample} waits for a later step's time budget; completed voxel hits retained");
                     return false;
                 }
-                var body = _game.LineOfSight(gp.Entity, e, nextSample);
+                var body = _game.LineOfSight(gp.Entity, e, nextSample, corpse: true);
                 if (body.State != Sight.Later) rays++; // BudgetExceeded did not cast a ray; Unknown is counted conservatively
                 trace = nextSample == SightSample.CorpseBody ? trace with { Body = body } : trace with { Upper = body };
                 trace.Sample(e, nextSample, body);

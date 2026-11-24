@@ -20,7 +20,7 @@ internal sealed record WindowKeys(Func<string> Menu, Func<string> Toggle, Func<s
     Func<IEnumerable<string>> Fixed);
 
 internal sealed class SettingsWindow(Data data, SettingsLink link, WindowKeys keys, FocusNotes focus,
-    Action<Net.CommandKind> command, SalvagePanel salvage)
+    Action<Net.CommandKind> command, SalvagePanel salvage, SightRayOverlay sightRays)
 {
     private static readonly Color Orange = new(255, 166, 77);
     private static readonly Color OnGreen = new(140, 220, 150);
@@ -290,8 +290,15 @@ internal sealed class SettingsWindow(Data data, SettingsLink link, WindowKeys ke
                 }
                 break;
         }
-        if (spec.Key == "visibleOnly" && link.Info is { LineOfSight: false })
-            ui.TextWrapped(T("lineOfSightMissing"));
+        if (spec.Key == "visibleOnly")
+        {
+            if (link.Info is { LineOfSight: false }) ui.TextWrapped(T("lineOfSightMissing"));
+            var show = sightRays.Enabled;
+            if (ui.Checkbox(T("debugSightRays") + "###debugSightRays", ref show))
+                link.Post(() => sightRays.Save(show));
+            ui.Tooltip(T("debugSightRaysHelp"));
+            if (sightRays.SaveError is { } error) ui.TextWrapped(error);
+        }
         // 0.2.8: the height window is the fallback where line of sight does not decide
         if (spec.Key == "heightBelow" && link.Info is { LineOfSight: true } && _edit.VisibleOnly)
             ui.TextWrapped(T("heightFallbackOnly"));

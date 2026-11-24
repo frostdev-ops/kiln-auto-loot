@@ -12,7 +12,7 @@
 //      inventory), farm bunnies (no produce) and wild animals (not tame) are not livestock, and neither is an animal
 //      with any other development word in its name (an unfinished "..._NOTFINISHED_DONOTUSE" yak).
 //   1. Work-in-progress and developer templates (deprecated, test, debug, placement helpers, cheats, unused) are never taken,
-//      and neither are base templates (the ones others are made from), except the generic drops resource nodes spawn.
+//      and neither are base templates, except the generic drops resource nodes spawn and a confirmed live Vukah Ranger.
 //   2. Creatures (Actor + Health) are enemies (pause and, once dead, their corpse) or fish; villagers, summons, pets and
 //      farm animals are nothing. A fish is one swimming free that a player grabs by hand: built as the game's pickup
 //      (IsFreeFish). A fish a player let go (tame) stays free; a fish on the hook and a fishing spot are no creature
@@ -130,8 +130,16 @@ public static class TemplateRules
         if (IsLivestock(t)) return Rule(t, Group.Livestock, TemplateFlags.None);
         var name = t.Name.ToLowerInvariant();
         if (!IsWorkable(name)) return null;
-        // a base template is what others are made from; the game places only the ones it drops from resource nodes
-        if (IsBase(name) && !c.Dropped.Contains(t.Guid)) return null;
+        if (IsBase(name) && !c.Dropped.Contains(t.Guid))
+        {
+            // Normally a base is only inherited. The game actually spawns this Ranger under its base template, and
+            // on death it adds a readable loot inventory. Keep every other base on the old path. The normal enemy
+            // classification and live corpse gates still apply; no fixed yield is needed for its readable slots.
+            if (name == "base_enemy_vukah_ranger" && t.Has("Actor") && t.Has("Health") && t.Has("RandomLoot") &&
+                string.Equals(t.Value("Faction.faction"), "Vukah", StringComparison.OrdinalIgnoreCase))
+                return Creature(t, name);
+            return null;
+        }
         if (t.Has("Actor") && t.Has("Health")) return Creature(t, name);
         if (CropRules.IsGrowthStage(t)) return c.RipeCrops.Contains(t.Guid) ? Rule(t, Group.Farm, TemplateFlags.None) : null;
         if (t.Has("PickupItem")) return Pickup(t, name, c);

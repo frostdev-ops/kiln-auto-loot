@@ -11,7 +11,7 @@ using Texts = KilnAutoLoot.Core.Texts;
 
 namespace KilnAutoLoot.Client;
 
-internal sealed class ClientPart(Data data, Server.LootServer server)
+internal sealed class ClientPart(Data data, Server.LootServer server, SightRayOverlay sightRays)
 {
     private const string MenuKeyId = "kiln-auto-loot.menu", ToggleKeyId = "kiln-auto-loot.toggle";
     private const string Category = "Kiln Auto Loot";
@@ -47,10 +47,11 @@ internal sealed class ClientPart(Data data, Server.LootServer server)
     {
         if (_started) return;
         _started = true;
+        sightRays.Start();
         _link.Start(AutoLootMod.ModContext?.DataDirectory ?? ".", () => Texts.Get("profileMine", German));
         _salvage = new SalvagePanel(data, SendSalvage, ServerHasSalvage);
         _window = new SettingsWindow(data, _link, new WindowKeys(() => MenuKeyName, () => ToggleKeyName,
-            () => NextProfileKeyName, () => FocusKeyName, () => FixedKeyNames), _focus, SendCommand, _salvage);
+            () => NextProfileKeyName, () => FocusKeyName, () => FixedKeyNames), _focus, SendCommand, _salvage, sightRays);
         _link.PersonalChanged += _window.Reload;
         _link.ProfilesChanged += SyncProfileKeys;
         _link.ProfileSwitched += ToastProfile;
@@ -85,6 +86,7 @@ internal sealed class ClientPart(Data data, Server.LootServer server)
     {
         if (!_started) return;
         _started = false;
+        sightRays.Stop();
         Ui.Screens.UiTick -= OnUiFrame;
         KClient.Tick -= OnClientTick;
         Network.ServerReady -= OnServerReady;
