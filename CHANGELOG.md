@@ -1,48 +1,12 @@
 # Changelog
 
-## Unreleased
-- **What you can see now decides what is in reach.** "Only what I can see" is on by default, and wherever your game or
-  server can check line of sight (Kiln's line-of-sight checks, on hosted games and dedicated servers), it decides what
-  Auto Loot takes and smashes: nothing behind walls or rocks, nothing in a cave under you, but a corpse down a slope
-  in plain view is taken. The height window ("Height above me", "Depth below me") was the stand-in until line of sight
-  was there; it is now off by default (0 = no limit) and only used where line of sight can't be checked (or with "Only
-  what I can see" off), and the F8 window says so. Fishing bait still ignores the height window. This is likely what
-  HadToRegister saw with Vukah corpses that were never touched: a corpse more than 4 m below or above you (down a
-  slope, on a camp's platform) was outside the old height window, so Auto Loot never looked into it.
-- Your saved settings move to the new defaults where they still hold the old ones (4 m above, 4 m below, "Only what I
-  can see" off), once, in your settings file, every profile and a server's defaults for players without the mod. Any
-  other value stays as you set it, and after the move you can choose the old values again. On a server, the new
-  defaults reach each player once they update Kiln Auto Loot: a game that still runs an older version keeps the
-  settings its window shows (players without the mod get the server's defaults).
-- **Corpses that keep a skipped item stay where they fell** (reported by HadToRegister): with Twigs on the skip
-  list, Vukah corpses looked as if they were never looted. They are looted: Auto Loot takes the Animal Fur and
-  everything else you want from them, one stack at a time, and leaves the Twigs in the corpse, as the skip list says.
-  The game removes a corpse only once it is empty, so a corpse still holding Twigs stays. While you have a corpse
-  open yourself, Auto Loot waits, and it carries on once you close it.
-- **A corpse or chest is never passed over for what it is supposed to give.** What the game data lists for a corpse
-  may miss loot the game adds when the enemy dies, so Auto Loot now opens every corpse and chest in reach and judges
-  each stack. Before, a corpse whose listed loot was all on your skip list (or had nothing on your only list or gather
-  focus) was never looked into. Creature piles (bones, bat fur) still go by what they can give, as their contents can't
-  always be read.
-- **A corpse the game spawned under a reused id is looted** (seen on the owner's game: a Vukah corpse holding Animal
-  Fur and Resin, right next to him, never looked into). The game hands the id of something that just went (a pickup
-  Auto Loot took, an enemy) to the next new thing, and Auto Loot kept taking the corpse for the thing before while it
-  stayed in reach. It now tells them apart by when the game spawned each.
-- **New command `/autoloot near`** (in chat): lists everything within your reach, what it is, what Auto Loot made of
-  it and why, in your chat and in `kiln/logs/kiln.log` (lines starting with "near:"), so a corpse or chest that is not
-  looted can be explained on the spot.
-- kiln.log now says what a corpse, chest or creature pile kept, and why, once for each: for example "left Twigs x2
-  (on the skip list); taking Animal Fur x6". Creature piles the mod cannot look into (bones, bat fur, critter parts:
-  the game hands their contents over only all at once) that it leaves whole get a line too, with the reason: an item
-  they can give is on your skip list, nothing they can give is on your only list, or a bag rule needs the amounts.
-  At most 200 such lines per world.
-- kiln.log also says why a corpse in reach was not looked into, once for each: out of sight, outside the height
-  window, beyond the corpse radius, Corpses off, or Bosses off for a boss, mini boss or elite corpse. At most 200 such
-  lines per world.
-- Fishing bait that Auto Loot does not know (reported by Tyrion67: maggots "not in the mod's table") now gets a
-  kiln.log line that says what your game's data showed of it, so the next log tells us why. In the game data we
-  checked, all nine bait swarms (fireflies and frogs in two forms each, moths, grasshoppers, scarabs, pillbugs and
-  maggots) are known.
+## 0.2.8
+- **Corpses and chests are checked stack by stack.** The skip list, only list and gather focus no longer rule out a readable container based on its expected loot. This lets Auto Loot take useful drops from a corpse even when its listed loot is on your skip list. Skipped items stay behind, so the corpse can remain visible. Creature piles whose contents the game only hands over all at once still use their listed loot.
+- **Corpse visibility checks several points, not just one.** If terrain or a wall blocks one point, a clear line to another point can still make the corpse lootable. “Only what I can see” now defaults to on. The height window defaults to no limit and applies when sight is disabled or a check can’t answer. Settings still using the old defaults migrate once; custom settings and settings received from older clients are preserved.
+- Fixed missed corpses when the game reuses an entity ID. More of the scan work is spread across server steps, and unsuccessful stack moves wait before retrying.
+- Use `/autoloot near` to see what Auto Loot finds nearby and why it takes or leaves it. `kiln.log` also records why a corpse or chest was skipped, what stayed inside, and whether stack moves completed.
+- Unknown fishing-bait swarms now log the classification details needed to investigate reports like missing maggots. This does not change which bait is picked up.
+- Requires Kiln 0.2.0-dev.30.6 or later.
 
 ## 0.2.7
 - **Farm animal produce** (new switch, off by default; contributed by potter420, pull request #3): the milk, wool and
