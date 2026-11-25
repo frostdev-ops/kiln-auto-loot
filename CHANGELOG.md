@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.11
+- **Fire fly swarms are collected in every setup.** In some setups the game data shows the fire fly swarm (`Lootpickup_Scatter_VFX_Bait_T1_Fire_Fly_Above`) without the pickup part it normally has, and Auto Loot left it out of its table. A bait swarm is now recognised by what it is (its stock of fishing bait, the game's loot offer, no model, no creature) with or without that part, and taken as a critter like the others. Nothing else is classified differently. Thanks to Tyrion67 for the report and the kiln.log line.
+- Requires Kiln 0.2.0-dev.30.6 or later.
+
 ## 0.2.10
 - **Salvage rules now work with Loot Leveler.** Loot Leveler swaps looted gear for a new copy at your level as it lands, so the rules never saw that gear. New gear now waits a moment (1.5 s) before the rules look at it; if another mod replaced it in that time with a copy of the same kind and rarity, the rules take the copy as the same world loot. Rules on the level also see the level after the change now. Thanks to netjunk for the report and the idea.
 - Requires Kiln 0.2.0-dev.30.6 or later.

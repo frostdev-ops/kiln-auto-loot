@@ -24,7 +24,9 @@
 //   default inventory and the game's pickup interaction, whose pickup names no item. They take the pickup path like
 //   mushrooms (the loot at once, no accept, no openDelay), judged by the bait they give (IsContainerTarget). Before 0.2.3
 //   they went the container path like bushes, whose visit sends an accept and waits up to 3 s per accept for the offer
-//   to move on before the loot-all: a player walking past was gone before it came.
+//   to move on before the loot-all: a player walking past was gone before it came. A swarm with no PickupItem at all
+//   (a fire fly swarm in a player's read, 0.2.11) takes the same path: the loop finds it by its offer, the loot-all
+//   hands over its default inventory as for every swarm whose pickup names no item, and its bait is its yield.
 using KilnAutoLoot.Core;
 
 namespace KilnAutoLoot.Server;

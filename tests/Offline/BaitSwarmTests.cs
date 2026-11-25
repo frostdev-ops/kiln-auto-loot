@@ -84,6 +84,71 @@ public sealed class BaitSwarmTests
         }
     }
 
+    // Tyrion67 (Nexus 355, 0.2.10): "critter: template Lootpickup_Scatter_VFX_Bait_T1_Fire_Fly_Above
+    // (c2091afd-f631-4160-ac79-574b951f5a4a) is not in the mod's table (never taken): ... yield 1014899877
+    // Material_T1_Fire_Fly_FishingBait (ammunitionType FishingBait); PickupItem no, DefaultInventory yes, model no,
+    // DestroyOnLoot yes, Health no; not taken". The game data of client build 26430625 has a PickupItem on that template;
+    // his read did not. A swarm is told by its stock, its offer and its bait, with or without the pickup.
+    private static TemplateFacts WithoutPickup(TemplateFacts t, Guid? guid = null, string[]? add = null) =>
+        new(guid ?? t.Guid, t.Name, t.Family, [.. t.Components.Where(c => c != "PickupItem"), .. add ?? []],
+            t.Values.Where(v => !v.Key.StartsWith("PickupItem.", StringComparison.Ordinal)).ToDictionary(v => v.Key, v => v.Value),
+            t.Drops, t.Yield);
+
+    [Fact]
+    public void The_fire_fly_swarm_without_its_pickup_is_a_critter()
+    {
+        var fireFly = WithoutPickup(BaitTemplates.Single(t => t.Name == "Lootpickup_Scatter_VFX_Bait_T1_Fire_Fly_Above"));
+        var c = Facts.Run([fireFly], BaitItems);
+        var r = Facts.Rule(c, fireFly);
+        Assert.True(r is { Group: Group.Critter, Flags: TemplateFlags.Swarm }, $"{r?.Group} {r?.Flags}");
+        Assert.Equal([1014899877u], r!.Yield);
+        var note = c.BaitNotes[fireFly.Guid];
+        Assert.Contains("PickupItem no", note);
+        Assert.Contains("taken as critter", note);
+    }
+
+    [Fact]
+    public void Every_bait_swarm_template_is_a_critter_with_or_without_its_pickup()
+    {
+        var bare = BaitTemplates.Select(t => WithoutPickup(t)).ToArray();
+        var c = Facts.Run(bare, BaitItems);
+        foreach (var t in bare)
+        {
+            var r = Facts.Rule(c, t);
+            Assert.True(r is { Group: Group.Critter, Flags: TemplateFlags.Swarm }, $"{t.Name}: {r?.Group} {r?.Flags}");
+            Assert.Equal(t.Yield, r!.Yield);
+        }
+    }
+
+    [Fact]
+    public void A_template_without_a_pickup_is_a_swarm_only_when_it_is_built_like_one()
+    {
+        var fireFly = BaitTemplates.Single(t => t.Name == "Lootpickup_Scatter_VFX_Bait_T1_Fire_Fly_Above");
+        var notBait = BaitItems.Single(i => i.Id == 1014899877u) with { Values = new Dictionary<string, string> { ["ammunitionType"] = "Invalid" } };
+        TemplateFacts Minus(string component) => new(Guid.NewGuid(), fireFly.Name, fireFly.Family,
+            [.. fireFly.Components.Where(c => c != "PickupItem" && c != component)],
+            fireFly.Values.Where(v => !v.Key.StartsWith("PickupItem.", StringComparison.Ordinal)).ToDictionary(v => v.Key, v => v.Value),
+            fireFly.Drops, fireFly.Yield);
+        var unlike = new[]
+        {
+            WithoutPickup(fireFly, Guid.NewGuid(), ["ModelResource"]),
+            WithoutPickup(fireFly, Guid.NewGuid(), ["ModelComponent"]),
+            WithoutPickup(fireFly, Guid.NewGuid(), ["Actor"]),
+            WithoutPickup(fireFly, Guid.NewGuid(), ["Wildlife"]),
+            WithoutPickup(fireFly, Guid.NewGuid(), ["FoodBait"]),
+            WithoutPickup(fireFly, Guid.NewGuid(), ["Health"]),
+            Minus("DefaultInventory"),
+            Minus("DestroyOnLoot"),
+            Minus("InteractionOfferRuntime"),
+        };
+        var c = Facts.Run(unlike, BaitItems);
+        foreach (var t in unlike)
+            Assert.True(Facts.Rule(c, t) is not { Group: Group.Critter }, string.Join(",", t.Components.Except(fireFly.Components)));
+        // its stock is no fishing bait: not a swarm, and nothing else takes it either (as before)
+        var bare = WithoutPickup(fireFly, Guid.NewGuid());
+        Assert.Null(Facts.Rule(Facts.Run([bare], [notBait]), bare));
+    }
+
     [Fact]
     public void The_classification_notes_what_the_data_showed_of_each_bait_template()
     {

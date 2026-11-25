@@ -84,6 +84,23 @@ public sealed class CritterCropTests
         Assert.Equal(Frog, rig.Loop.HandPickupItem(frogs.Id));
     }
 
+    // Tyrion67 (0.2.10): a fire fly swarm whose template carries no PickupItem. The loop finds it by its offer, takes it
+    // as the pickup a critter is (the loot-all hands over its default inventory, as for every swarm whose pickup names
+    // no item), at once and without an accept; a hand take names its bait.
+    [Fact]
+    public void A_swarm_without_a_pickup_component_is_taken_at_once_as_a_pickup()
+    {
+        var rig = Rig();
+        var frogs = rig.Game.Add(LoopRig.Frogs, 3, [LootLoop.OfferComponent]);
+        frogs.Offer = new Offer(true, false, 5);
+        rig.ScanAfter(100);
+        Assert.True(Took(rig, frogs));
+        Assert.Empty(rig.Game.Interacts);
+        Assert.Equal(1, rig.Loop.Counters.PickupsSeen);
+        Assert.Equal(0, rig.Loop.Counters.ContainersSeen);
+        Assert.Equal(Frog, rig.Loop.HandPickupItem(frogs.Id));
+    }
+
     [Fact]
     public void A_critter_reaches_as_far_as_the_main_radius()
     {

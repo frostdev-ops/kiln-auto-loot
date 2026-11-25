@@ -24,7 +24,8 @@
 //   4. Pickups (PickupItem): never quest things; collectibles by their item's category; critters (the fishing bait
 //      swarms: fireflies, moths, frogs, maggots ..., an effect with no model) are their own group; the rest is ground
 //      loot, stones flagged, and so is furniture the world places that players can also build (the books of villages
-//      and ruins: decor, the oldBooks switch). The generic drops (what other templates spawn their loot as, with no item of their own: the game
+//      and ruins: decor, the oldBooks switch). A bait swarm read without its PickupItem is a critter all the same (its
+//      bait is its default inventory). The generic drops (what other templates spawn their loot as, with no item of their own: the game
 //      sets it at the spawn) are ground loot flagged generic, judged by their live item (GenericDrops), also the ones
 //      that carry no PickupItem in their template.
 //   5. Things the player empties or harvests (an offer and a default inventory): boss loot is never taken; enemy remains
@@ -143,6 +144,7 @@ public static class TemplateRules
         if (t.Has("Actor") && t.Has("Health")) return Creature(t, name);
         if (CropRules.IsGrowthStage(t)) return c.RipeCrops.Contains(t.Guid) ? Rule(t, Group.Farm, TemplateFlags.None) : null;
         if (t.Has("PickupItem")) return Pickup(t, name, c);
+        if (IsBareSwarm(t, name, c)) return Rule(t, Group.Critter, TemplateFlags.Swarm);
         if (c.Dropped.Contains(t.Guid) && IsGenericDrop(t)) return Rule(t, Group.Ground, TemplateFlags.Generic);
         if (t.Has("InteractionOfferRuntime") && (t.Has("DefaultInventory") || t.Has("RandomLoot"))) return Container(t, name, c);
         return null;
@@ -227,6 +229,23 @@ public static class TemplateRules
     private static bool IsSwarm(TemplateFacts t, ItemFacts? item) =>
         t.Has("DefaultInventory") && !t.Has("ModelResource") && !t.Has("ModelComponent") &&
         item?.Value("ammunitionType") == "FishingBait";
+
+    /// <summary>A bait swarm whose template carries no PickupItem (Tyrion67, 0.2.10: his read of
+    /// "Lootpickup_Scatter_VFX_Bait_T1_Fire_Fly_Above" showed "PickupItem no", where the game data of client build
+    /// 26430625 has one). It is the same swarm: the bait is its default inventory, which the loot-all hands over, and the
+    /// offer the loop finds it by is still there. Built like the swarms <see cref="Pickup"/> takes, with the checks that
+    /// path makes before <see cref="IsSwarm"/>: a default inventory, DestroyOnLoot and the game's interaction offer, no
+    /// model, never a creature or thrown bait (no Actor, Wildlife, FoodBait or Health), nothing of a story, and a
+    /// fishing bait yield. Anything else without a pickup goes on to the rules after this one, as before.</summary>
+    private static bool IsBareSwarm(TemplateFacts t, string name, Context c)
+    {
+        if (!t.Has("InteractionOfferRuntime") || !t.Has("DestroyOnLoot")) return false;
+        if (t.Has("Actor") || t.Has("Wildlife") || t.Has("FoodBait") || t.Has("Health")) return false;
+        if (AnyWord(name, StoryWords)) return false;
+        var item = t.Yield.Count > 0 && c.Items.TryGetValue(t.Yield[0], out var it) ? it : null;
+        if (item is null || c.IsQuestItem(item)) return false;
+        return IsSwarm(t, item);
+    }
 
     /// <summary>What the game data shows of a template named like a bait swarm, for the kiln.log line of one the table
     /// lacks (Tyrion67, 0.2.7: "T7_Maggots_Above is not in the mod's table"): its yield with each item's ammunitionType,
