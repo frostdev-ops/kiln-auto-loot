@@ -1,7 +1,7 @@
 # Changelog
 
 ## 0.2.11
-- **Fire fly swarms are collected in every setup.** In some setups the game data shows the fire fly swarm (`Lootpickup_Scatter_VFX_Bait_T1_Fire_Fly_Above`) without the pickup part it normally has, and Auto Loot left it out of its table. A bait swarm is now recognised by what it is (its stock of fishing bait, the game's loot offer, no model, no creature) with or without that part, and taken as a critter like the others. Nothing else is classified differently. Thanks to Tyrion67 for the report and the kiln.log line.
+- **Fire fly swarms without their pickup part are collected.** In some setups the game data shows the fire fly swarm (`Lootpickup_Scatter_VFX_Bait_T1_Fire_Fly_Above`) without the pickup part it normally has, and Auto Loot left it out of its table. A bait swarm is now recognised by what it is (its stock of fishing bait, the game's loot offer, no model, no creature) with or without that part, and taken as a critter like the others. Nothing else is classified differently. Thanks to Tyrion67 for the report and the kiln.log line.
 - Requires Kiln 0.2.0-dev.30.6 or later.
 
 ## 0.2.10
