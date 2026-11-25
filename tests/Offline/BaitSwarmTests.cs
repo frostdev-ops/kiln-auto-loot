@@ -149,6 +149,43 @@ public sealed class BaitSwarmTests
         Assert.Null(Facts.Rule(Facts.Run([bare], [notBait]), bare));
     }
 
+    // The enemy corpses and the boss loot pile are built like a swarm without its pickup (the game's offer, a default
+    // inventory, DestroyOnLoot, no model), with an inventory of their own. One whose first loot is fishing bait (a frog
+    // from a data pack, another mod's loot table) stays with the container rules: the corpse switches, its stacks one by
+    // one, boss loot left for the player. Taken as a critter it would go out as one loot-all on the pickup path, with
+    // its quest items and skipped stacks.
+    [Fact]
+    public void A_corpse_or_boss_loot_whose_first_item_is_bait_is_no_swarm()
+    {
+        string[] corpseParts = ["AttachToSurface", "AudioComponent", "AudioResourceComponent", "CheckPlayerInRange", "ClientInteractionOffer", "ColliderResourceComponent", "CurrentTransform", "Debug", "DefaultInventory", "DestroyOnLoot", "DismantleOverride", "DoNotSave", "InteractionOfferRuntime", "Inventory", "InventoryEmptyState", "InventorySetup", "InventorySetupInit", "Level", "LifeTime", "MovementColliderConfig", "RenderTransform", "SpawnTime", "StaticClientCollider", "StaticCollider", "UiInteractable", "VfxComponent", "VfxComponentResource", "VfxParametersTemplateComponent"];
+        string[] bossParts = ["AttachToSurface", "CheckPlayerInRange", "ClientInteractionOffer", "ColliderResourceComponent", "CollisionFeedbackMaterialComponent", "CurrentTransform", "Debug", "DefaultInventory", "DestroyOnLoot", "DismantleOverride", "InteractionOfferRuntime", "InventorySetup", "InventorySetupInit", "InventorySetupOverwrite", "MovementColliderConfig", "OnDestroy", "RenderTransform", "ServerTarget", "SpawnTime", "StaticClientCollider", "StaticCollider", "UiInteractable", "UiOffsets"];
+        var corpse = Facts.T("LootContainer_Enemy_Wildlife_Frog", corpseParts, yield: [1014899877u, 2053375978u]);
+        var boss = Facts.T("LootPickup_Enemy_Boss_GiantFrog", bossParts, yield: [1014899877u]);
+        var c = Facts.Run([corpse, boss], BaitItems);
+        Assert.Equal(Group.Corpse, Facts.Rule(c, corpse)?.Group);
+        Assert.Equal(Group.Boss, Facts.Rule(c, boss)?.Group);
+
+        // the swarm's own build with an inventory, rolled loot or something to break, a boss name, or placed by an item
+        var fireFly = BaitTemplates.Single(t => t.Name == "Lootpickup_Scatter_VFX_Bait_T1_Fire_Fly_Above");
+        TemplateFacts Bare(string? component = null, string? name = null) => new(Guid.NewGuid(), name ?? fireFly.Name, fireFly.Family,
+            [.. fireFly.Components.Where(x => x != "PickupItem"), .. component is null ? Array.Empty<string>() : [component]],
+            fireFly.Values.Where(v => !v.Key.StartsWith("PickupItem.", StringComparison.Ordinal)).ToDictionary(v => v.Key, v => v.Value),
+            fireFly.Drops, fireFly.Yield);
+        var placed = Bare();
+        var unlike = new[]
+        {
+            Bare("Inventory"), Bare("InventorySetup"), Bare("RandomLoot"), Bare("Destructible"),
+            Bare(name: "Lootpickup_Scatter_VFX_Bait_Boss_Fire_Fly"), placed,
+        };
+        var c2 = Facts.Run(unlike, [.. BaitItems, Facts.I(4000000001u, "Furniture_Fire_Fly_Jar", "Furniture", [placed.Guid])]);
+        foreach (var t in unlike)
+            Assert.True(Facts.Rule(c2, t) is not { Group: Group.Critter },
+                $"{t.Name} {string.Join(",", t.Components.Except(fireFly.Components))}: {Facts.Rule(c2, t)?.Group}");
+        // and the swarm itself, as before
+        var bare = Bare();
+        Assert.Equal(Group.Critter, Facts.Rule(Facts.Run([bare], BaitItems), bare)?.Group);
+    }
+
     [Fact]
     public void The_classification_notes_what_the_data_showed_of_each_bait_template()
     {

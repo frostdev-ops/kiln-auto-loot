@@ -25,9 +25,10 @@
 //      swarms: fireflies, moths, frogs, maggots ..., an effect with no model) are their own group; the rest is ground
 //      loot, stones flagged, and so is furniture the world places that players can also build (the books of villages
 //      and ruins: decor, the oldBooks switch). A bait swarm read without its PickupItem is a critter all the same (its
-//      bait is its default inventory). The generic drops (what other templates spawn their loot as, with no item of their own: the game
-//      sets it at the spawn) are ground loot flagged generic, judged by their live item (GenericDrops), also the ones
-//      that carry no PickupItem in their template.
+//      bait is its default inventory; unlike a corpse it has no inventory of its own). The generic drops (what other
+//      templates spawn their loot as, with no item of their own: the game sets it at the spawn) are ground loot
+//      flagged generic, judged by their live item (GenericDrops), also the ones that carry no PickupItem in their
+//      template.
 //   5. Things the player empties or harvests (an offer and a default inventory): boss loot is never taken; enemy remains
 //      are corpses; world chests and heaps are chests (the player's own storage, locked chests and the
 //      ones an item places are not); bushes (twig bushes too), reeds and harvest trees are plants; fog-nest resources are ground.
@@ -236,12 +237,17 @@ public static class TemplateRules
     /// offer the loop finds it by is still there. Built like the swarms <see cref="Pickup"/> takes, with the checks that
     /// path makes before <see cref="IsSwarm"/>: a default inventory, DestroyOnLoot and the game's interaction offer, no
     /// model, never a creature or thrown bait (no Actor, Wildlife, FoodBait or Health), nothing of a story, and a
-    /// fishing bait yield. Anything else without a pickup goes on to the rules after this one, as before.</summary>
+    /// fishing bait yield. And no inventory of its own, no rolled loot, nothing to break, no boss and nothing an item
+    /// places: the enemy corpses and the boss loot pile are built like a swarm without its pickup, with an inventory
+    /// (InventorySetup), and one whose first loot is bait stays with the container rules (the corpse and boss switches,
+    /// its stacks one by one) instead of going out as one loot-all. Anything else without a pickup goes on to the rules
+    /// after this one, as before.</summary>
     private static bool IsBareSwarm(TemplateFacts t, string name, Context c)
     {
         if (!t.Has("InteractionOfferRuntime") || !t.Has("DestroyOnLoot")) return false;
         if (t.Has("Actor") || t.Has("Wildlife") || t.Has("FoodBait") || t.Has("Health")) return false;
-        if (AnyWord(name, StoryWords)) return false;
+        if (t.Has("Inventory") || t.Has("InventorySetup") || t.Has("RandomLoot") || t.Has("Destructible")) return false;
+        if (c.Buildable.Contains(t.Guid) || name.Contains("boss") || AnyWord(name, StoryWords)) return false;
         var item = t.Yield.Count > 0 && c.Items.TryGetValue(t.Yield[0], out var it) ? it : null;
         if (item is null || c.IsQuestItem(item)) return false;
         return IsSwarm(t, item);
