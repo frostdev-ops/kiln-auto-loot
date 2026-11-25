@@ -4,6 +4,7 @@
 // the game's pickup interaction), at once and without an accept; ripe crops have one switch for the world and one for
 // a base (a player's report: base fields are decoration).
 using KilnAutoLoot.Core;
+using KilnAutoLoot.Net;
 using KilnAutoLoot.Server;
 using Xunit;
 
@@ -99,6 +100,40 @@ public sealed class CritterCropTests
         Assert.Equal(1, rig.Loop.Counters.PickupsSeen);
         Assert.Equal(0, rig.Loop.Counters.ContainersSeen);
         Assert.Equal(Frog, rig.Loop.HandPickupItem(frogs.Id));
+    }
+
+    // Each player's settings hold a swarm without its pickup as they hold one with it: the Critters switch, the skip
+    // list, the only list, the gather focus and a carry limit on its bait leave it where it is.
+    [Fact]
+    public void A_swarm_without_a_pickup_component_follows_each_players_settings()
+    {
+        string[] bare = [LootLoop.OfferComponent];
+        foreach (var settings in new Action<PersonalSettings>[]
+        {
+            s => s.Critters = false,
+            s => s.SkipList = "=Material_T6_Frogs_FishingBait",
+            s => { s.ItemFilter = FilterMode.Only; s.OnlyList = "=Twigs"; },
+            s => s.CarryLimits = "=Material_T6_Frogs_FishingBait:0",
+        })
+        {
+            var rig = Rig(settings);
+            var frogs = rig.Game.Add(LoopRig.Frogs, 3, bare);
+            rig.ScanFor(1000);
+            Assert.False(Took(rig, frogs));
+        }
+
+        var focus = Rig();
+        focus.Loop.TookByHand(focus.Player, 1);   // twigs by hand, then F11
+        focus.Loop.Command(focus.Player, CommandKind.ToggleFocus);
+        var focused = focus.Game.Add(LoopRig.Frogs, 3, bare);
+        focus.ScanFor(1000);
+        Assert.False(Took(focus, focused));
+        Assert.True(focus.Loop.Counters.NotFocus > 0);
+
+        var only = Rig(s => { s.ItemFilter = FilterMode.Only; s.OnlyList = "=Material_T6_Frogs_FishingBait"; });
+        var listed = only.Game.Add(LoopRig.Frogs, 3, bare);
+        only.ScanFor(1000);
+        Assert.True(Took(only, listed));
     }
 
     [Fact]
