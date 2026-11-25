@@ -30,6 +30,8 @@ internal sealed class SalvageServer
     private readonly Action<string> _log;
     private readonly SalvageSources _sources;
     private readonly SalvageHandTakes _hand;
+    private readonly SalvageSettle _settle;
+    private long _nextSettleMs;
     private readonly HashSet<EntityId> _ruled = [];   // item entities the rules already handled this world
     private long _nextHandMs;
     private readonly IClock _clock;
@@ -52,6 +54,7 @@ internal sealed class SalvageServer
         _log = log;
         _sources = new SalvageSources(clock);
         _hand = new SalvageHandTakes(clock);
+        _settle = new SalvageSettle(clock);
     }
 
     /// <summary>At the world's start. The key is declared once per process.</summary>
@@ -65,6 +68,7 @@ internal sealed class SalvageServer
         _checks.Clear();
         _last.Clear();
         _ruled.Clear();
+        _settle.Clear();
         var b = _world.Balancing;
         _log(b is null ? "salvage: the game's BalancingTable could not be read: salvage is off in this world"
             : $"salvage: yield data seed {b.Seed}, creep {b.Creep}, trash {b.TrashStart}..{b.TrashEnd}, factors {b.WeaponsShield}/{b.Armor}/{b.Rings}, rune item {_world.RuneItem}");
@@ -133,6 +137,7 @@ internal sealed class SalvageServer
         }
         RunChecks();
         HandTakes();
+        Settle();
     }
 
     /// <summary>A player opened something (a chest's screen): a world chest's gear is watched for 2 minutes, so what
@@ -142,6 +147,9 @@ internal sealed class SalvageServer
         if (_world is null || !player.IsPlayer || host.IsNone) return;
         var world = IsWorldSource(host);
         if (world || HasInventory(host)) _sources.Looted(player, host, world);   // also a tombstone or a built chest
+        // a swap through the player's own storage is theirs (world loot opened by E or by hand keeps its replacements: the
+        // next corpse looted right after must not cost the last one its copy)
+        if (!world && HasInventory(host)) _settle.Opened(player);
         if (Ready() != SalvageReady.Ready || SalvageRules.Parse(_settingsOf(player).SalvageRules).Count == 0 || !world) return;
         _hand.Backpack(player, _world.BackpackEntities(player));   // what the player carries now is never "taken"
         var gear = _world.GearIn(host);
@@ -157,7 +165,7 @@ internal sealed class SalvageServer
         {
             if (!_hand.Watching(p.Entity)) continue;
             foreach (var entity in _hand.Backpack(p.Entity, _world.BackpackEntities(p.Entity)))
-                if (_world.Read(p.Entity, entity) is { } item) ApplyRules(p.Entity, item, "by hand");
+                if (_world.Read(p.Entity, entity) is { } item) Fresh(p.Entity, item, "by hand");
         }
     }
 
@@ -242,11 +250,20 @@ internal sealed class SalvageServer
         if (_world is null || _jobs is null || !e.Receiver.IsPlayer || Ready() != SalvageReady.Ready) return;
         if (!_data.Items.TryGet(e.ItemId, out var row) || !GearRules.IsGear(row)) return;
         if (SalvageRules.Parse(_settingsOf(e.Receiver).SalvageRules).Count == 0) return;
-        if (_world.AtSlot(e.Receiver, e.SlotInventory, e.SlotIndex) is not { } item || item.Item != e.ItemId) return;
+        if (_world.AtSlot(e.Receiver, e.SlotInventory, e.SlotIndex) is not { } item) return;
+        if (item.Item != e.ItemId)
+        {
+            // another mod already swapped the pickup for a new item (Loot Leveler's next tier): the same kind of gear in
+            // the very slot the pickup landed in is that copy; anything else is not this pickup
+            if (!_ruled.Contains(item.ItemEntity) && KindOf(item.Item) == KindOf(e.ItemId) && _data.Items.TryGet(item.Item, out var now) && GearRules.IsGear(now))
+                _log($"salvage: the slot of player {e.Receiver}'s pickup {e.ItemId} holds {item.Name} now: another mod replaced it; the rules take the new item");
+            else return;
+        }
         if (item.Block == SalvageBlock.NoPerks) return;   // grenades and other "weapons" without upgrades: nothing to say
         var verdict = _sources.Judge(e.Receiver, e.Source, e.Source.IsPlayer && e.Source != e.Receiver, LiveWorld(e.Source));
         if (verdict != SourceVerdict.World)
         {
+            _settle.Explained(item.ItemEntity);
             _log($"salvage: rules leave {item.Name} for player {e.Receiver}: it came from {verdict switch
             {
                 SourceVerdict.Crafted => "crafting",
@@ -255,7 +272,34 @@ internal sealed class SalvageServer
             }} ({e.Source})");
             return;
         }
-        ApplyRules(e.Receiver, item, "pickup");
+        Fresh(e.Receiver, item, "pickup");
+    }
+
+    private SalvageKind KindOf(uint item) => SalvageFormula.KindOf(_world?.SlotTypeOf(item));
+
+    /// <summary>World gear for the rules, once it settled (SalvageSettle: another mod may still swap it for a copy).</summary>
+    private void Fresh(EntityId player, SalvageItem item, string how)
+    {
+        if (_world is null || _ruled.Contains(item.ItemEntity)) return;
+        _settle.Arrived(player, item.ItemEntity, KindOf(item.Item), item.Rarity, how, _world.CarriedEntities(player));
+    }
+
+    private void Settle()
+    {
+        if (_world is null || _clock.NowMs < _nextSettleMs) return;
+        _nextSettleMs = _clock.NowMs + 250;
+        foreach (var player in _settle.Players)
+        {
+            var carried = _world.CarriedEntities(player);
+            var due = _settle.Poll(player, carried, e => _world.Read(player, e) is { } x ? (KindOf(x.Item), x.Rarity) : null);
+            foreach (var d in due)
+            {
+                if (_world.Read(player, d.Item) is not { } item) continue;
+                if (d.Replaced)
+                    _log($"salvage: player {player}'s new world gear was replaced by {item.Name} (another mod, e.g. Loot Leveler); the rules take the new item");
+                ApplyRules(player, item, d.Replaced ? d.How + ", replaced" : d.How);
+            }
+        }
     }
 
     /// <summary>The source still exists: is it world loot Auto Loot's tables know (true) or something else (false)?
@@ -280,7 +324,7 @@ internal sealed class SalvageServer
         if (_world is null || _jobs is null || !player.IsPlayer || Ready() != SalvageReady.Ready) return;
         if (SalvageRules.Parse(_settingsOf(player).SalvageRules).Count == 0 || !IsWorldSource(from)) return;
         foreach (var entity in items)
-            if (_world.Read(player, entity) is { } item) ApplyRules(player, item, "auto loot");
+            if (_world.Read(player, entity) is { } item) Fresh(player, item, "auto loot");
     }
 
     private void ApplyRules(EntityId player, SalvageItem item, string how)
@@ -319,6 +363,7 @@ internal sealed class SalvageServer
     {
         _sources.Forget(player);
         _hand.Forget(player);
+        _settle.Forget(player);
         _last.Remove(player);
     }
 
@@ -327,6 +372,7 @@ internal sealed class SalvageServer
     /// <summary>A player trashes gear by hand: what the formula says is compared with the runes the game gives.</summary>
     public void Tossed(ItemTossEvent e)
     {
+        if (!e.Canceled) _settle.Tossed(e.ItemEntity);   // thrown away or dropped: no replacement for it
         if (_world is null || e.How != DiscardKind.Trash || !e.Player.IsPlayer || e.ItemEntity.IsNone || e.Canceled) return;
         if (_world.Read(e.Player, e.ItemEntity) is not { } item || item.Runes <= 0 || _world.RuneItem == 0) return;
         _checks.Add((e.Player, e.ItemEntity, item.Runes, _world.RuneCount(e.Player), _clock.NowMs + 750, item.Name));

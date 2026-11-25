@@ -55,7 +55,8 @@ notes run in each player's game.
 - **Salvage** (new in 0.2.0): turn gear into runes, as many as the game's own Trash gives. In F8's Salvage tab, mark
   what can go (marked rows are red) and salvage it in one go, with a confirm that lists the items and the runes. Keep
   protects an item for good. Rules for new gear (off until you add one): weapons, shields, armor, rings or all gear up to
-  a rarity and level, marked or salvaged at once, only for gear you pick up from the world from then on. Worn gear, the
+  a rarity and level, marked or salvaged a moment after it arrives, only for gear you pick up from the world from then on
+  (also when another mod, such as Loot Leveler, swaps it for a new copy as it lands). Worn gear, the
   action bar, kept and quest items, gear with a gem and everything in chests are never touched. Give "Salvage marked
   gear" a key in Kiln's Keys page if you like (no key by default).
 - **Bag-aware**: top up only the stacks you already carry, keep some bag slots free, or stop at a set amount of an item

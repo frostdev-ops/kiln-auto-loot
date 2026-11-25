@@ -182,6 +182,10 @@ internal sealed class KilnSalvageWorld(Data data, IClock clock, InstanceKey<Salv
         return BackpackGear(inv).Where(s => InBackpack(s, bar)).Select(s => s.ItemEntity).ToList();
     }
 
+    /// <summary>Every gear item entity the player carries: the backpack and the action bar (new weapons land there).</summary>
+    public IReadOnlyList<EntityId> CarriedEntities(EntityId player) =>
+        Inv(player) is { } inv ? BackpackGear(inv).Select(s => s.ItemEntity).ToList() : [];
+
     /// <summary>The gear item entities in a container.</summary>
     public IReadOnlyList<EntityId> GearIn(EntityId container) =>
         Inv(container) is { } inv ? BackpackGear(inv).Select(s => s.ItemEntity).ToList() : [];

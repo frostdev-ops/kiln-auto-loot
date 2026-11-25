@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.10
+- **Salvage rules now work with Loot Leveler.** Loot Leveler swaps looted gear for a new copy at your level as it lands, so the rules never saw that gear. New gear now waits a moment (1.5 s) before the rules look at it; if another mod replaced it in that time with a copy of the same kind and rarity, the rules take the copy as the same world loot. Rules on the level also see the level after the change now. Thanks to netjunk for the report and the idea.
+- Requires Kiln 0.2.0-dev.30.6 or later.
+
 ## 0.2.9
 - Fixed Vukah Rangers spawned from `Base_Enemy_Vukah_Ranger` being skipped before the sight check. Dead Rangers now use the normal corpse visibility and stack filters.
 - **F8 → Where & bag → Show corpse sight rays (debug)** draws red rays and marks voxel hits in single-player and worlds you host. Off by default; no extra rays or changes to loot rules when enabled.

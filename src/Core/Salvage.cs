@@ -381,3 +381,130 @@ public sealed class SalvageHandTakes(IClock clock)
         _carried.Remove(player);
     }
 }
+
+/// <summary>New gear from the world waits a moment before the rules look at it, because another mod may still change
+/// it: Loot Leveler, for one, swaps looted gear for a new copy at the player's level (same rarity, sometimes the next
+/// tier of the same kind of item) right after it lands. The copy comes with no pickup note, so without this the rules
+/// never saw it, and a rule on the level saw the level before the change. When the item is still carried after
+/// <see cref="SettleMs"/> the rules take it as it is now; when it is gone (not thrown away by the player) a gear item
+/// that appeared since, of the same kind and rarity, that nothing else explains, is its replacement and counts as the
+/// same world loot. Each copy replaces one item, and nothing found within <see cref="WindowMs"/> drops the item. Once the
+/// player opens storage that is not world loot (a built chest, a station, a tombstone) after the item arrived, nothing
+/// replaces it: a swap through such a chest is the player's own, and the gear taken out of it may be their own.</summary>
+public sealed class SalvageSettle(IClock clock)
+{
+    public const long SettleMs = 1500;
+    public const long WindowMs = 6000;
+
+    /// <summary>What the rules get: the item (the original or its replacement) and how it arrived.</summary>
+    public readonly record struct Due(EntityId Player, EntityId Item, string How, bool Replaced);
+
+    private sealed class Fresh
+    {
+        public EntityId Item;
+        public SalvageKind Kind;
+        public int Rarity;
+        public string How = "";
+        public long ArrivedMs, DueMs, UntilMs;
+        public HashSet<EntityId> Before = [];
+    }
+
+    private readonly Dictionary<EntityId, List<Fresh>> _fresh = new();
+    private readonly Dictionary<EntityId, long> _gone = new();        // thrown away or dropped by the player
+    private readonly Dictionary<EntityId, long> _explained = new();   // arrived another way: crafting, a trade, private storage
+    private readonly Dictionary<EntityId, long> _opened = new();      // when a player last opened storage that is not world loot
+
+    public bool Pending(EntityId player) => _fresh.TryGetValue(player, out var l) && l.Count > 0;
+
+    public IEnumerable<EntityId> Players => _fresh.Where(p => p.Value.Count > 0).Select(p => p.Key).ToList();
+
+    /// <summary>World gear arrived. <paramref name="carriedNow"/>: every gear item the player carries now (backpack and
+    /// action bar), so what appears later can be told apart.</summary>
+    public void Arrived(EntityId player, EntityId item, SalvageKind kind, int rarity, string how, IEnumerable<EntityId> carriedNow)
+    {
+        if (!player.IsPlayer || item.IsNone) return;
+        if (!_fresh.TryGetValue(player, out var list)) _fresh[player] = list = [];
+        if (list.Any(f => f.Item == item)) return;
+        var now = clock.NowMs;
+        list.Add(new Fresh { Item = item, Kind = kind, Rarity = rarity, How = how, ArrivedMs = now, DueMs = now + SettleMs, UntilMs = now + WindowMs, Before = [.. carriedNow, item] });
+    }
+
+    /// <summary>The player threw the item away or dropped it: it has no replacement.</summary>
+    public void Tossed(EntityId item)
+    {
+        if (!item.IsNone) _gone[item] = clock.NowMs;
+    }
+
+    /// <summary>The player opened storage that is not world loot: what they carried may have gone in, and what appears may be
+    /// their own.</summary>
+    public void Opened(EntityId player)
+    {
+        if (player.IsPlayer) _opened[player] = clock.NowMs;
+    }
+
+    /// <summary>Gear that arrived another way (crafting, a trade, a tombstone or a built chest): never a replacement.</summary>
+    public void Explained(EntityId item)
+    {
+        if (!item.IsNone) _explained[item] = clock.NowMs;
+    }
+
+    /// <summary>The settled items of one player. <paramref name="carriedNow"/>: every gear item the player carries now;
+    /// <paramref name="facts"/>: an item's kind and rarity (null: unreadable).</summary>
+    public IReadOnlyList<Due> Poll(EntityId player, IReadOnlyCollection<EntityId> carriedNow, Func<EntityId, (SalvageKind Kind, int Rarity)?> facts)
+    {
+        Prune();
+        if (!_fresh.TryGetValue(player, out var list) || list.Count == 0) return [];
+        var now = clock.NowMs;
+        var due = new List<Due>();
+        var claimed = new HashSet<EntityId>(list.Select(f => f.Item));   // a waiting item is never another's replacement
+        foreach (var f in list.ToList())
+        {
+            if (now < f.DueMs) continue;
+            if (carriedNow.Contains(f.Item))
+            {
+                due.Add(new Due(player, f.Item, f.How, false));
+                list.Remove(f);
+                continue;
+            }
+            if (_gone.ContainsKey(f.Item) || _opened.TryGetValue(player, out var opened) && opened > f.ArrivedMs) { list.Remove(f); continue; }
+            EntityId? copy = null;
+            foreach (var e in carriedNow)
+            {
+                if (f.Before.Contains(e) || claimed.Contains(e) || _explained.ContainsKey(e) || _gone.ContainsKey(e)) continue;
+                if (facts(e) is not { } x || x.Kind != f.Kind || x.Rarity != f.Rarity) continue;
+                copy = e;
+                break;
+            }
+            if (copy is { } c)
+            {
+                claimed.Add(c);
+                due.Add(new Due(player, c, f.How, true));
+                list.Remove(f);
+            }
+            else if (now >= f.UntilMs) list.Remove(f);
+        }
+        return due;
+    }
+
+    public void Forget(EntityId player)
+    {
+        _fresh.Remove(player);
+        _opened.Remove(player);
+    }
+
+    public void Clear()
+    {
+        _fresh.Clear();
+        _gone.Clear();
+        _explained.Clear();
+        _opened.Clear();
+    }
+
+    private void Prune()
+    {
+        var now = clock.NowMs;
+        foreach (var map in new[] { _gone, _explained })
+            foreach (var (k, at) in map.ToList())
+                if (now - at > WindowMs) map.Remove(k);
+    }
+}
