@@ -357,7 +357,7 @@ public sealed class RulesWaveTests
         world.Targets.Add(new SmashTarget(new EntityId(202), crate, 1, new WorldPosition(1, 6, 0)));
         world.Targets.Add(new SmashTarget(new EntityId(203), crate, 1, new WorldPosition(1, -6, 0)));
         var smash = new global::KilnAutoLoot.Server.Smash(null!, world, () => 1_000_000,
-            () => SmashTable.Parse(new StringReader($"# t\n{crate}\tsmash\tCrate\n")));
+            () => SmashTable.Parse(new StringReader($"# t\n{crate}\tsmash\tCrate\n")), () => 0);
         smash.Run(new EntityId(1), new WorldPosition(0, 0, 0), new PersonalSettings { HeightAbove = 4, HeightBelow = 4 }, new ServerLimits());
         Assert.Equal([new EntityId(201)], world.Hits.ToArray());
     }

@@ -62,8 +62,9 @@ public sealed class SmashOffTests
 
     public SmashOffTests() => _smash = NewSmash();
 
+    // a still step clock: the step's time and ray budgets (Stopwatch by default) never run out under a loaded test run
     private global::KilnAutoLoot.Server.Smash NewSmash() =>
-        new(null!, _world, () => _now, Table);
+        new(null!, _world, () => _now, Table, () => 0);
 
     /// <summary>Every switch under "Smash things around me" on: furniture, stones (with things on the ground), trees, hives.</summary>
     private static void AllOn(PersonalSettings s)
