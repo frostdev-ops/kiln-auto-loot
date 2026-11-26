@@ -21,13 +21,15 @@
 //     each target's template is read once (Spawn.Inspect) and kept while it stays in reach;
 //   - a target is hit again only after RetryMs (it needs a step or two to break), and after MaxTries hits that did
 //     not break it, it is left alone for GiveUpMs (otherwise one target that never breaks would hold a slot forever);
-//   - with "Only what I can see" on and line of sight there, only a target the player can see is hit (0.2.8), each
-//     answer kept SightCacheMs. A check looks at the prop itself (BodySightHeight), then at the point above it
-//     (AboveSightHeight, the only one before 0.2.12: under a low ceiling it lay in the ceiling for a barrel on a stack
-//     or a shelf, which was never smashed though in plain view; lab Pace_built_room); elsewhere the height window decides (as for looting, LootLoop.SightDecides). A check that
-//     does not answer (a tile not loaded yet) leaves that one target to the height window for SightRetryMs, then it is
-//     asked again; before 0.2.12 one such answer turned line of sight off for every target for 5 s, and props behind
-//     walls and under floors were smashed meanwhile (lab: Pace_built_room, Pace_cellar_below).
+//   - with "Only what I can see" on and line of sight there, only a target the player can see is hit (0.2.8); elsewhere
+//     the height window decides (as for looting, LootLoop.SightDecides). A check looks at the prop itself
+//     (BodySightHeight), then, when that is blocked or does not answer, at the point above it (AboveSightHeight, the
+//     only one before 0.2.12: under a low ceiling it lay in the ceiling for a barrel on a stack or a shelf, which was
+//     never smashed though in plain view; lab Pace_built_room). An answer is kept SightCacheMs, a Hidden one up to
+//     HiddenKeepMs while the player stays put. A check where neither point answers (a tile not loaded yet) leaves that
+//     one target to the height window for SightRetryMs, then it is asked again; before 0.2.12 one such answer turned
+//     line of sight off for every target for 5 s, and props behind walls and under floors were smashed meanwhile
+//     (lab: Pace_built_room, Pace_cellar_below).
 using Kiln;
 using KilnAutoLoot.Core;
 
@@ -52,8 +54,9 @@ internal sealed class Smash
     public const double SightStillMetres = 1.0;
     public const long SightRetryMs = 5_000;      // a target's check did not answer: the height window judges it this long
     // Where a check looks, from the player's eye: the prop itself (0.6 m above its origin, the middle of a barrel or a
-    // crate), then, only when that is blocked, the point 1.5 m above it (all that was looked at before 0.2.12). Both are
-    // in the target's own origin column, never moved sideways past a wall (as SightTrace's corpse heights).
+    // crate), then, only when that is blocked or does not answer, the point 1.5 m above it (all that was looked at
+    // before 0.2.12). Both are in the target's own origin column, never moved sideways past a wall (as SightTrace's
+    // corpse heights).
     public const double BodySightHeight = 0.6, AboveSightHeight = 1.5;
 
     /// <summary>What the last Run or Resume did in its server step (the "slow smash" line). <paramref name="Stopped"/>: the
@@ -84,7 +87,8 @@ internal sealed class Smash
     // per target: its template and serial from its first Spawn.Inspect, and when a Run last saw it
     private readonly Dictionary<uint, (Guid Template, ulong Serial, long Stamp, long SeenMs)> _known = new();
     // per player and target: what line of sight said, until when, and when and from where it was asked
-    private readonly Dictionary<(uint Player, uint Target), (long Until, ulong Serial, long Stamp, Sight Answer, long AskedMs, WorldPosition From)> _sight = new();
+    private readonly Dictionary<(uint Player, uint Target),
+        (long Until, ulong Serial, long Stamp, Sight Answer, long AskedMs, WorldPosition From)> _sight = new();
     private long _lastKnownPrune;
 
     private readonly ISmashWorld _world;
@@ -263,6 +267,9 @@ internal sealed class Smash
             ProbeTrace.Note(e, $"smash: {kind}, wanted {SmashRules.Wants(kind, sw, NearBuildZone)} (stones {sw.Stones}, " +
                                $"buildables {sw.Buildables}, trees {sw.Trees}, hives {sw.Hives}), may hit {MayHit(target, now)}");
             if (!SmashRules.Wants(kind, sw, NearBuildZone) || !MayHit(target, now)) continue;
+            // out of reach now (a pass that goes on after the player moved, or the radius was lowered): no ray for it
+            var dist = target.Position.DistanceTo(position);
+            if (dist > sw.Radius) continue;
             if (sightDecides)
             {
                 var seen = Look(player, target, position, now);
@@ -283,8 +290,7 @@ internal sealed class Smash
                     continue;
                 }
             }
-            var dist = target.Position.DistanceTo(position);
-            if (dist <= sw.Radius) wanted.Add((dist, target, kind));
+            wanted.Add((dist, target, kind));
         }
         LastRun = new RunWork(inReach.Count, looked, fresh, inspectMicros, slowest, stopped);
         wanted.Sort((a, b) => a.Dist.CompareTo(b.Dist));

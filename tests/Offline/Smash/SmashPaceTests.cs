@@ -446,6 +446,7 @@ public sealed class SmashPaceTests
         _smash.Run(Player, at, S(), new ServerLimits());
         Assert.True(_smash.Pending(Player));
         at = new WorldPosition(-30, 0, 0);   // glided away: the barrels are 38 m off now, out of the 15 m radius
+        var asked = _world.SightCalls.Values.Sum();
         for (var i = 0; i < 30 && _smash.Pending(Player); i++)
         {
             _now += StepMs;
@@ -454,6 +455,7 @@ public sealed class SmashPaceTests
             _smash.Resume(Player, at, S(), new ServerLimits());
         }
         Assert.Empty(_world.Hits);
+        Assert.Equal(asked, _world.SightCalls.Values.Sum());   // and no ray is spent on what is out of reach now
     }
 
     [Fact]
