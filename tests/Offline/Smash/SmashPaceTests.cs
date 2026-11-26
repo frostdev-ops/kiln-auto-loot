@@ -277,11 +277,11 @@ public sealed class SmashPaceTests
         ServerSteps(1, S(s => s.HeightBelow = 4));
         Assert.Contains(_world.Hits, h => h.Target == seen);
         Assert.DoesNotContain(_world.Hits, h => h.Target == below);
-        Assert.Equal(1, _world.SightCalls[below]);
+        Assert.Equal(2, _world.SightCalls[below]);                              // its body, then the point above
         _world.SightOf[below] = Sight.Visible;                                  // its tile is in now
         ServerSteps(global::KilnAutoLoot.Server.Smash.SightRetryMs / 1000.0 + 1, S(s => s.HeightBelow = 4));
         Assert.Contains(_world.Hits, h => h.Target == below);
-        Assert.Equal(2, _world.SightCalls[below]);                              // once, then once after SightRetryMs
+        Assert.Equal(3, _world.SightCalls[below]);                              // once, then once after SightRetryMs
     }
     // ---- where line of sight looks (lab Pace_built_room: under a ceiling the game's rays put about 2 m up, the barrels
     //      on the stacks and on the shelf were "hidden" though in plain view: the point 1.5 m above each one's origin,
@@ -452,5 +452,20 @@ public sealed class SmashPaceTests
             _smash.Resume(Player, at, S(), new ServerLimits());
         }
         Assert.Empty(_world.Hits);
+    }
+
+    [Fact]
+    public void A_body_check_that_does_not_answer_asks_the_point_above_and_a_known_blockage_there_stands()
+    {
+        _world.RaysPerStep = 64;
+        var walled = _world.Add(TSmash, 2);
+        _world.SightAt[(walled, Body)] = Sight.Unknown;   // that ray's tile is not in the ray cache yet (NotLoaded)
+        _world.SightAt[(walled, Above)] = Sight.Hidden;   // the other one meets the wall (0.2.11 left it on this)
+        var seen = _world.Add(TSmash, 3);
+        _world.SightAt[(seen, Body)] = Sight.Unknown;
+        _world.SightAt[(seen, Above)] = Sight.Visible;
+        ServerSteps(2, S());                              // no height window limit (the default)
+        Assert.DoesNotContain(_world.Hits, h => h.Target == walled);
+        Assert.Contains(_world.Hits, h => h.Target == seen);
     }
 }

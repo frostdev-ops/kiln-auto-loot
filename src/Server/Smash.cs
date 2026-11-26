@@ -291,10 +291,11 @@ internal sealed class Smash
 
     public void PlayerLeft(EntityId player) => _passes.Remove(player.Value);   // the tries belong to the targets
 
-    /// <summary>Line of sight from the player to the target, at the prop itself and, when that is blocked, at the point
-    /// above it: Visible (either is clear) or Hidden (both are blocked, or the second did not answer), kept
-    /// <see cref="SightCacheMs"/>; Unknown (the first check did not answer: the height window judges this target), kept
-    /// <see cref="SightRetryMs"/>; Later: this server step's rays are spent (smashing's share, MaxRaysPerStep and
+    /// <summary>Line of sight from the player to the target, at the prop itself and, when that is blocked or does not
+    /// answer, at the point above it: Visible (either is clear) or Hidden (one is blocked and the other is not clear),
+    /// kept <see cref="SightCacheMs"/>; Unknown (neither answered: the height window judges this target; before the
+    /// review a body check that did not answer went to the height window without asking the point above, which
+    /// 0.2.11 would have found blocked), kept <see cref="SightRetryMs"/>; Later: this server step's rays are spent (smashing's share, MaxRaysPerStep and
     /// MaxRayMicrosPerStep, or the game's budget), nothing is kept (both are asked again in the next step).</summary>
     private Sight Look(EntityId player, in SmashTarget t, long now)
     {
@@ -303,12 +304,13 @@ internal sealed class Smash
         // a look takes up to two rays: with fewer left of smashing's share in this step it waits for the next
         if (_stepRays + 2 > MaxRaysPerStep || _stepRayMicros >= MaxRayMicrosPerStep) return Sight.Later;
         var answer = Ray(player, t.Entity, BodySightHeight);
-        if (answer == Sight.Hidden)
+        if (answer is Sight.Hidden or Sight.Unknown)
             answer = Ray(player, t.Entity, AboveSightHeight) switch
             {
                 Sight.Visible => Sight.Visible,
+                Sight.Hidden => Sight.Hidden,   // a known blockage there stands, whatever the body's ray said
                 Sight.Later => Sight.Later,
-                _ => Sight.Hidden,   // blocked twice, or the second did not answer: one known blockage stands
+                _ => answer,                    // the second did not answer: the body's Hidden stands, or neither answered
             };
         if (answer == Sight.Later) return answer;   // the pass asks again in the next step
         _sight[key] = (now + (answer == Sight.Unknown ? SightRetryMs : SightCacheMs), t.Serial, t.Stamp, answer);
