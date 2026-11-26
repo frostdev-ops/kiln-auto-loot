@@ -44,7 +44,9 @@ public static class BagRules
 
     /// <summary>How many of <paramref name="item"/> may be taken now; int.MaxValue = no bag rule limits it.</summary>
     /// <param name="bag">null = the bag could not be read.</param>
-    public static int Allowance(uint item, PersonalSettings s, Bag? bag, CarryLimits limits, out BagRefusal why)
+    /// <param name="game">a take the game itself hands over (a pickup, a loot-all), which also tops up stacks on the action
+    /// bar; else a slot move (Items.Move), which does not.</param>
+    public static int Allowance(uint item, PersonalSettings s, Bag? bag, CarryLimits limits, out BagRefusal why, bool game = false)
     {
         why = BagRefusal.None;
         if (!NeedsBag(s, limits)) return int.MaxValue;
@@ -54,16 +56,18 @@ public static class BagRules
             return 0;
         }
         long room = int.MaxValue;
-        if (s.FillCarriedStacks) room = bag.Room(item);
-        else if (s.KeepFreeSlots > 0) room = bag.Room(item) + bag.SlotCapacity(item, UsableSlots(s, bag));
+        long carried = bag.Room(item) + (game ? bag.BarRoom(item) : 0);
+        if (s.FillCarriedStacks) room = carried;
+        else if (s.KeepFreeSlots > 0) room = carried + bag.SlotCapacity(item, UsableSlots(s, bag));
         var left = limits.Left(item, bag);
         var allowed = (int)Math.Min(Math.Min(room, int.MaxValue), left);
         if (allowed <= 0) why = left <= room ? BagRefusal.CarryLimit : BagRefusal.NoRoom;
         return allowed;
     }
 
-    /// <summary>A take that goes whole or not at all (a ground pickup, a harvest): the whole amount of every item has to
-    /// fit, the parts planned one after the other on a copy of the bag.</summary>
+    /// <summary>A take that goes whole or not at all (a ground pickup, a harvest), handed over by the game itself (so stacks
+    /// on the action bar take their share): the whole amount of every item has to fit, the parts planned one after the
+    /// other on a copy of the bag.</summary>
     public static BagRefusal Fits(IReadOnlyList<(uint Item, int Count)> take, PersonalSettings s, Bag? bag, CarryLimits limits)
     {
         if (!NeedsBag(s, limits)) return BagRefusal.None;
@@ -72,13 +76,13 @@ public static class BagRules
         foreach (var (item, count) in take)
         {
             var need = Math.Max(1, count);
-            var allowed = Allowance(item, s, plan, limits, out var why);
+            var allowed = Allowance(item, s, plan, limits, out var why, game: true);
             if (allowed < need)
             {
                 if (why != BagRefusal.None) return why;
                 return limits.Left(item, plan) < need ? BagRefusal.CarryLimit : BagRefusal.NoRoom;
             }
-            plan.Took(item, need);
+            plan.Took(item, need, game: true);
         }
         return BagRefusal.None;
     }

@@ -122,6 +122,8 @@ rules and what a dedicated server can show without a player. Everything below ne
       reeds, crops, bones and bat fur piles and corpses are still collected until 2 backpack slots are left (empty
       action-bar slots do not count as free); with only 2 left, a crop is harvested into a carried stack only while that
       stack has room for the most the crop gives (corn: 19 of 20 corncobs carried, the crop stays).
+- [ ] Fill carried stacks with mushrooms only on the action bar and a full backpack: mushrooms on the ground are still
+      picked up into the action-bar stack.
 - [ ] Carry limit "=<logs>:100" (from the editor): the mod stops at 100 logs.
 - [ ] A broken `profiles.json` (edit it badly by hand) does not stop the game; it is kept as `profiles.json.bad`.
 

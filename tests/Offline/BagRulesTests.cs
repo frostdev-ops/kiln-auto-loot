@@ -72,6 +72,24 @@ public sealed class BagRulesTests
     }
 
     [Fact]
+    public void An_action_bar_stack_gives_room_to_the_games_own_takes_only()
+    {
+        var s = S(x => x.FillCarriedStacks = true);
+        var bag = BagOf(0, new BagSlot(Twigs, 40, false, ActionBar: true), new BagSlot(Twigs, 45, true));
+        Assert.Equal(5, bag.Room(Twigs));
+        Assert.Equal(10, bag.BarRoom(Twigs));
+        Assert.Equal(5, BagRules.Allowance(Twigs, s, bag, CarryLimits.None, out _));                // a slot move
+        Assert.Equal(15, BagRules.Allowance(Twigs, s, bag, CarryLimits.None, out _, game: true));   // a pickup, a loot-all
+        Assert.Equal(BagRefusal.None, BagRules.Pickup(Twigs, 15, s, bag, CarryLimits.None));
+        Assert.Equal(BagRefusal.NoRoom, BagRules.Pickup(Twigs, 16, s, bag, CarryLimits.None));
+        // a game take uses the backpack's room first, then the bar's
+        bag.Took(Twigs, 7, game: true);
+        Assert.Equal((0, 8), (bag.Room(Twigs), bag.BarRoom(Twigs)));
+        bag.Took(Twigs, 3);                       // a slot move: no bar room, so a new stack
+        Assert.Equal(8, bag.BarRoom(Twigs));
+    }
+
+    [Fact]
     public void Room_is_what_carried_backpack_stacks_still_hold()
     {
         var bag = BagOf(5, new BagSlot(Twigs, 30, true), new BagSlot(Twigs, 50, true), new BagSlot(Twigs, 10, false));

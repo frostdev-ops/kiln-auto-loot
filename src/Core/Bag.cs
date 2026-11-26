@@ -2,22 +2,26 @@
 // A player's bag as one scan sees it: read once at the scan's first need, then kept up to date with what the scan
 // itself takes, so two targets in one scan never count the same room twice.
 //
-//   Room in carried stacks: per item, over the backpack slots only (the Generic inventories but the two action bars,
-//   Core/BackpackRead), the item's max stack minus the stack's count. Slots elsewhere (action bar, equipment) give no
-//   room: a missed top-up there costs a pickup left behind, never an overshoot.
+//   Room in carried stacks: per item, over the backpack slots (the Generic inventories but the two action bars,
+//   Core/BackpackRead), the item's max stack minus the stack's count. Stacks on the action bar have room of their own
+//   (BarRoom), which only the game's own takes use: its pickup and loot-all top them up, Kiln's Items.Move does not
+//   (lab dev31-review-autoloot-0213, review of 0.2.13). Other slots (equipment) give no room: a missed top-up there
+//   costs a pickup left behind, never an overshoot.
 //   Held: per item, over every slot the read returns (backpack, action bar, equipment): what carry limits count.
 //   Max stack: what the world uses now (the caller decides: the game's own raised by the server's stack size); 0 =
 //   not known, which gives no room.
 namespace KilnAutoLoot.Core;
 
 /// <summary>One non-empty slot of a player's inventories. <paramref name="Backpack"/>: a backpack slot (a Generic
-/// inventory that is not an action bar, Core/BackpackRead).</summary>
-public readonly record struct BagSlot(uint Item, int Count, bool Backpack);
+/// inventory that is not an action bar, Core/BackpackRead). <paramref name="ActionBar"/>: a slot of one of the two action
+/// bars.</summary>
+public readonly record struct BagSlot(uint Item, int Count, bool Backpack, bool ActionBar = false);
 
 public sealed class Bag
 {
     private readonly Dictionary<uint, int> _held = new();
     private readonly Dictionary<uint, int> _room = new();
+    private readonly Dictionary<uint, int> _barRoom = new();
     private readonly Func<uint, int> _maxStack;
 
     /// <param name="freeSlots">free backpack slots; below 0 = not known.</param>
@@ -30,9 +34,11 @@ public sealed class Bag
         {
             if (s.Item == 0 || s.Count <= 0) continue;
             _held[s.Item] = _held.GetValueOrDefault(s.Item) + s.Count;
-            if (!s.Backpack) continue;
+            if (!s.Backpack && !s.ActionBar) continue;
             var max = maxStack(s.Item);
-            if (max > 1 && s.Count < max) _room[s.Item] = _room.GetValueOrDefault(s.Item) + (max - s.Count);
+            if (max <= 1 || s.Count >= max) continue;
+            var room = s.Backpack ? _room : _barRoom;
+            room[s.Item] = room.GetValueOrDefault(s.Item) + (max - s.Count);
         }
     }
 
@@ -42,6 +48,7 @@ public sealed class Bag
         _maxStack = from._maxStack;
         _held = new Dictionary<uint, int>(from._held);
         _room = new Dictionary<uint, int>(from._room);
+        _barRoom = new Dictionary<uint, int>(from._barRoom);
     }
 
     /// <summary>A copy to plan against: what is reserved on it does not touch this bag.</summary>
@@ -59,6 +66,10 @@ public sealed class Bag
 
     /// <summary>Room left in the stacks of <paramref name="item"/> already carried in the backpack.</summary>
     public int Room(uint item) => _room.GetValueOrDefault(item);
+
+    /// <summary>Room left in the stacks of <paramref name="item"/> on the action bar: what the game's own pickup and
+    /// loot-all also top up (never Items.Move).</summary>
+    public int BarRoom(uint item) => _barRoom.GetValueOrDefault(item);
 
     /// <summary>How many of <paramref name="item"/> the player carries.</summary>
     public int Held(uint item) => _held.GetValueOrDefault(item);
@@ -78,24 +89,30 @@ public sealed class Bag
         if (stacks > 0 && FreeSlots >= 0) FreeSlots = Math.Max(0, FreeSlots - stacks);
     }
 
-    /// <summary>The scan sent a take of <paramref name="count"/>: it fills carried stacks first, the rest starts new stacks
-    /// (each one a free slot less).</summary>
-    public void Took(uint item, int count)
+    /// <summary>The scan sent a take of <paramref name="count"/>: it fills carried stacks first (the backpack's, then with
+    /// <paramref name="game"/>, a take the game itself hands over, the action bar's), the rest starts new stacks (each one
+    /// a free slot less).</summary>
+    public void Took(uint item, int count, bool game = false)
     {
         if (item == 0 || count <= 0) return;
         _held[item] = Held(item) + count;
-        var room = Room(item);
-        var into = Math.Min(room, count);
-        if (into > 0)
-        {
-            if (room - into > 0) _room[item] = room - into;
-            else _room.Remove(item);
-        }
-        var rest = count - into;
+        var rest = Fill(_room, item, count);
+        if (game) rest = Fill(_barRoom, item, rest);
         if (rest <= 0 || FreeSlots < 0) return;
         var max = _maxStack(item);
         var stacks = max > 1 ? (rest + max - 1) / max : rest;
         FreeSlots = Math.Max(0, FreeSlots - stacks);
         if (max > 1 && rest % max != 0) _room[item] = Room(item) + (max - rest % max);
+    }
+
+    /// <summary>Takes up to <paramref name="count"/> of the room in <paramref name="rooms"/>; returns what is left over.</summary>
+    private static int Fill(Dictionary<uint, int> rooms, uint item, int count)
+    {
+        var room = rooms.GetValueOrDefault(item);
+        var into = Math.Min(room, count);
+        if (into <= 0) return count;
+        if (room - into > 0) rooms[item] = room - into;
+        else rooms.Remove(item);
+        return count - into;
     }
 }

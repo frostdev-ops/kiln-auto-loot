@@ -10,7 +10,9 @@
   Plants, crops, piles and corpses are now collected until only your kept slots are left, as the setting says.
 - **Kept slots are backpack slots.** Empty slots on your action bar counted as free bag slots, so with a few of them
   empty the mod could fill your whole backpack, and loot it tried to move from a corpse into the action bar was
-  refused by the game. Only the backpack counts now.
+  refused by the game. Only the backpack counts now. Stacks on your action bar are still topped up by what the game
+  hands over itself (things on the ground, plants, piles, a corpse or chest taken whole), also with "Only fill stacks
+  I carry", as before.
 - "Only fill stacks I carry" and carry limits still leave plants, crops and piles whose amounts cannot be seen, as
   before (they count items, not slots).
 - Thanks to Celphia26 for the report.

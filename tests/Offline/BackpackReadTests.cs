@@ -39,13 +39,13 @@ public sealed class BackpackReadTests
     }
 
     [Fact]
-    public void A_stack_in_the_action_bar_is_carried_but_gives_no_room_to_top_up()
+    public void A_stack_in_the_action_bar_is_carried_and_marked_as_on_the_bar()
     {
         var slots = Player(packUsed: 0, barUsed: 0);
         slots[16] = new InventorySlotRead(7, 5, true, Bar0);   // flint on the first action bar
         slots[0] = new InventorySlotRead(1, 5, true, Pack0);   // twigs in the backpack
         var read = BackpackRead.From(slots, Bar0, Bar1);
-        Assert.Contains(new BagSlot(7, 5, false), read.Slots);
+        Assert.Contains(new BagSlot(7, 5, false, ActionBar: true), read.Slots);
         Assert.Contains(new BagSlot(1, 5, true), read.Slots);
         Assert.Equal(23, read.FreeSlots);
     }

@@ -119,6 +119,17 @@ public sealed class FreeSlotsTests
     }
 
     [Fact]
+    public void A_plant_tops_up_a_stack_on_the_action_bar_while_only_the_kept_slots_are_free()
+    {
+        // lab: the game's loot-all of a default inventory tops up an action-bar stack
+        var rig = Rig(2, 2, null, new BagSlot(Fibre, 10, false, ActionBar: true));
+        var bush = rig.Game.Add(LoopRig.Bush, 2, Inv);
+        bush.Slots = null;
+        rig.ScanFor(500);
+        Assert.True(Took(rig, bush));
+    }
+
+    [Fact]
     public void A_plant_with_less_room_in_its_carried_stack_than_it_gives_needs_a_usable_slot()
     {
         var rig = Rig(2, 3, null, new BagSlot(Fibre, 49, true));   // one usable slot takes the rest

@@ -1023,7 +1023,20 @@ internal sealed class LootLoop
         var plan = BagRules.NeedsBag(s, p.Limits) ? BagOf(p, gp)?.Clone() : null;
         // what stays and why, for the target's kiln.log line (collected only until that line is written)
         var left = _left.Told(key) ? null : new List<(uint Item, int Count, string Why)>();
-        foreach (var slot in slots)
+        // the game's own loot-all also tops up stacks on the action bar, Items.Move does not (lab, review of 0.2.13): when
+        // the slot filter lets every slot through and the whole inventory fits the bag as the loot-all sees it, nothing
+        // has to stay and the loot-all goes; otherwise each slot is planned for Items.Move (backpack stacks only)
+        if (plan is not null &&
+            slots.All(x => LootRules.Slot(x.Item, x.Rarity, s, _data.Quest, p.Filter, _data.Items) == SlotRule.Take) &&
+            BagRules.Fits(slots.Select(x => (x.Item, x.Count)).ToList(), s, plan, p.Limits) == BagRefusal.None)
+        {
+            foreach (var slot in slots)
+            {
+                take.Add((slot, 0));
+                takeable += slot.Count;
+            }
+        }
+        else foreach (var slot in slots)
             switch (LootRules.Slot(slot.Item, slot.Rarity, s, _data.Quest, p.Filter, _data.Items))   // quest, filter, rarity, take
             {
                 case SlotRule.KeepQuest:
@@ -1108,7 +1121,7 @@ internal sealed class LootLoop
             foreach (var (slot, _) in take)
             {
                 Counters.CountLooted(slot.Item, slot.Count);
-                p.Bag?.Took(slot.Item, slot.Count);
+                p.Bag?.Took(slot.Item, slot.Count, game: true);   // a loot-all: the bar's stacks take their share too
             }
             return;
         }
@@ -1255,7 +1268,7 @@ internal sealed class LootLoop
     {
         foreach (var (item, count) in contents)
             if (item == 0) p.Bag?.TookNewStacks(count);
-            else p.Bag?.Took(item, count);
+            else p.Bag?.Took(item, count, game: true);
     }
 
     /// <summary>The kiln.log line of a target that keeps something (once per target): what stays and why, and what is
@@ -1442,7 +1455,7 @@ internal sealed class LootLoop
         _budget--;
         Counters.Injects++;
         Counters.CountLooted(item, details.Amount);
-        p.Bag?.Took(item, details.Amount);
+        p.Bag?.Took(item, details.Amount, game: true);
         ProbeTrace.Note(e, $"send: pickup loot ({item} x{details.Amount})");
         _game.Loot(gp.Entity, e);
         p.Pickups.Taken(key);

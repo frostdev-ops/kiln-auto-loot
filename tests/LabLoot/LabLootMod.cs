@@ -505,6 +505,61 @@ public sealed class Probe
         Spawn.CleanupTracked(Tag);
     }
 
+    /// <summary>The loop with "only fill stacks I carry" while the stand-in's bones sit on the action bar and every other
+    /// Generic slot is full (review 0.2.13): loose bones are taken into the bar's stack (the game's pickup tops it up), a
+    /// skeleton corpse holding something else is left without a slot move into the bar.</summary>
+    [KilnTest(TimeoutSeconds = 300, Order = 6)]
+    public async Task Loop_fill_carried_action_bar(TestContext t)
+    {
+        var data = LoadData();
+        var (anchor, _) = FindAnchor();
+        Assert.True(anchor is not null, "an anchor");
+        var a = anchor!.Value;
+        var bones = data.Templates.All.First(r => r.Name == "LootPickup_Material_Skeleton_Hound_Bones").Yield[0];
+        var avoid = Yields(data, Targets.Select(x => x.Template));
+        var standAt = Ground(a.X + 60, a.Y, a.Z + 160);
+        var p = await StandIn(t, standAt);
+        var bars = Ecs.TryGet<Ecs.SlotSelection>(p, out var sel) ? new[] { sel.actionbarEntityIds[0].id, sel.actionbarEntityIds[1].id } : [];
+        var read = Items.Read(p)!;
+        var barSlot = read.Slots.First(x => x.IsEmpty && x.Link >= 0 && x.Link < read.Inventories.Count && bars.Contains(read.Inventories[x.Link].Inventory.Value));
+        await Items.Give(p, new ItemId(bones), 5, null, default, barSlot.Slot);
+        await FillGeneric(p, data, avoid, 0);
+        var (bag0, f0) = Bag(p);
+        var loose = await Spawn.Item(bones, 2, Ground(standAt.X + 1.5, standAt.Y, standAt.Z), 0, new SpawnOptions { Tag = Tag });
+        var corpse = await Spawn.Entity("LootContainer_Enemy_Skeleton_Melee", Ground(standAt.X + 3, standAt.Y, standAt.Z + 1), 0, new SpawnOptions { Tag = Tag });
+        await t.Delay(TimeSpan.FromSeconds(2));
+        var corpseBefore = InventoryText(corpse);
+        var game = new StandInGame(new KilnGame(Info), p);
+        var clock = new TickClock();
+        var loop = new LootLoop(game, clock, data, (_, _) => { }, l => Info($"FILLBAR key: {l}"));
+        loop.Configure(new ServerSettings());
+        loop.SetPersonal(p, new PersonalSettings
+        {
+            FillCarriedStacks = true, OpenDelay = 0, VisibleOnly = false, Radius = 12, EnemyPause = false, Smash = false,
+        });
+        var last = Environment.TickCount64;
+        var until = last + 5000;
+        while (Environment.TickCount64 < until)
+        {
+            var now = Environment.TickCount64;
+            clock.Advance(now - last);
+            last = now;
+            loop.Step();
+            await t.Ticks(1);
+        }
+        await t.Delay(TimeSpan.FromSeconds(1));
+        var (bag1, f1) = Bag(p);
+        read = Items.Read(p)!;
+        var at = string.Join(", ", read.Slots.Where(x => x.Item.Value == bones).Select(x =>
+            $"x{x.Count} link {x.Link}{(x.Link >= 0 && x.Link < read.Inventories.Count && bars.Contains(read.Inventories[x.Link].Inventory.Value) ? " (bar)" : "")}"));
+        Info($"FILLBAR generic free {f0} -> {f1}; got [{Diff(bag0, bag1)}]; bones now {at}; loose bones loot-alls {game.Loots.GetValueOrDefault(loose)}, " +
+             $"exists after {World.Exists(loose)}; corpse before {corpseBefore}, loot-alls {game.Loots.GetValueOrDefault(corpse)}, moves {game.Moves.GetValueOrDefault(corpse)}, after {InventoryText(corpse)}; " +
+             $"counters noRoom {loop.Counters.NoRoom}");
+        foreach (var e in new[] { loose, corpse }) if (World.Exists(e)) Spawn.Destroy(e);
+        Spawn.Destroy(p);
+        Spawn.CleanupTracked(Tag);
+    }
+
     [KilnTest(TimeoutSeconds = 400, Order = 1)]
     public async Task Loop_keep_free_slots(TestContext t)
     {

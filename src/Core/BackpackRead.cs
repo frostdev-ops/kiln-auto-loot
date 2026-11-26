@@ -2,9 +2,11 @@
 // A player's inventory read as the bag rules see it: the backpack (0.2.13). Items.Read of a player has five Generic
 // inventories of 8 slots, two of which are the action bars (Ecs.SlotSelection.actionbarEntityIds; lab, a 1_Player:
 // links 2 and 3). Kiln's Items.Move never puts a stack into an action bar ("no room in entity's backpack" while 8 of its
-// slots are empty), and the action bar is not what a player calls their bag, so:
+// slots are empty, and also when a stack of the item is on the bar), and the action bar is not what a player calls their
+// bag, so:
 //   - free bag slots: the empty slots of the Generic inventories that are not an action bar;
-//   - a stack in an action bar is carried (carry limits count it) but gives no room to top up (Bag: Backpack false).
+//   - a stack in an action bar is carried (carry limits count it); its room serves only the game's own pickup and
+//     loot-all, which top it up (Bag.BarRoom; lab dev31-review-autoloot-0213), never a slot move.
 // When the action bars are not known (0), every Generic inventory counts, as before 0.2.13.
 namespace KilnAutoLoot.Core;
 
@@ -28,7 +30,7 @@ public static class BackpackRead
                 if (backpack) free++;
                 continue;
             }
-            list.Add(new BagSlot(s.Item, s.Count, backpack));
+            list.Add(new BagSlot(s.Item, s.Count, backpack, s.Generic && !backpack));
         }
         return (list, free);
     }

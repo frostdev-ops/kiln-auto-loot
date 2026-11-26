@@ -42,6 +42,46 @@ public sealed class RulesWaveTests
     }
 
     [Fact]
+    public void Fill_carried_stacks_tops_up_a_stack_on_the_action_bar_from_the_ground()
+    {
+        // review 0.2.13 (lab): the game's own pickup tops up an action-bar stack while the backpack is full; 0.2.12 did this
+        var rig = Rig(s => s.FillCarriedStacks = true);
+        rig.Game.BagSlots = [new BagSlot(Twigs, 30, false, ActionBar: true)];
+        rig.Game.FreeSlotCount = 0;
+        var e = rig.Game.Add(LoopRig.Twig, 2, Pickup, pickupItem: Twigs);
+        e.PickupAmount = 15;
+        rig.ScanAfter(100);
+        Assert.True(Took(rig, e));
+    }
+
+    [Fact]
+    public void Fill_carried_stacks_loots_a_chest_whose_slots_all_top_up_stacks_on_the_action_bar()
+    {
+        // the game's loot-all tops up the bar's stacks too, so with nothing to keep it goes out (as in 0.2.12)
+        var rig = Rig(s => s.FillCarriedStacks = true);
+        rig.Game.BagSlots = [new BagSlot(Twigs, 30, false, ActionBar: true), new BagSlot(Stone, 10, true)];
+        rig.Game.FreeSlotCount = 0;
+        var chest = rig.Game.Add(LoopRig.Chest, 4, Inv);
+        chest.Slots = [new ContainerSlot(11, Twigs, 5), new ContainerSlot(13, Stone, 2)];
+        rig.ScanAfter(100);
+        Assert.True(Took(rig, chest));
+        Assert.Empty(rig.Game.Moves);
+    }
+
+    [Fact]
+    public void A_slot_move_never_counts_on_a_stack_on_the_action_bar()
+    {
+        // lab: Kiln's Items.Move does not top up an action-bar stack ("no room in entity's backpack")
+        var rig = Rig(s => s.FillCarriedStacks = true);
+        rig.Game.BagSlots = [new BagSlot(Twigs, 30, false, ActionBar: true)];
+        var chest = rig.Game.Add(LoopRig.Chest, 4, Inv);
+        chest.Slots = [new ContainerSlot(11, Twigs, 5), new ContainerSlot(13, Apple, 2)];
+        rig.ScanFor(500);
+        Assert.Empty(rig.Game.Moves);
+        Assert.Empty(rig.Game.Loots);
+    }
+
+    [Fact]
     public void Two_pickups_in_one_scan_share_the_room_the_bag_read_showed()
     {
         var rig = Rig(s => s.FillCarriedStacks = true);
