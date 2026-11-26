@@ -103,6 +103,10 @@ public sealed class Probe
         return (d, inv.FreeSlots());
     }
 
+    /// <summary>Free slots as the mod counts them (KilnGame.Bag: the backpack, the action bars left out) and as every
+    /// Generic slot.</summary>
+    private static string Free(EntityId p) => $"backpack {new KilnGame(_ => { }).FreeSlots(p)} / generic {Items.Read(p)?.FreeSlots() ?? -1}";
+
     private static string Diff(Dictionary<uint, int> before, Dictionary<uint, int> after) =>
         string.Join(", ", after.Where(kv => kv.Value > before.GetValueOrDefault(kv.Key))
             .Select(kv => $"{Name(kv.Key)} +{kv.Value - before.GetValueOrDefault(kv.Key)}"));
@@ -176,6 +180,42 @@ public sealed class Probe
         Spawn.CleanupTracked(Tag);
     }
 
+    /// <summary>Items.Move of a corpse's slots into the stand-in with 40 free slots, then with 3: what the service
+    /// answers (the loop's slot moves when a bag rule keeps something in a corpse).</summary>
+    [KilnTest(TimeoutSeconds = 120, Order = 2)]
+    public async Task Moves_into_the_stand_in(TestContext t)
+    {
+        var data = LoadData();
+        var (anchor, _) = FindAnchor();
+        Assert.True(anchor is not null, "an anchor");
+        var a = anchor!.Value;
+        foreach (var free in new[] { 40, 8, 6, 5, 4, 3 })
+        {
+            var at = Ground(a.X + 40, a.Y, a.Z - 40 - free);
+            var p = await StandIn(t, at);
+            var fillers = data.Items.All.Where(x => x.OriginalMaxStack > 1 && x.Category == "Materials").Select(x => x.Id).ToList();
+            var k = 0;
+            while (Items.Read(p)!.FreeSlots() > free && k < fillers.Count) await Items.Give(p, new ItemId(fillers[k++]), 1);
+            var corpse = await Spawn.Entity("LootContainer_Enemy_Skeleton_Melee", Ground(at.X + 2, at.Y, at.Z), 0, new SpawnOptions { Tag = Tag });
+            await t.Delay(TimeSpan.FromSeconds(1.5));
+            var pi = Items.Read(p)!;
+            var bars = Ecs.TryGet<Ecs.SlotSelection>(p, out var sel)
+                ? $"action bars {sel.actionbarEntityIds[0].id}, {sel.actionbarEntityIds[1].id}" : "no SlotSelection";
+            Info($"MOVE {bars}; inventories [{string.Join(", ", pi.Inventories.Select((x, i) => $"{i}:{x.Inventory}/{x.Category}"))}]");
+            Info($"MOVE free {pi.FreeSlots()}: links [{string.Join(", ", pi.Inventories.Select((x, i) => $"{i}:{x.Category}"))}]; empty slots by link " +
+                 $"[{string.Join(", ", pi.Slots.Where(x => x.IsEmpty).GroupBy(x => (x.Link, x.Category)).Select(g => $"{g.Key.Link}/{g.Key.Category} x{g.Count()}"))}]; " +
+                 $"used by link [{string.Join(", ", pi.Slots.Where(x => !x.IsEmpty).GroupBy(x => (x.Link, x.Category)).Select(g => $"{g.Key.Link}/{g.Key.Category} x{g.Count()}"))}]; corpse {InventoryText(corpse)}");
+            foreach (var slot in Items.Read(corpse)!.Slots.Where(x => !x.IsEmpty).ToList())
+            {
+                var r = await Items.Move(corpse, slot.Slot, p);
+                Info($"MOVE free before {free}: {Name(slot.Item.Value)} x{slot.Count}: {r.Status} done {r.Done} '{r.Message}' game error {r.GameError}; stand-in free now {Items.Read(p)!.FreeSlots()}");
+            }
+            Spawn.Destroy(corpse);
+            Spawn.Destroy(p);
+        }
+        Spawn.CleanupTracked(Tag);
+    }
+
     /// <summary>KilnGame with the stand-in as the only player, and every loot-all and slot move counted per target.</summary>
     private sealed class StandInGame(KilnGame inner, EntityId player) : IGame
     {
@@ -243,14 +283,16 @@ public sealed class Probe
                 if (names.Contains(r.Name)) yields.UnionWith(r.Yield);
             var fillers = data.Items.All.Where(x => x.OriginalMaxStack > 1 && x.Category == "Materials" && !yields.Contains(x.Id))
                 .Select(x => x.Id).ToList();
-            var start = Items.Read(p)!.FreeSlots();
+            var start = Free(p);
             var k = 0;
-            while (Items.Read(p)!.FreeSlots() > free && k < fillers.Count)
+            var counted = new KilnGame(_ => { });
+            while (counted.FreeSlots(p) > free && k < fillers.Count)
             {
                 var g = await Items.Give(p, new ItemId(fillers[k++]), 1);
                 if (!g.Succeeded) Info($"LOOP fill: give {Name(fillers[k - 1])} {g.Status}");
             }
-            var (bag0, free0) = Bag(p);
+            var (bag0, _) = Bag(p);
+            var free0 = Free(p);
             var spawned = new List<(string Kind, EntityId E)>();
             var j = 0;
             foreach (var (kind, template) in Targets)
@@ -283,9 +325,10 @@ public sealed class Probe
                 await t.Ticks(1);
             }
             await t.Delay(TimeSpan.FromSeconds(1));
-            var (bag1, free1) = Bag(p);
+            var (bag1, _) = Bag(p);
+            var free1 = Free(p);
             var c = loop.Counters;
-            Info($"LOOP keep {keep} free {free}: backpack free {start} -> {free0} after the fill -> {free1} after the loop; got [{Diff(bag0, bag1)}]; " +
+            Info($"LOOP keep {keep} free {free}: free slots {start} -> {free0} after the fill -> {free1} after the loop; got [{Diff(bag0, bag1)}]; " +
                  $"counters noRoom {c.NoRoom} harvestUnread {c.HarvestUnread} unreadable {c.Unreadable} containerTries {c.ContainerTries}");
             foreach (var (kind, e) in spawned)
                 Info($"LOOP keep {keep} free {free}: {kind} {e}: loot-alls {game.Loots.GetValueOrDefault(e)}, moves {game.Moves.GetValueOrDefault(e)}, " +
