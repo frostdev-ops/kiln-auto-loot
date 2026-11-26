@@ -80,7 +80,8 @@ rules and what a dedicated server can show without a player. Everything below ne
 ## 6. Smashing
 - [ ] Barrels, crates, pots and broken furniture in ruins break, up to four a second, nearest first, and their loot is
       picked up. 0.2.12: in a ruin with a room next door or a cellar below full of props, those in view still break
-      within a few seconds; so do barrels on a stack or a shelf; nothing behind a wall or under the floor breaks.
+      within a few seconds; so do barrels on a stack or a shelf; nothing behind a wall or under the floor breaks. With
+      two players each in a ruin like that, both get smashing.
 - [ ] Inside your base nothing breaks; near your base buildable furniture stays whole.
 - [ ] "Fell trees" on (test world!): trees, stumps and logs come down and drop wood; harvest trees (hazelnut, coffee)
       stay. "Smash bee hives": hives break, honey is picked up.

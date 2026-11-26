@@ -73,7 +73,7 @@ public sealed class PersonalSettings
     [Comment("Leave quest items in containers so you take them yourself.")] public bool LeaveQuestItems { get; set; } = true;
 
     // Smashing
-    [Comment("Break barrels, crates, pots and wrecked furniture around you, once a second. Never in a base.")] public bool Smash { get; set; } = true;
+    [Comment("Break barrels, crates, pots and wrecked furniture around you, up to four a second, nearest first. Never in a base.")] public bool Smash { get; set; } = true;
     [Comment("Also break furniture that players could build, but only well away from any base.")] public bool SmashBuildables { get; set; } = true;
     [Comment("Experimental: bring down trees, stumps and logs around you. They may not grow back.")] public bool FellTrees { get; set; }
     [Comment("Break wild bee hives around you (some let wasps out).")] public bool SmashHives { get; set; }

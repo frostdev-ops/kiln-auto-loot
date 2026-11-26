@@ -95,6 +95,8 @@ notes run in each player's game.
 - **Line of sight** ("only take what I can see") needs Kiln's line-of-sight checks (queries.line_of_sight). Where a
   game or server doesn't have them, or they don't answer yet while a world loads, the height window decides instead,
   and the window says so. For smashing, a check that doesn't answer leaves only that one prop to the height window.
+  Smashing uses at most a quarter of the game's line-of-sight checks in any moment (all players together), so other
+  mods and creatures keep theirs.
 
 ## Requirements
 Kiln 0.2.0-dev.30.6 or later, on the server and (for the window, the keys and the notes) in each player's game.
