@@ -103,7 +103,7 @@ internal interface IGame
     /// <summary>Items.Read: the non-empty slots, or null when the entity has no readable inventory.</summary>
     IReadOnlyList<ContainerSlot>? Slots(EntityId container);
 
-    /// <summary>Items.Read(player).FreeSlots(Generic); -1 when unknown.</summary>
+    /// <summary>The free backpack slots of the player (Bag: the Generic inventories but the action bars); -1 when unknown.</summary>
     int FreeSlots(EntityId player);
 
     /// <summary>Items.Read of the player: every non-empty slot of the player's inventories (Generic = backpack) and the

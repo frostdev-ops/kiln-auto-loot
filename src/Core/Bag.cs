@@ -2,15 +2,16 @@
 // A player's bag as one scan sees it: read once at the scan's first need, then kept up to date with what the scan
 // itself takes, so two targets in one scan never count the same room twice.
 //
-//   Room in carried stacks: per item, over the backpack slots only (the game's Generic inventory, where it tops up
-//   stacks on a pickup), the item's max stack minus the stack's count. Slots elsewhere (action bar, equipment) give no
+//   Room in carried stacks: per item, over the backpack slots only (the Generic inventories but the two action bars,
+//   Core/BackpackRead), the item's max stack minus the stack's count. Slots elsewhere (action bar, equipment) give no
 //   room: a missed top-up there costs a pickup left behind, never an overshoot.
 //   Held: per item, over every slot the read returns (backpack, action bar, equipment): what carry limits count.
 //   Max stack: what the world uses now (the caller decides: the game's own raised by the server's stack size); 0 =
 //   not known, which gives no room.
 namespace KilnAutoLoot.Core;
 
-/// <summary>One non-empty slot of a player's inventories. <paramref name="Backpack"/>: a slot of the Generic inventory.</summary>
+/// <summary>One non-empty slot of a player's inventories. <paramref name="Backpack"/>: a backpack slot (a Generic
+/// inventory that is not an action bar, Core/BackpackRead).</summary>
 public readonly record struct BagSlot(uint Item, int Count, bool Backpack);
 
 public sealed class Bag

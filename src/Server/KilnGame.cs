@@ -86,16 +86,35 @@ internal sealed class KilnGame(Action<string> logOnce) : IGame
         return list;
     }
 
-    public int FreeSlots(EntityId player) => _items && Items.Read(player) is { } inv ? inv.FreeSlots(InventoryCategory.Generic) : -1;
+    public int FreeSlots(EntityId player) => Bag(player)?.FreeSlots ?? -1;
 
+    /// <summary>The backpack (0.2.13, Core/BackpackRead): the Generic inventories but the two action bars, which Kiln's
+    /// Items.Move never fills and a player does not count as their bag.</summary>
     public BagRead? Bag(EntityId player)
     {
         if (!_items || Items.Read(player) is not { } inv) return null;
-        var list = new List<KilnAutoLoot.Core.BagSlot>(inv.Slots.Count);
+        var (bar0, bar1) = ActionBars(player);
+        var slots = new List<KilnAutoLoot.Core.InventorySlotRead>(inv.Slots.Count);
         foreach (var s in inv.Slots)
-            if (!s.IsEmpty && s.Count > 0)
-                list.Add(new KilnAutoLoot.Core.BagSlot(s.Item.Value, s.Count, s.Category == InventoryCategory.Generic));
-        return new BagRead(list, inv.FreeSlots(InventoryCategory.Generic));
+        {
+            var at = s.Link >= 0 && s.Link < inv.Inventories.Count ? inv.Inventories[s.Link].Inventory.Value : 0u;
+            slots.Add(new KilnAutoLoot.Core.InventorySlotRead(s.IsEmpty ? 0 : s.Item.Value, s.IsEmpty ? 0 : s.Count,
+                s.Category == InventoryCategory.Generic, at));
+        }
+        var (list, free) = KilnAutoLoot.Core.BackpackRead.From(slots, bar0, bar1);
+        return new BagRead(list, free);
+    }
+
+    /// <summary>The player's two action-bar inventories (Ecs.SlotSelection.actionbarEntityIds); 0 = not known.</summary>
+    private static (uint, uint) ActionBars(EntityId player)
+    {
+        try
+        {
+            return Ecs.TryGet<Ecs.SlotSelection>(player, out var sel)
+                ? (sel.actionbarEntityIds[0].id, sel.actionbarEntityIds[1].id)
+                : (0u, 0u);
+        }
+        catch (Exception e) when (e is KilnUnavailableException or InvalidOperationException or ArgumentException) { return (0u, 0u); }
     }
 
     public int StackSizeWish => WorldData.AppliedStackSize;
