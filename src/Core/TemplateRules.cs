@@ -352,7 +352,7 @@ public static class TemplateRules
         };
     }
 
-    private static TemplateRule Rule(TemplateFacts t, Group g, TemplateFlags f) => new(t.Guid, g, f, t.Name, t.Yield);
+    private static TemplateRule Rule(TemplateFacts t, Group g, TemplateFlags f) => new(t.Guid, g, f, t.Name, t.Yield, t.YieldMax);
 
     private static bool AnyWord(string lowerName, string[] words)
     {

@@ -9,7 +9,7 @@ namespace KilnAutoLoot.Core;
 public static class GameFactsJson
 {
     /// <summary>Bump when the reader collects other facts: older cache files are then read again from the game.</summary>
-    public const int Format = 1;
+    public const int Format = 2;   // 2 (0.2.13): templates carry YieldMax, the most of each item a default inventory gives
 
     private sealed record CacheFile(int Format, string Key, GameFacts Facts);
 

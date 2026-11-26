@@ -51,7 +51,8 @@ public sealed class TemplateTable
     }
 
     /// <summary>A small tab-separated text form for test fixtures: <c>guid, group word, flag words, name, yield ids
-    /// (comma separated)</c>; '#' and empty lines are skipped, and so is a line without a GUID.</summary>
+    /// (comma separated; <c>id:max</c> also gives the most of it the default inventory can give)</c>; '#' and empty lines
+    /// are skipped, and so is a line without a GUID.</summary>
     public static TemplateTable Parse(TextReader text)
     {
         var rules = new List<TemplateRule>();
@@ -72,12 +73,17 @@ public sealed class TemplateTable
             if (flagText.Contains("decor", StringComparison.Ordinal)) flags |= TemplateFlags.Decor;
             if (flagText.Contains("grown", StringComparison.Ordinal)) flags |= TemplateFlags.Grown;
             var yield = new List<uint>();
+            Dictionary<uint, int>? most = null;
             foreach (var part in cols[4].Split(','))
             {
-                var id = TextRules.Trim(part);
-                if (id.Length > 0) yield.Add(TextRules.ParseUInt(id));
+                var entry = TextRules.Trim(part);
+                if (entry.Length == 0) continue;
+                var colon = entry.IndexOf(':');
+                var id = TextRules.ParseUInt(colon < 0 ? entry : entry[..colon]);
+                yield.Add(id);
+                if (colon >= 0) (most ??= new())[id] = (int)TextRules.ParseUInt(entry[(colon + 1)..]);
             }
-            rules.Add(new TemplateRule(guid, GroupOf(TextRules.Trim(cols[1])), flags, TextRules.Trim(cols[3]), yield));
+            rules.Add(new TemplateRule(guid, GroupOf(TextRules.Trim(cols[1])), flags, TextRules.Trim(cols[3]), yield, most));
         }
         return FromRules(rules);
     }

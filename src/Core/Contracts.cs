@@ -29,7 +29,10 @@ public enum Group { Unknown, Ground, Collectible, Plant, Farm, Corpse, Chest, Bo
 [Flags]
 public enum TemplateFlags { None = 0, Stone = 1, Swarm = 2, Boss = 4, Elite = 8, Animal = 16, Drop = 32, Generic = 64, Decor = 128, Grown = 256 }
 
-public sealed record TemplateRule(Guid Guid, Group Group, TemplateFlags Flags, string Name, IReadOnlyList<uint> Yield);
+/// <summary>A template the mod may take. <paramref name="YieldMax"/>: per yield item, the most its default inventory can
+/// give before the world's Loot Amount scales it (the stacks' countMax added up; null or missing = not known).</summary>
+public sealed record TemplateRule(Guid Guid, Group Group, TemplateFlags Flags, string Name, IReadOnlyList<uint> Yield,
+    IReadOnlyDictionary<uint, int>? YieldMax = null);
 
 /// <summary>One item of the game (ItemRules.RowOf).</summary>
 public sealed record ItemRow(uint Id, string Internal, string English, string German, bool Lootable, string Category,

@@ -9,8 +9,11 @@ namespace KilnAutoLoot.Core;
 /// "AreaLootOverride.exclude" = "true"). Text as the game's reflection gives it; enums by name.</param>
 /// <param name="Drops">Templates this one drops as pickups (its pickup drop references).</param>
 /// <param name="Yield">Item ids it gives: its pickup item and the items of its default inventory.</param>
+/// <param name="YieldMax">Per item of its default inventory, the most that inventory can give (the countMax of every
+/// stack naming the item, added up), before the world's Loot Amount scales it; null = none known.</param>
 public sealed record TemplateFacts(Guid Guid, string Name, string Family, IReadOnlyList<string> Components,
-    IReadOnlyDictionary<string, string> Values, IReadOnlyList<Guid> Drops, IReadOnlyList<uint> Yield)
+    IReadOnlyDictionary<string, string> Values, IReadOnlyList<Guid> Drops, IReadOnlyList<uint> Yield,
+    IReadOnlyDictionary<uint, int>? YieldMax = null)
 {
     private HashSet<string>? _set;
 

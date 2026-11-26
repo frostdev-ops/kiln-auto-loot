@@ -161,6 +161,16 @@ public class TemplateRulesTests
     }
 
     [Fact]
+    public void A_harvest_rule_carries_the_most_its_default_inventory_gives()
+    {
+        var bush = Facts.T("LootPickup_Material_Plant_Fibre_Bush", Facts.Bush, yield: [3u])
+            with { YieldMax = new Dictionary<uint, int> { [3] = 2 } };
+        var rule = One(bush, Facts.I(3, "Material_T1_Plant_Fibre", "Materials"));
+        Assert.Equal(Group.Plant, rule?.Group);
+        Assert.Equal(2, rule!.YieldMax![3]);
+    }
+
+    [Fact]
     public void Boss_loot_is_the_boss_group_and_corpses_carry_elite()
     {
         Assert.Equal(Group.Boss, One(Facts.T("LootPickup_Enemy_Boss_GiantLizard", Facts.Corpse))?.Group);
@@ -583,6 +593,21 @@ public class GameDataFormatTests
         Assert.Null(GameFactsJson.Read(json, "k2"));
         Assert.Null(GameFactsJson.Read("{not json", "k1"));
         Assert.DoesNotContain('+', GameFactsJson.FileName("v1-server-0.2.0-dev.28+abc"));
+    }
+
+    [Fact]
+    public void The_cache_keeps_the_most_a_default_inventory_gives()
+    {
+        var bush = Facts.T("Bush", ["DefaultInventory"], yield: [3u, 4u]) with { YieldMax = new Dictionary<uint, int> { [3] = 2 } };
+        var facts = new GameFacts([bush, Facts.T("Rock", ["PickupItem"], yield: [5u])], [Facts.I(3, "I", "Materials")]);
+        var back = GameFactsJson.Read(GameFactsJson.Write("k1", facts), "k1");
+        Assert.NotNull(back);
+        Assert.Equal(2, back!.Templates[0].YieldMax![3]);
+        Assert.False(back.Templates[0].YieldMax!.ContainsKey(4));
+        Assert.Null(back.Templates[1].YieldMax);
+        // a cache from before the counts were read (format 1) is read from the game again
+        var old = GameFactsJson.Write("k1", facts).Replace($"\"Format\":{GameFactsJson.Format}", "\"Format\":1");
+        Assert.Null(GameFactsJson.Read(old, "k1"));
     }
 
     [Fact]
