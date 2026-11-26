@@ -19,12 +19,27 @@ public sealed class Pace
 {
     private static void Info(string s) => KilnLog.Info($"labsmash: PACE {s}");
 
-    /// <summary>KilnSmashWorld with every answer counted per target.</summary>
+    /// <summary>KilnSmashWorld with every answer counted per target, and smashing's rays per server step (the rays it
+    /// cast, their time as the mod sees it; a BudgetExceeded refusal casts none).</summary>
     private sealed class Watched(ISmashWorld inner) : ISmashWorld
     {
         public readonly Dictionary<EntityId, Dictionary<Sight, int>> Sights = new();
         public readonly Dictionary<Sight, int> SightTotals = new();
         public int InspectCalls, CandidateCalls;
+        public int StepRays, MostRays, Steps, RaySteps, Rays, Refused;
+        public long StepRayMicros, MostRayMicros, RayMicros;
+        public readonly int[] RayHistogram = new int[9];   // steps by rays cast: 0, 1-8, 9-16, ..., 57-64
+
+        public void EndStep()
+        {
+            Steps++;
+            if (StepRays > 0) RaySteps++;
+            RayHistogram[Math.Min(8, (StepRays + 7) / 8)]++;
+            MostRays = Math.Max(MostRays, StepRays);
+            MostRayMicros = Math.Max(MostRayMicros, StepRayMicros);
+            StepRays = 0;
+            StepRayMicros = 0;
+        }
 
         public IReadOnlyList<EntityId> Candidates() { CandidateCalls++; return inner.Candidates(); }
         public IReadOnlyList<EntityId> Within(IReadOnlyList<EntityId> candidates, WorldPosition at, double radius) => inner.Within(candidates, at, radius);
@@ -41,7 +56,13 @@ public sealed class Pace
 
         public Sight LineOfSight(EntityId player, EntityId target, double toHeight)
         {
+            var t0 = System.Diagnostics.Stopwatch.GetTimestamp();
             var s = inner.LineOfSight(player, target, toHeight);
+            var us = (long)System.Diagnostics.Stopwatch.GetElapsedTime(t0).TotalMicroseconds;
+            StepRayMicros += us;
+            RayMicros += us;
+            if (s != Sight.Later) { StepRays++; Rays++; }
+            else Refused++;
             if (s == Sight.Hidden && !Blocked.ContainsKey(target))
             {
                 var r = Queries.VoxelLineOfSight(player, target, new VoxelSightOptions { ToOffset = new WorldPosition(0, toHeight, 0) });
@@ -111,6 +132,10 @@ public sealed class Pace
         // LootServer.SmashStep: a new pass once a second, the rest of an unfinished pass in the next server steps
         var next = Environment.TickCount64;
         var resumes = 0;
+        // a mod that asks after Auto Loot in every step: 8 voxel rays (as a creature's sight or a placement search)
+        var nFrom = new WorldPosition(at0.X + 0.3, at0.Y + 1.5, at0.Z + 0.3);
+        var nTo = new WorldPosition(at0.X + 2.3, at0.Y + 1.6, at0.Z + 1.3);
+        int nAsked = 0, nRefused = 0, nStepsNone = 0;
         for (var i = 0; i < seconds;)
         {
             var at = World.Position(stand) ?? at0;
@@ -128,6 +153,13 @@ public sealed class Pace
                 smash.Resume(stand, at, s, new ServerLimits());
                 resumes++;
             }
+            world.EndStep();
+            var refused = 0;
+            for (var k = 0; k < 8; k++)
+                if (Queries.RaycastVoxels(nFrom, nTo) is { Ok: false, Reason: "BudgetExceeded" }) refused++;
+            nAsked += 8;
+            nRefused += refused;
+            if (refused == 8) nStepsNone++;
             await t.Ticks(1);
             var now = Environment.TickCount64 - start;
             foreach (var target in watched)
@@ -152,6 +184,10 @@ public sealed class Pace
              $"longest gap between breaks {gaps / 1000.0:0.0} s; hits {hits.Values.Sum(x => x.Count)} (+{otherHits} on other props); " +
              $"sight {string.Join(",", world.SightTotals.Select(kv => $"{kv.Key}x{kv.Value}"))} (not answered: {string.Join(",", world.Reasons.Select(kv => $"{kv.Key}x{kv.Value}"))}); inspects {world.InspectCalls}; stand-in moved {at1.DistanceTo(at0):0.0} m");
         Info($"{label}: runs {string.Join(" | ", runs)}");
+        Info($"{label}: RAYS smashing cast {world.Rays} rays in {world.Steps} server steps ({world.RaySteps} with any), most in one step {world.MostRays} " +
+             $"({world.MostRayMicros} us), {world.Refused} refused (BudgetExceeded); {(world.Rays > 0 ? world.RayMicros / (double)world.Rays : 0):0.0} us a ray as the mod sees it; " +
+             $"steps by rays 0|1-8|9-16|17-24|25-32|33-40|41-48|49-56|57-64: {string.Join("|", world.RayHistogram)}; " +
+             $"a mod asking 8 rays after Auto Loot each step: {nRefused} of {nAsked} refused, {nStepsNone} steps with none");
     }
 
     private static readonly string[] RingTemplates =
