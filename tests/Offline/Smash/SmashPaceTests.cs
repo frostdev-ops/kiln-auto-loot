@@ -231,4 +231,35 @@ public sealed class SmashPaceTests
         _smash.Stop();
         Assert.False(_smash.Pending(Player));
     }
+    // ---- a check that does not answer (NotLoaded) is that prop's alone (lab Pace_built_room / Pace_cellar_below: one
+    //      such answer turned line of sight off for every prop for 5 s, and props behind walls and under floors broke)
+
+    [Fact]
+    public void One_check_that_does_not_answer_lets_the_height_window_judge_that_prop_only_never_the_ones_out_of_sight()
+    {
+        _world.RaysPerStep = 64;
+        var unknown = _world.Add(TSmash, 1.0, sight: Sight.Unknown);          // its ray does not answer (NotLoaded)
+        var hidden = Enumerable.Range(0, 10).Select(i => _world.Add(TSmash, 2 + i * 0.3, sight: Sight.Hidden)).ToList();
+        var seen = Enumerable.Range(0, 4).Select(i => _world.Add(TSmash, 6 + i * 0.3)).ToList();
+        ServerSteps(6, S());
+        Assert.DoesNotContain(_world.Hits, h => hidden.Contains(h.Target));   // never through walls
+        Assert.Contains(_world.Hits, h => h.Target == unknown);               // the height window (no limit) lets it be hit
+        Assert.All(seen, e => Assert.DoesNotContain(e, _world.Entities.Keys));
+    }
+
+    [Fact]
+    public void A_prop_whose_check_does_not_answer_is_left_when_the_height_window_says_no_and_asked_again_later()
+    {
+        _world.RaysPerStep = 64;
+        var below = _world.Add(TSmash, 2, y: -6, sight: Sight.Unknown);
+        var seen = _world.Add(TSmash, 3, y: -6);                                // in view, as deep: line of sight decides it
+        ServerSteps(1, S(s => s.HeightBelow = 4));
+        Assert.Contains(_world.Hits, h => h.Target == seen);
+        Assert.DoesNotContain(_world.Hits, h => h.Target == below);
+        Assert.Equal(1, _world.SightCalls[below]);
+        _world.SightOf[below] = Sight.Visible;                                  // its tile is in now
+        ServerSteps(global::KilnAutoLoot.Server.Smash.SightRetryMs / 1000.0 + 1, S(s => s.HeightBelow = 4));
+        Assert.Contains(_world.Hits, h => h.Target == below);
+        Assert.Equal(2, _world.SightCalls[below]);                              // once, then once after SightRetryMs
+    }
 }

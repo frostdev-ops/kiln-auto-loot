@@ -19,7 +19,10 @@
 //   - a target is hit again only after RetryMs (it needs a step or two to break), and after MaxTries hits that did
 //     not break it, it is left alone for GiveUpMs (otherwise one target that never breaks would hold a slot forever);
 //   - with "Only what I can see" on and line of sight there, only a target the player can see is hit (0.2.8), each
-//     answer kept SightCacheMs; elsewhere the height window decides (as for looting, LootLoop.SightDecides).
+//     answer kept SightCacheMs; elsewhere the height window decides (as for looting, LootLoop.SightDecides). A check that
+//     does not answer (a tile not loaded yet) leaves that one target to the height window for SightRetryMs, then it is
+//     asked again; before 0.2.12 one such answer turned line of sight off for every target for 5 s, and props behind
+//     walls and under floors were smashed meanwhile (lab: Pace_built_room, Pace_cellar_below).
 using Kiln;
 using KilnAutoLoot.Core;
 
@@ -32,7 +35,7 @@ internal sealed class Smash
     public const long RunBudgetMicros = 4_000;   // a pass's look at the targets in one server step; it goes on in the next
     public const long KnownForgetMs = 2_500;     // a template kept for a target no Run saw this long is read again
     public const long SightCacheMs = 1_500;      // a line-of-sight answer per player and target is kept this long
-    public const long SightRetryMs = 5_000;      // line of sight did not answer: the height window stands in this long
+    public const long SightRetryMs = 5_000;      // a target's check did not answer: the height window judges it this long
 
     /// <summary>What the last Run or Resume did in its server step (the "slow smash" line). <paramref name="Stopped"/>: the
     /// pass goes on in the next step (its time in this step is spent, or the game's ray budget).</summary>
@@ -58,8 +61,7 @@ internal sealed class Smash
     // per target: its template and serial from its first Spawn.Inspect, and when a Run last saw it
     private readonly Dictionary<uint, (Guid Template, ulong Serial, long Stamp, long SeenMs)> _known = new();
     // per player and target: what line of sight said, until when
-    private readonly Dictionary<(uint Player, uint Target), (long Until, ulong Serial, long Stamp, bool Visible)> _sight = new();
-    private long _sightUnknownUntil;
+    private readonly Dictionary<(uint Player, uint Target), (long Until, ulong Serial, long Stamp, Sight Answer)> _sight = new();
     private long _lastKnownPrune;
 
     private readonly ISmashWorld _world;
@@ -120,7 +122,6 @@ internal sealed class Smash
         _tries.Clear();
         _known.Clear();
         _sight.Clear();
-        _sightUnknownUntil = 0;
     }
 
     /// <summary>Once per second per player, tick thread: starts a new pass (an unfinished one of this player is dropped).
@@ -175,7 +176,7 @@ internal sealed class Smash
         var position = pass.Position;
         bool? near = null;
         bool NearBuildZone() => near ??= _world.NearBuildZone(player);
-        bool SightDecides() => s.VisibleOnly && now >= _sightUnknownUntil && _world.SightAvailable;
+        var sightDecides = s.VisibleOnly && _world.SightAvailable;
 
         var wanted = new List<(double Dist, SmashTarget Target, SmashKind Kind)>();
         var started = _micros();
@@ -215,7 +216,7 @@ internal sealed class Smash
                 ProbeTrace.Note(e, "smash: not a smash target");
                 continue;
             }
-            if (!SightDecides() && !HeightWindow.Allows(target.Position.Y - position.Y, s))
+            if (!sightDecides && !HeightWindow.Allows(target.Position.Y - position.Y, s))
             {
                 ProbeTrace.Note(e, $"smash: {kind}, outside the height window");
                 continue;   // the player's height window
@@ -223,25 +224,25 @@ internal sealed class Smash
             ProbeTrace.Note(e, $"smash: {kind}, wanted {SmashRules.Wants(kind, sw, NearBuildZone)} (stones {sw.Stones}, " +
                                $"buildables {sw.Buildables}, trees {sw.Trees}, hives {sw.Hives}), may hit {MayHit(target, now)}");
             if (!SmashRules.Wants(kind, sw, NearBuildZone) || !MayHit(target, now)) continue;
-            if (SightDecides())
+            if (sightDecides)
             {
-                var seen = Visible(player, target, now);
-                if (seen is null)
+                var seen = Look(player, target, now);
+                if (seen == Sight.Later)
                 {
                     stopped = true;   // the game's ray budget of this step is spent: ask this one again in the next step
                     break;
                 }
-                if (seen == false)
+                if (seen == Sight.Hidden)
                 {
                     ProbeTrace.Note(e, $"smash: {kind}, not in plain view");
                     continue;
                 }
-            }
-            // This call may have been the first Unknown answer: the fallback applies to this prop already.
-            if (!SightDecides() && !HeightWindow.Allows(target.Position.Y - position.Y, s))
-            {
-                ProbeTrace.Note(e, "smash: sight did not answer, outside the height window fallback");
-                continue;
+                // this one's check did not answer: the height window judges it (this target only)
+                if (seen == Sight.Unknown && !HeightWindow.Allows(target.Position.Y - position.Y, s))
+                {
+                    ProbeTrace.Note(e, "smash: sight did not answer, outside the height window fallback");
+                    continue;
+                }
             }
             var dist = target.Position.DistanceTo(position);
             if (dist <= sw.Radius) wanted.Add((dist, target, kind));
@@ -261,23 +262,17 @@ internal sealed class Smash
 
     public void PlayerLeft(EntityId player) => _passes.Remove(player.Value);   // the tries belong to the targets
 
-    /// <summary>Line of sight from the player to the target, kept <see cref="SightCacheMs"/>; "not known" counts as
-    /// visible, and the height window stands in for <see cref="SightRetryMs"/>. Null: the game's ray budget of this server
-    /// step is spent, nothing was asked.</summary>
-    private bool? Visible(EntityId player, in SmashTarget t, long now)
+    /// <summary>Line of sight from the player to the target: Visible or Hidden, kept <see cref="SightCacheMs"/>; Unknown
+    /// (the check did not answer: the height window judges this target), kept <see cref="SightRetryMs"/>; Later: the
+    /// game's ray budget of this server step is spent, nothing was asked or kept.</summary>
+    private Sight Look(EntityId player, in SmashTarget t, long now)
     {
         var key = (player.Value, t.Entity.Value);
-        if (_sight.TryGetValue(key, out var c) && c.Until > now && c.Serial == t.Serial && c.Stamp == t.Stamp) return c.Visible;
-        bool visible;
-        switch (_world.LineOfSight(player, t.Entity))
-        {
-            case Sight.Later: return null;   // the step's ray budget is spent: the pass asks again in the next step
-            case Sight.Hidden: _sightUnknownUntil = 0; visible = false; break;
-            case Sight.Unknown: _sightUnknownUntil = now + SightRetryMs; visible = true; break;
-            default: _sightUnknownUntil = 0; visible = true; break;
-        }
-        _sight[key] = (now + SightCacheMs, t.Serial, t.Stamp, visible);
-        return visible;
+        if (_sight.TryGetValue(key, out var c) && c.Until > now && c.Serial == t.Serial && c.Stamp == t.Stamp) return c.Answer;
+        var answer = _world.LineOfSight(player, t.Entity);
+        if (answer == Sight.Later) return answer;   // the pass asks again in the next step
+        _sight[key] = (now + (answer == Sight.Unknown ? SightRetryMs : SightCacheMs), t.Serial, t.Stamp, answer);
+        return answer;
     }
 
     private bool MayHit(in SmashTarget t, long now)
