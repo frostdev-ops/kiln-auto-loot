@@ -468,4 +468,19 @@ public sealed class SmashPaceTests
         Assert.DoesNotContain(_world.Hits, h => h.Target == walled);
         Assert.Contains(_world.Hits, h => h.Target == seen);
     }
+
+    [Fact]
+    public void Never_more_than_four_hits_in_any_second_also_when_a_pass_finds_its_targets_late()
+    {
+        _world.RaysPerStep = 16;
+        // so many urns out of sight in front of the barrels that the first pass reaches them only late in its second
+        var hidden = Enumerable.Range(0, 400).Select(i => _world.Add(TSmash, 0.5 + i * 0.012, sight: Sight.Hidden)).ToList();
+        var barrels = Enumerable.Range(0, 16).Select(i => _world.Add(TSmash, 6 + i * 0.3)).ToList();
+        ServerSteps(4, S());
+        Assert.True(_world.Hits.Count >= 8, $"{_world.Hits.Count} hits");
+        foreach (var (ms, _) in _world.Hits)
+            Assert.True(_world.Hits.Count(h => h.Ms >= ms && h.Ms < ms + 1000) <= SmashRules.MaxTargetsPerStep,
+                $"{_world.Hits.Count(h => h.Ms >= ms && h.Ms < ms + 1000)} hits in the second from {ms - 1_000_000} ms");
+        Assert.DoesNotContain(_world.Hits, h => hidden.Contains(h.Target));
+    }
 }

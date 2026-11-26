@@ -5,7 +5,8 @@
 //
 // C# picks the targets (the template's kind from Data.Smash, read from the game, the switches, the player's two states) and runs a
 // one-target program per hit (SmashHit). Because the loop runs in C#:
-//   - at most SmashRules.MaxTargetsPerStep (4) targets per player per pass (per second), nearest first;
+//   - at most SmashRules.MaxTargetsPerStep (4) targets per player per pass and in any second (a pass that found its
+//     targets late in its second does not let the next one add four more at once), nearest first;
 //   - a pass looks at the targets nearest first and ends at the 4 nearest wanted ones or at the end of the list. In one
 //     server step all players' passes together spend at most RunBudgetMicros and cast at most MaxRaysPerStep rays in at
 //     most MaxRayMicrosPerStep (a quarter of the game's shared ray budget, Kiln.Queries: 64 rays and 500 us a step for
@@ -66,6 +67,8 @@ internal sealed class Smash
 
     // per player: the pass that is not finished yet
     private readonly Dictionary<uint, Pass> _passes = new();
+    // per player: when their latest hits went out, oldest first (at most MaxTargetsPerStep in any second)
+    private readonly Dictionary<uint, Queue<long>> _recentHits = new();
     // this server step (BeginStep): smashing's time, rays and ray time, every player's pass together; whose turn it is
     private long _stepMicros, _stepRayMicros;
     private int _stepRays, _turn;
@@ -134,6 +137,7 @@ internal sealed class Smash
         _candidates = [];
         _candidatesAt = null;
         _passes.Clear();
+        _recentHits.Clear();
         BeginStep(0);
         _tries.Clear();
         _known.Clear();
@@ -212,10 +216,12 @@ internal sealed class Smash
         int looked = 0, fresh = 0;
         long inspectMicros = 0, slowest = 0;
         var stopped = false;
+        // the pass's own 4, and no more than 4 in the last second (the previous pass may have hit late in its second)
+        var room = Math.Min(SmashRules.MaxTargetsPerStep - pass.Hits, HitsLeft(player, now));
         for (; pass.Next < inReach.Count; pass.Next++)
         {
             var e = inReach[pass.Next];
-            if (pass.Hits + wanted.Count >= SmashRules.MaxTargetsPerStep) break;   // the nearest wanted ones are found
+            if (wanted.Count >= room) break;   // the nearest wanted ones are found, or this second's hits are
             if (looked > 0 && _stepMicros + (_micros() - started) >= RunBudgetMicros)
             {
                 stopped = true;   // the rest goes on in the next server step
@@ -280,6 +286,8 @@ internal sealed class Smash
         foreach (var (_, target, kind) in wanted)
         {
             pass.Hits++;
+            if (!_recentHits.TryGetValue(player.Value, out var recent)) _recentHits[player.Value] = recent = new();
+            recent.Enqueue(now);
             Remember(target, now);
             _known.Remove(target.Entity.Value);   // a hit target breaks and its id may come back as another: read it anew
             ProbeTrace.Note(target.Entity, $"smash: hit as {kind}");
@@ -289,7 +297,19 @@ internal sealed class Smash
         _stepMicros += _micros() - started;
     }
 
-    public void PlayerLeft(EntityId player) => _passes.Remove(player.Value);   // the tries belong to the targets
+    public void PlayerLeft(EntityId player)
+    {
+        _passes.Remove(player.Value);   // the tries belong to the targets
+        _recentHits.Remove(player.Value);
+    }
+
+    /// <summary>How many more hits the player may have in this second (SmashRules.MaxTargetsPerStep in any second).</summary>
+    private int HitsLeft(EntityId player, long now)
+    {
+        if (!_recentHits.TryGetValue(player.Value, out var recent)) return SmashRules.MaxTargetsPerStep;
+        while (recent.Count > 0 && now - recent.Peek() >= 1000) recent.Dequeue();
+        return SmashRules.MaxTargetsPerStep - recent.Count;
+    }
 
     /// <summary>Line of sight from the player to the target, at the prop itself and, when that is blocked or does not
     /// answer, at the point above it: Visible (either is clear) or Hidden (one is blocked and the other is not clear),
