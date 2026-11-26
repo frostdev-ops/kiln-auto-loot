@@ -1,0 +1,41 @@
+<Project Sdk="Kiln.Sdk/0.2.0-dev.30.6">
+  <!-- Lab probe of Kiln Auto Loot's loot loop and the bag rules (keepFreeSlots), player-free, on a lab dedicated server.
+       Not part of the mod: it compiles the mod's own loot loop (src/Server/LootLoop.cs with KilnGame, the real game
+       layer) and runs it for a spawned 1_Player stand-in among plants, crops, creature piles and corpses.
+         dotnet build tests/LabLoot -t:KilnDeploy -p:KilnServer=<lab server folder>
+         kiln test kiln-auto-loot-labloot -\-server <lab server folder> -->
+  <PropertyGroup>
+    <KilnModId>kiln-auto-loot-labloot</KilnModId>
+    <KilnModName>Kiln Auto Loot loot lab probe</KilnModName>
+    <Version>0.1.0</Version>
+    <AssemblyName>KilnAutoLootLabLoot</AssemblyName>
+    <RootNamespace>KilnAutoLoot.LabLoot</RootNamespace>
+    <KilnSide>server</KilnSide>
+    <KilnServices>Players;World;Spawn;Gameplay;Items;Combat;Creatures;Queries;Abilities;Content;Assets;Ui;Network;Client;Saves;Game;Settings;Chat;Testing</KilnServices>
+    <KilnGameIds>None</KilnGameIds>
+    <Nullable>enable</Nullable>
+    <KilnIncludeModFolders>false</KilnIncludeModFolders>
+    <NoWarn>$(NoWarn);CS0649;CS8602;KILN121</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../../src/Core/*.cs" LinkBase="Mod/Core" />
+    <Compile Include="../../src/Net/Messages.cs" Link="Mod/Messages.cs" />
+    <Compile Include="../../src/Net/SettingsJson.cs" Link="Mod/SettingsJson.cs" />
+    <Compile Include="../../src/Server/WorldData.cs" Link="Mod/WorldData.cs" />
+    <Compile Include="../../src/Server/WorldDataRules.cs" Link="Mod/WorldDataRules.cs" />
+    <Compile Include="../../src/Server/GameData/*.cs" LinkBase="Mod/GameData" />
+    <Compile Include="../../src/Server/LootLoop.cs" Link="Mod/LootLoop.cs" />
+    <Compile Include="../../src/Server/KilnGame.cs" Link="Mod/KilnGame.cs" />
+    <Compile Include="../../src/Server/IGame.cs" Link="Mod/IGame.cs" />
+    <Compile Include="../../src/Server/Release.cs" Link="Mod/Release.cs" />
+    <Compile Include="../../src/Server/CandidateIndex.cs" Link="Mod/CandidateIndex.cs" />
+    <Compile Include="../../src/Server/PlayerLoot.cs" Link="Mod/PlayerLoot.cs" />
+    <Compile Include="../../src/Server/LootCounters.cs" Link="Mod/LootCounters.cs" />
+    <Compile Include="../../src/Server/NearReport.cs" Link="Mod/NearReport.cs" />
+    <Compile Include="../../src/Server/ProbeTrace.cs" Link="Mod/ProbeTrace.cs" />
+    <Compile Include="../../src/Server/SightAnswer.cs" Link="Mod/SightAnswer.cs" />
+    <Compile Include="../../src/Server/TickClock.cs" Link="Mod/TickClock.cs" />
+    <Compile Include="../../src/Server/SmashTable.cs" Link="Mod/SmashTable.cs" />
+    <Compile Include="../../src/Client/SightRayOverlay.cs" Link="Mod/SightRayOverlay.cs" />
+  </ItemGroup>
+</Project>
