@@ -457,26 +457,34 @@ internal sealed class LootServer(Data data)
         if (_enabled) Salvage(s => s.Arrived(e));
     }
 
-    /// <summary>Smash.Run once per second per player (the smash rhythm).</summary>
+    /// <summary>A new Smash pass once per second per player (the smash rhythm); a pass that did not finish in its server
+    /// step goes on in the next ones (Smash.Resume) until the next pass is due.</summary>
     private void SmashStep()
     {
         if (_loop is null || _config is null) return;
         var now = _clock.NowMs;
         foreach (var (entity, state) in _loop.Players)
         {
-            if (now < state.NextSmashMs || !_loop.Acts(entity)) continue;   // nothing before their own settings
-            state.NextSmashMs = now + 1000;
-            if (Kiln.Players.Find(entity) is not { State: PlayerState.InGame, IsDead: false, Position: { } at }) continue;
+            var due = now >= state.NextSmashMs;
+            if (!due && !_smash.Pending(entity)) continue;
+            if (!_loop.Acts(entity)) continue;   // nothing before their own settings
+            if (due) state.NextSmashMs = now + 1000;
+            if (Kiln.Players.Find(entity) is not { State: PlayerState.InGame, IsDead: false, Position: { } at })
+            {
+                _smash.PlayerLeft(entity);   // dead or not in the game: no unfinished pass carries on
+                continue;
+            }
             _smash.Hit = _config.Value.CounterLog ? (t, kind, sw) => SmashLine(entity, t, kind, sw) : null;
             var started = LootLoop.StopwatchMicros();
-            _smash.Run(entity, at, state.Settings, _config.Value.Limits);
+            if (due) _smash.Run(entity, at, state.Settings, _config.Value.Limits);
+            else _smash.Resume(entity, state.Settings, _config.Value.Limits);
             var spent = LootLoop.StopwatchMicros() - started;
             if (spent > LootLoop.SlowStepMicros && _loop.SlowLineDue(now))
             {
                 var w = _smash.LastRun;
                 KeyLine($"slow smash: {LootLoop.Ms(spent)} ms in one server step for player {entity}: {w.InReach} candidates in reach, " +
                         $"{w.Looked} looked at, {w.New} new (Spawn.Inspect {LootLoop.Ms(w.InspectMicros)} ms, slowest call " +
-                        $"{LootLoop.Ms(w.SlowestInspect)} ms){(w.Stopped ? "; the rest waits for the next second" : "")}");
+                        $"{LootLoop.Ms(w.SlowestInspect)} ms){(w.Stopped ? "; the rest goes on in the next server step" : "")}");
             }
         }
     }
