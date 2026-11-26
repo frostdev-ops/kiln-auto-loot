@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.12
+- **Smashing keeps up again.** In a ruin, with many props out of sight close by (the next room, a cellar or the floor below, all within your radius), smashing could stall: one barrel broke, then nothing for a minute or more while barrels stood in plain view right next to you. Each second the mod started again at the nearest props, the game's line-of-sight checks for that moment ran out on the ones you can't see, and it never got to the ones you can. It now carries on in the next moments where it stopped, so everything in view gets its turn: a room full of barrels, crates and urns breaks within a few seconds, up to four a second, nearest first, as designed. Server time stays bounded (each prop in reach is looked at once a second at most).
+- **Barrels on a stack or a shelf are seen.** The check looked at a point well above each prop, which under a low ceiling is in the ceiling, so stacked barrels and things on shelves counted as out of sight. It now looks at the prop itself first, then at the point above it. Behind a wall or under the floor stays out of sight.
+- **A check that can't answer no longer turns "Only what I can see" off for everything.** When the game couldn't answer one check (a part of the world not loaded yet), smashing went by the height window alone for 5 s and could break things behind walls and under the floor. Now only that one prop waits for the height window; everything else still goes by what you can see.
+- The **Smash things around me** help now says that off means nothing is broken at all, and that the switches below it need it.
+- Thanks to HadToRegister for the report and for comparing it with Auto Loot Plus.
+- Requires Kiln 0.2.0-dev.30.6 or later.
+
 ## 0.2.11
 - **Fire fly swarms without their pickup part are collected.** In some setups the game data shows the fire fly swarm (`Lootpickup_Scatter_VFX_Bait_T1_Fire_Fly_Above`) without the pickup part it normally has, and Auto Loot left it out of its table. A bait swarm is now recognised by what it is (its stock of fishing bait, the game's loot offer, no model, no creature) with or without that part, and taken as a critter like the others. Nothing else is classified differently. Thanks to Tyrion67 for the report and the kiln.log line.
 - Requires Kiln 0.2.0-dev.30.6 or later.

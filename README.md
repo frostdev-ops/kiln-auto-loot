@@ -30,8 +30,10 @@ notes run in each player's game.
   only once it is empty); `kiln/logs/kiln.log` has a `loot:` line for each corpse, chest or creature pile that kept
   something, saying what and why. Old books lying in villages and ruins stay put unless you switch **Old books** on,
   and even then not in or near a base, where they may be part of the décor.
-- **Smashes** barrels, crates, pots and wrecked furniture around you once a second, never in a base. Optional:
-  furniture players could build (only well away from a base), bee hives, and, experimental, trees.
+- **Smashes** barrels, crates, pots and wrecked furniture around you, up to four a second, nearest first, never in a
+  base. With "Only what I can see" on, only what you can see: a barrel on a stack or a shelf in the room counts, the
+  room next door or the cellar below doesn't. Optional: furniture players could build (only well away from a base),
+  bee hives, and, experimental, trees.
 - **Bigger stacks**: every stackable item up to 9999 by default (at most 65535, 0 = the game's own sizes).
 - **Pauses** while a game window is open (a chest, crafting, a dialogue, the inventory, the map, the pause menu), and,
   if you switch it on, while an enemy is near.
@@ -92,7 +94,7 @@ notes run in each player's game.
   in the player's own game); things are still picked up.
 - **Line of sight** ("only take what I can see") needs Kiln's line-of-sight checks (queries.line_of_sight). Where a
   game or server doesn't have them, or they don't answer yet while a world loads, the height window decides instead,
-  and the window says so.
+  and the window says so. For smashing, a check that doesn't answer leaves only that one prop to the height window.
 
 ## Requirements
 Kiln 0.2.0-dev.30.6 or later, on the server and (for the window, the keys and the notes) in each player's game.

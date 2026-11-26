@@ -133,8 +133,8 @@ public static class Texts
 
         // Smashing
         new("smash", "smashing", "Smash things around me", "Zertrümmern",
-            "Breaks barrels, crates, baskets, pots, urns and wrecked furniture within the radius, once a second. Never in a base.",
-            "Zertrümmert Fässer, Kisten, Körbe, Krüge, Urnen und kaputte Möbel im Radius, einmal pro Sekunde. In einer Basis nie."),
+            "Breaks barrels, crates, baskets, pots, urns and wrecked furniture within the radius, up to four a second, nearest first. Never in a base. Off: the mod breaks nothing; the switches below need this one.",
+            "Zertrümmert Fässer, Kisten, Körbe, Krüge, Urnen und kaputte Möbel im Radius, bis zu vier pro Sekunde, die nächsten zuerst. In einer Basis nie. Aus: Die Mod zertrümmert nichts; die Schalter darunter brauchen diesen hier."),
         new("smashBuildables", "smashing", "Also buildable furniture", "Auch baubare Möbel",
             "Also breaks furniture players could build themselves, such as barrels, bales and tables, but only while you are well away from any base.",
             "Zertrümmert auch Möbel, die Spieler selbst bauen können, etwa Fässer, Ballen und Tische, aber nur, wenn du weit genug von jeder Basis weg bist."),
