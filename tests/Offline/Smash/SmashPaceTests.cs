@@ -37,7 +37,17 @@ public sealed class SmashPaceTests
         private int _raysThisStep;
         private uint _next = 100;
 
-        public void NewStep() => _raysThisStep = RaysTakenByOthers;
+        public void NewStep()
+        {
+            _raysThisStep = RaysTakenByOthers;
+            RayMicrosThisStep = 0;
+        }
+
+        /// <summary>Rays smashing cast in this step (the others' not counted), and their time.</summary>
+        public int SmashRaysThisStep => _raysThisStep - RaysTakenByOthers;
+        public long RayMicrosThisStep;
+        /// <summary>Rays the game would still admit in this step (for a mod that asks after Auto Loot).</summary>
+        public int RaysLeft => RaysPerStep is { } max ? Math.Max(0, max - _raysThisStep) : int.MaxValue;
 
         public EntityId Add(Guid template, double x, double y = 0, double z = 0, Sight sight = Sight.Visible)
         {
@@ -83,12 +93,14 @@ public sealed class SmashPaceTests
             if (RaysPerStep is { } max && _raysThisStep >= max) return Sight.Later;   // BudgetExceeded: no ray cast
             _raysThisStep++;
             Micros += RayCostMicros;
+            RayMicrosThisStep += RayCostMicros;
             SightCalls[target] = SightCalls.GetValueOrDefault(target) + 1;
             return SightAt.TryGetValue((target, toHeight), out var at) ? at : SightOf.GetValueOrDefault(target, Sight.Visible);
         }
     }
 
     private long _now = 1_000_000, _nextPass;
+    private long _stepMs = StepMs;
     private readonly FakeWorld _world = new();
     private readonly global::KilnAutoLoot.Server.Smash _smash;
 
@@ -111,9 +123,10 @@ public sealed class SmashPaceTests
     {
         limits ??= new ServerLimits();
         var end = _now + (long)(seconds * 1000);
-        for (; _now < end; _now += StepMs)
+        for (; _now < end; _now += _stepMs)
         {
             _world.NewStep();
+            _smash.BeginStep(1);
             if (_now >= _nextPass)
             {
                 _nextPass = _now + 1000;
@@ -180,8 +193,8 @@ public sealed class SmashPaceTests
     public void A_pass_looks_at_each_prop_once_and_keeps_to_the_run_budget_in_every_step()
     {
         _world.RaysPerStep = 64;
-        _world.RayCostMicros = 100;
-        _world.InspectCostMicros = 20;
+        _world.RayCostMicros = 5;
+        _world.InspectCostMicros = 600;   // the step's time runs out on reading new templates (a village after a fast travel)
         var (hidden, _) = Cellar(hiddenCount: 200, seen: 0);
         long worst = 0;
         var before = _world.Micros;
@@ -192,8 +205,8 @@ public sealed class SmashPaceTests
         });
         // one look each, and the pass got to all of them: a hidden prop is two rays (its body, then the point above)
         Assert.All(hidden, e => Assert.Equal(2, _world.SightCalls.GetValueOrDefault(e)));
-        // at most one look (two rays) beyond the budget in any step
-        Assert.True(worst <= global::KilnAutoLoot.Server.Smash.RunBudgetMicros + 2 * 100 + 20, $"{worst} us in one step");
+        // at most one look (a template read and two rays) beyond the budget in any step
+        Assert.True(worst <= global::KilnAutoLoot.Server.Smash.RunBudgetMicros + 600 + 2 * 5, $"{worst} us in one step");
         Assert.Empty(_world.Hits);
     }
 
@@ -204,6 +217,7 @@ public sealed class SmashPaceTests
         Cellar();
         // the first step starts the pass and runs out of rays on the urns; then smashing is switched off
         _world.NewStep();
+        _smash.BeginStep(1);
         _nextPass = _now + 1000;
         _smash.Run(Player, Origin, S(), new ServerLimits());
         Assert.True(_smash.Pending(Player));
@@ -213,6 +227,7 @@ public sealed class SmashPaceTests
 
         _now = _nextPass;
         _world.NewStep();
+        _smash.BeginStep(1);
         _nextPass = _now + 1000;
         _smash.Run(Player, Origin, S(), new ServerLimits());
         Assert.True(_smash.Pending(Player));
@@ -228,6 +243,7 @@ public sealed class SmashPaceTests
         _world.RaysPerStep = 64;
         Cellar();
         _world.NewStep();
+        _smash.BeginStep(1);
         _smash.Run(Player, Origin, S(), new ServerLimits());
         Assert.True(_smash.Pending(Player));
         _smash.PlayerLeft(Player);
@@ -296,5 +312,122 @@ public sealed class SmashPaceTests
         ServerSteps(3, S());
         Assert.Contains(_world.Hits, h => h.Target == buried);
         Assert.DoesNotContain(_world.Hits, h => h.Target == walled);
+    }
+
+    // ---- review of 0.2.12: a pass that goes on across server steps must leave the rest of every step to the others.
+    //      Kiln.Queries: every mod's rays and every creature's sight share 64 rays and 500 us a step; a dedicated server
+    //      steps at 24.5 Hz. Before the review a pass took every ray the game had left, step after step, while props in
+    //      reach were unanswered, so a mod (or a creature brain) asking after Auto Loot got none in those steps.
+
+    private const int RayShare = global::KilnAutoLoot.Server.Smash.MaxRaysPerStep;              // a quarter of the game's 64
+    private const long RayTimeShare = global::KilnAutoLoot.Server.Smash.MaxRayMicrosPerStep;    // a quarter of the game's 500 us
+    private const long DedicatedStepMs = 41;    // 24.5 Hz
+
+    /// <summary>LootServer.SmashStep for several players: a pass a second for each, the rest in the next steps, one
+    /// step's smash time and rays shared, the players taking turns going first.</summary>
+    private void ServerStepsFor(double seconds, IReadOnlyList<(EntityId Player, Func<WorldPosition> At)> players,
+        PersonalSettings s, Action? eachStep = null)
+    {
+        var limits = new ServerLimits();
+        var next = players.ToDictionary(p => p.Player, _ => _now);
+        var end = _now + (long)(seconds * 1000);
+        for (; _now < end; _now += _stepMs)
+        {
+            _world.NewStep();
+            var first = _smash.BeginStep(players.Count);   // as LootServer.SmashStep: the players take turns going first
+            for (var i = 0; i < players.Count; i++)
+            {
+                var (player, at) = players[(first + i) % players.Count];
+                if (_now >= next[player])
+                {
+                    next[player] = _now + 1000;
+                    _smash.Run(player, at(), s, limits);
+                }
+                else if (_smash.Pending(player)) _smash.Resume(player, s, limits);
+            }
+            eachStep?.Invoke();
+        }
+    }
+
+    /// <summary>A cellar of <paramref name="hiddenCount"/> urns out of sight under <paramref name="at"/> (every one
+    /// nearer than the barrels) and <paramref name="seen"/> barrels in view 6.6 m away.</summary>
+    private (List<EntityId> Hidden, List<EntityId> Seen) CellarAt(WorldPosition at, int hiddenCount, int seen)
+    {
+        var hidden = new List<EntityId>();
+        for (var i = 0; i < hiddenCount; i++)
+            hidden.Add(_world.Add(TSmash, at.X - 3 + (i % 11) * 0.6, at.Y - 4.4 + (i / 121) * 0.3, at.Z - 3 + (i / 11 % 11) * 0.6, Sight.Hidden));
+        var visible = new List<EntityId>();
+        for (var i = 0; i < seen; i++)
+        {
+            var ang = i * Math.PI * 2 / seen;
+            visible.Add(_world.Add(TSmash, at.X + Math.Cos(ang) * 6.6, at.Y, at.Z + Math.Sin(ang) * 6.6));
+        }
+        return (hidden, visible);
+    }
+
+    [Fact]
+    public void On_a_dedicated_server_smashing_casts_at_most_a_quarter_of_the_game_rays_a_step_and_still_reaches_the_barrels()
+    {
+        _stepMs = DedicatedStepMs;
+        _world.RaysPerStep = 64;
+        var (hidden, seen) = Cellar();
+        int most = 0, othersShort = 0;
+        ServerSteps(4, S(), eachStep: () =>
+        {
+            most = Math.Max(most, _world.SmashRaysThisStep);
+            if (_world.RaysLeft < 64 - RayShare) othersShort++;   // a mod asking after Auto Loot found less than 48
+        });
+        Assert.True(most <= RayShare, $"smashing cast {most} rays in one step");
+        Assert.Equal(0, othersShort);
+        Assert.All(seen, e => Assert.DoesNotContain(e, _world.Entities.Keys));   // all 8 barrels in view within 4 s
+        Assert.DoesNotContain(_world.Hits, h => hidden.Contains(h.Target));
+    }
+
+    [Fact]
+    public void On_slow_rays_smashing_keeps_to_a_quarter_of_the_step_ray_time()
+    {
+        _stepMs = DedicatedStepMs;
+        _world.RaysPerStep = 64;
+        _world.RayCostMicros = 50;   // a slow PC: the game's 500 us hold ten of these
+        Cellar(hiddenCount: 120);
+        long most = 0;
+        ServerSteps(3, S(), eachStep: () => most = Math.Max(most, _world.RayMicrosThisStep));
+        // at most one look (two rays) beyond the share
+        Assert.True(most <= RayTimeShare + 2 * 50, $"smashing spent {most} us on rays in one step");
+    }
+
+    [Fact]
+    public void Players_share_one_step_budget_and_take_turns_so_a_ruin_with_many_props_does_not_starve_another_player()
+    {
+        _stepMs = DedicatedStepMs;
+        _world.RaysPerStep = 64;
+        _world.InspectCostMicros = 20;
+        _world.RayCostMicros = 2;
+        // player 1 stands over a huge field of props out of sight: more than the game's whole budget could answer in
+        // time, so its pass always wants rays
+        var p1 = new EntityId(1);
+        var p1At = new WorldPosition(0, 0, 0);
+        var field = new List<EntityId>();
+        for (var i = 0; i < 1500; i++)
+            field.Add(_world.Add(TSmash, -6 + (i % 20) * 0.6, -2 - (i / 400) * 0.5, -6 + (i / 20 % 20) * 0.6, Sight.Hidden));
+        // player 2, 200 m away, at a small cellar with barrels in view
+        var p2 = new EntityId(2);
+        var p2At = new WorldPosition(200, 0, 0);
+        var (hidden2, seen2) = CellarAt(p2At, hiddenCount: 40, seen: 4);
+        int most = 0;
+        long mostMicros = 0, before = _world.Micros;
+        long? p2Done = null;
+        var start = _now;
+        ServerStepsFor(3, [(p1, () => p1At), (p2, () => p2At)], S(), () =>
+        {
+            most = Math.Max(most, _world.SmashRaysThisStep);
+            mostMicros = Math.Max(mostMicros, _world.Micros - before);
+            before = _world.Micros;
+            if (p2Done is null && seen2.All(e => !_world.Entities.ContainsKey(e))) p2Done = _now - start;
+        });
+        Assert.True(most <= RayShare, $"{most} rays in one step, both players together");
+        Assert.True(mostMicros <= global::KilnAutoLoot.Server.Smash.RunBudgetMicros + 2 * 2 + 20, $"{mostMicros} us in one step, both players together");
+        Assert.True(p2Done is not null && p2Done <= 2000, $"player 2's barrels done at {p2Done} ms");
+        Assert.DoesNotContain(_world.Hits, h => field.Contains(h.Target) || hidden2.Contains(h.Target));
     }
 }

@@ -139,7 +139,12 @@ public sealed class SmashRunTests
         return s;
     }
 
-    private void Run(PersonalSettings s, ServerLimits? limits = null) => _smash.Run(Player, Origin, s, limits ?? new ServerLimits());
+    /// <summary>One server step with a new pass (each run its own step, as LootServer.SmashStep starts it).</summary>
+    private void Run(PersonalSettings s, ServerLimits? limits = null)
+    {
+        _smash.BeginStep(1);
+        _smash.Run(Player, Origin, s, limits ?? new ServerLimits());
+    }
 
     private bool HitOnce(Guid template, PersonalSettings s, ServerLimits? limits = null)
     {
@@ -364,10 +369,12 @@ public sealed class SmashRunTests
     [Fact] public void The_candidate_list_is_shared_by_players_in_the_same_moment()
     {
         _world.Add(TSmash, 2);
+        _smash.BeginStep(2);
         _smash.Run(Player, Origin, S(), new ServerLimits());
         _smash.Run(new EntityId(2), Origin, S(), new ServerLimits());
         Assert.Equal(1, _world.CandidateCalls);
         _now += global::KilnAutoLoot.Server.Smash.CandidateCacheMs;
+        _smash.BeginStep(2);
         _smash.Run(Player, Origin, S(), new ServerLimits());
         Assert.Equal(2, _world.CandidateCalls);
     }

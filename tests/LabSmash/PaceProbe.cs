@@ -114,6 +114,7 @@ public sealed class Pace
         for (var i = 0; i < seconds;)
         {
             var at = World.Position(stand) ?? at0;
+            smash.BeginStep(1);   // as LootServer.SmashStep: a server step's smash time and rays start from nothing
             if (Environment.TickCount64 >= next)
             {
                 next += 1000;

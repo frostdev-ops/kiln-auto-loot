@@ -7,14 +7,16 @@
 // one-target program per hit (SmashHit). Because the loop runs in C#:
 //   - at most SmashRules.MaxTargetsPerStep (4) targets per player per pass (per second), nearest first;
 //   - a pass looks at the targets nearest first and ends at the 4 nearest wanted ones or at the end of the list. In one
-//     server step it spends at most RunBudgetMicros, and it stops for the step when the game's shared ray budget is spent
-//     (Kiln.Queries: 64 rays or 500 us a step, for every mod); then it goes on from there in the next step, until the
-//     next pass starts a second later. Before 0.2.12 the rest waited for the next second's pass, which began again at the
-//     nearest target: with more props out of sight near the player than one step's rays cover (a cellar or the next room
-//     of a ruin, inside 15 m), every pass spent its rays on the same nearest hidden ones, their answers ran out before
-//     the pass came back to them, and props in plain view behind them were not looked at for a minute or more
-//     (HadToRegister, 2026-11-26; lab: tests/LabSmash Pace_cellar_below). A pass looks at each target at most once, so a
-//     second costs at most one look at what is in reach;
+//     server step all players' passes together spend at most RunBudgetMicros and cast at most MaxRaysPerStep rays in at
+//     most MaxRayMicrosPerStep (a quarter of the game's shared ray budget, Kiln.Queries: 64 rays and 500 us a step for
+//     every mod and every creature's sight), and a pass stops for the step when either is spent or the game refuses a
+//     ray (BudgetExceeded); then it goes on from there in the next step, until the next pass starts a second later.
+//     LootServer.SmashStep lets the players take turns going first (BeginStep). Before 0.2.12 the rest waited for the
+//     next second's pass, which began again at the nearest target: with more props out of sight near the player than
+//     one step's rays cover (a cellar or the next room of a ruin, inside 15 m), every pass spent its rays on the same
+//     nearest hidden ones, their answers ran out before the pass came back to them, and props in plain view behind them
+//     were not looked at for a minute or more (HadToRegister, 2026-11-26; lab: tests/LabSmash Pace_cellar_below). A
+//     pass looks at each target at most once, so a second costs at most one look at what is in reach;
 //     each target's template is read once (Spawn.Inspect) and kept while it stays in reach;
 //   - a target is hit again only after RetryMs (it needs a step or two to break), and after MaxTries hits that did
 //     not break it, it is left alone for GiveUpMs (otherwise one target that never breaks would hold a slot forever);
@@ -34,7 +36,12 @@ internal sealed class Smash
 {
     public const long CandidateCacheMs = 250, RetryMs = 1500, GiveUpMs = 30_000;
     public const int MaxTries = 3;
-    public const long RunBudgetMicros = 4_000;   // a pass's look at the targets in one server step; it goes on in the next
+    public const long RunBudgetMicros = 4_000;   // all passes' looks in one server step; a pass goes on in the next
+    // Smashing's share of the game's ray budget in one server step, all players together: a quarter of the 64 rays and of
+    // the 500 us that every mod's rays and every creature's sight share (Kiln.Queries), so a pass that goes on step after
+    // step leaves the rest of every step to them (review of 0.2.12: a pass took every ray the game had left).
+    public const int MaxRaysPerStep = 16;
+    public const long MaxRayMicrosPerStep = 125;
     public const long KnownForgetMs = 2_500;     // a template kept for a target no Run saw this long is read again
     public const long SightCacheMs = 1_500;      // a line-of-sight answer per player and target is kept this long
     public const long SightRetryMs = 5_000;      // a target's check did not answer: the height window judges it this long
@@ -60,6 +67,9 @@ internal sealed class Smash
 
     // per player: the pass that is not finished yet
     private readonly Dictionary<uint, Pass> _passes = new();
+    // this server step (BeginStep): smashing's time, rays and ray time, every player's pass together; whose turn it is
+    private long _stepMicros, _stepRayMicros;
+    private int _stepRays, _turn;
 
     internal RunWork LastRun { get; private set; }
 
@@ -125,6 +135,7 @@ internal sealed class Smash
         _candidates = [];
         _candidatesAt = null;
         _passes.Clear();
+        BeginStep(0);
         _tries.Clear();
         _known.Clear();
         _sight.Clear();
@@ -155,6 +166,17 @@ internal sealed class Smash
         if (!pass.Done) _passes[player.Value] = pass;
     }
 
+    /// <summary>At the start of every server step, before any player's Run or Resume (LootServer.SmashStep): the step's
+    /// smash time and rays start from nothing. Returns the index of the player (of <paramref name="players"/>) who goes
+    /// first in this step: they take turns, so one player's pass that wants every ray never leaves another without.</summary>
+    public int BeginStep(int players)
+    {
+        _stepMicros = _stepRayMicros = 0;
+        _stepRays = 0;
+        if (players <= 0) return _turn = 0;
+        return _turn = (_turn + 1) % players;
+    }
+
     /// <summary>The player has a pass that goes on in the next server step (call <see cref="Resume"/> then).</summary>
     public bool Pending(EntityId player) => _passes.ContainsKey(player.Value);
 
@@ -175,8 +197,9 @@ internal sealed class Smash
         if (pass.Done) _passes.Remove(player.Value);
     }
 
-    /// <summary>One server step of a pass: from where it stopped, nearest first, until it has its 4, the list ends, this
-    /// step's RunBudgetMicros are spent or the game's ray budget is (then it stops at that target, to ask again).</summary>
+    /// <summary>One server step of a pass: from where it stopped, nearest first, until it has its 4, the list ends, the
+    /// step's RunBudgetMicros are spent (all players together) or the step's rays are (smashing's share or the game's
+    /// budget: then it stops at that target, to ask again).</summary>
     private void Slice(EntityId player, Pass pass, PersonalSettings s, SmashSwitches sw, SmashTable table, long now)
     {
         var position = pass.Position;
@@ -194,7 +217,7 @@ internal sealed class Smash
         {
             var e = inReach[pass.Next];
             if (pass.Hits + wanted.Count >= SmashRules.MaxTargetsPerStep) break;   // the nearest wanted ones are found
-            if (looked > 0 && _micros() - started >= RunBudgetMicros)
+            if (looked > 0 && _stepMicros + (_micros() - started) >= RunBudgetMicros)
             {
                 stopped = true;   // the rest goes on in the next server step
                 break;
@@ -235,7 +258,7 @@ internal sealed class Smash
                 var seen = Look(player, target, now);
                 if (seen == Sight.Later)
                 {
-                    stopped = true;   // the game's ray budget of this step is spent: ask this one again in the next step
+                    stopped = true;   // this step's rays are spent (ours or the game's): ask this one again in the next step
                     break;
                 }
                 if (seen == Sight.Hidden)
@@ -264,6 +287,7 @@ internal sealed class Smash
             _world.Hit(player, target, kind);
             Hit?.Invoke(target, kind, sw);
         }
+        _stepMicros += _micros() - started;
     }
 
     public void PlayerLeft(EntityId player) => _passes.Remove(player.Value);   // the tries belong to the targets
@@ -271,15 +295,17 @@ internal sealed class Smash
     /// <summary>Line of sight from the player to the target, at the prop itself and, when that is blocked, at the point
     /// above it: Visible (either is clear) or Hidden (both are blocked, or the second did not answer), kept
     /// <see cref="SightCacheMs"/>; Unknown (the first check did not answer: the height window judges this target), kept
-    /// <see cref="SightRetryMs"/>; Later: the game's ray budget of this server step is spent, nothing is kept (both are
-    /// asked again in the next step).</summary>
+    /// <see cref="SightRetryMs"/>; Later: this server step's rays are spent (smashing's share, MaxRaysPerStep and
+    /// MaxRayMicrosPerStep, or the game's budget), nothing is kept (both are asked again in the next step).</summary>
     private Sight Look(EntityId player, in SmashTarget t, long now)
     {
         var key = (player.Value, t.Entity.Value);
         if (_sight.TryGetValue(key, out var c) && c.Until > now && c.Serial == t.Serial && c.Stamp == t.Stamp) return c.Answer;
-        var answer = _world.LineOfSight(player, t.Entity, BodySightHeight);
+        // a look takes up to two rays: with fewer left of smashing's share in this step it waits for the next
+        if (_stepRays + 2 > MaxRaysPerStep || _stepRayMicros >= MaxRayMicrosPerStep) return Sight.Later;
+        var answer = Ray(player, t.Entity, BodySightHeight);
         if (answer == Sight.Hidden)
-            answer = _world.LineOfSight(player, t.Entity, AboveSightHeight) switch
+            answer = Ray(player, t.Entity, AboveSightHeight) switch
             {
                 Sight.Visible => Sight.Visible,
                 Sight.Later => Sight.Later,
@@ -287,6 +313,17 @@ internal sealed class Smash
             };
         if (answer == Sight.Later) return answer;   // the pass asks again in the next step
         _sight[key] = (now + (answer == Sight.Unknown ? SightRetryMs : SightCacheMs), t.Serial, t.Stamp, answer);
+        return answer;
+    }
+
+    /// <summary>One line-of-sight ray, counted against smashing's share of the step (a BudgetExceeded refusal casts
+    /// nothing; its time still counts).</summary>
+    private Sight Ray(EntityId player, EntityId target, double height)
+    {
+        var t0 = _micros();
+        var answer = _world.LineOfSight(player, target, height);
+        _stepRayMicros += _micros() - t0;
+        if (answer != Sight.Later) _stepRays++;
         return answer;
     }
 

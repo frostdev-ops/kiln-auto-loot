@@ -457,14 +457,22 @@ internal sealed class LootServer(Data data)
         if (_enabled) Salvage(s => s.Arrived(e));
     }
 
+    // SmashStep's players in this step, in turn order (kept to spare a list a step)
+    private readonly List<(EntityId Entity, PlayerLoot State)> _smashOrder = [];
+
     /// <summary>A new Smash pass once per second per player (the smash rhythm); a pass that did not finish in its server
-    /// step goes on in the next ones (Smash.Resume) until the next pass is due.</summary>
+    /// step goes on in the next ones (Smash.Resume) until the next pass is due. All players' smashing shares one step's
+    /// time and rays (Smash.BeginStep), and the players take turns going first.</summary>
     private void SmashStep()
     {
         if (_loop is null || _config is null) return;
         var now = _clock.NowMs;
-        foreach (var (entity, state) in _loop.Players)
+        _smashOrder.Clear();
+        foreach (var (entity, state) in _loop.Players) _smashOrder.Add((entity, state));
+        var first = _smash.BeginStep(_smashOrder.Count);
+        for (var i = 0; i < _smashOrder.Count; i++)
         {
+            var (entity, state) = _smashOrder[(first + i) % _smashOrder.Count];
             var due = now >= state.NextSmashMs;
             if (!due && !_smash.Pending(entity)) continue;
             if (!_loop.Acts(entity)) continue;   // nothing before their own settings

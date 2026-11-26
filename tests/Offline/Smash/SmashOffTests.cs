@@ -83,6 +83,7 @@ public sealed class SmashOffTests
     {
         _now += 1000;
         _world.Hits.Clear();
+        _smash.BeginStep(1);
         _smash.Run(new EntityId(1), new WorldPosition(0, 0, 0), inEffect, limits);
         return [.. _world.Hits];
     }
