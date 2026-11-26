@@ -62,7 +62,8 @@ notes run in each player's game.
   action bar, kept and quest items, gear with a gem and everything in chests are never touched. Give "Salvage marked
   gear" a key in Kiln's Keys page if you like (no key by default).
 - **Bag-aware**: top up only the stacks you already carry, keep some bag slots free, or stop at a set amount of an item
-  or a whole category ("500 wood logs").
+  or a whole category ("500 wood logs"). Kept slots are backpack slots (the action bar does not count); plants, crops
+  and creature piles are still collected while there is room above them.
 
 ## Using it
 - **F8** opens the settings window; **F9** turns auto loot on and off; **F11** turns the gather focus on and off.

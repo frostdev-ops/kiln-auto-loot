@@ -11,5 +11,5 @@ public sealed class VersionTests
         Assert.Equal(typeof(AutoLootMod).Assembly.GetName().Version!.ToString(3), AutoLootMod.Version);
 
     [Fact]
-    public void This_release_is_0_2_12() => Assert.Equal("0.2.12", AutoLootMod.Version);
+    public void This_release_is_0_2_13() => Assert.Equal("0.2.13", AutoLootMod.Version);
 }

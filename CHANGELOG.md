@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.2.13
+- **Plants and corpses are collected again with "Keep bag slots free" on.** With the setting at anything above 0,
+  bushes, herbs, reeds, ripe crops and the piles creatures leave (bones, bat fur, critter parts) were never collected,
+  while things on the ground were. These have no inventory of their own that the mod can look into before taking
+  them, and the setting refused everything it could not count. It only needs to know how many new stacks a take
+  starts, and the game data says what each one gives: anything you already carry a stack of tops that stack up,
+  everything else needs one free slot above the ones you keep. Plants, crops, piles and corpses are now collected
+  until only your kept slots are left, as the setting says.
+- **Kept slots are backpack slots.** Empty slots on your action bar counted as free bag slots, so with a few of them
+  empty the mod could fill your whole backpack, and loot it tried to move from a corpse into the action bar was
+  refused by the game. Only the backpack counts now.
+- "Only fill stacks I carry" and carry limits still leave plants, crops and piles whose amounts cannot be seen, as
+  before (they count items, not slots).
+- Thanks to Celphia26 for the report.
+- Requires Kiln 0.2.0-dev.30.6 or later.
+
 ## 0.2.12
 - **Smashing keeps up again.** In a ruin, with many props out of sight close by (the next room, a cellar or the floor below, all within your radius), smashing could stall: one barrel broke, then nothing for a minute or more while barrels stood in plain view right next to you. Each second the mod started again at the nearest props, the game's line-of-sight checks for that moment ran out on the ones you can't see, and it never got to the ones you can. It now carries on in the next moments where it stopped (judging reach from where you are then), so everything in view gets its turn: a room full of barrels, crates and urns breaks within a few seconds, up to four a second, nearest first, as designed. While you stand still, something out of sight is checked again only after 5 s, so the mod gets on to what you can see sooner.
 - **Smashing leaves the game's line-of-sight checks to other mods and creatures.** The game allows only so many of these checks in a moment, shared by every mod and every creature's sight. Smashing now uses at most a quarter of them in any moment, all players together, and players take turns, so one player's ruin can't hold up another player's smashing. Server time stays bounded: each prop in reach is looked at once a second at most.

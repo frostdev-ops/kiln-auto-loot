@@ -118,7 +118,9 @@ rules and what a dedicated server can show without a player. Everything below ne
       or smashed. 0 = no limit.
 - [ ] Fill carried stacks: with 30 of 50 sticks in your bag, a pickup of 15 is taken, one of 25 stays; from a chest of
       40 sticks, 20 move and 20 stay.
-- [ ] Keep 2 free slots: when only 2 are left, only stacks you carry are topped up.
+- [ ] Keep 2 free slots: when only 2 are left, only stacks you carry are topped up. 0.2.13: with more free, bushes,
+      reeds, crops, bones and bat fur piles and corpses are still collected until 2 backpack slots are left (empty
+      action-bar slots do not count as free).
 - [ ] Carry limit "=<logs>:100" (from the editor): the mod stops at 100 logs.
 - [ ] A broken `profiles.json` (edit it badly by hand) does not stop the game; it is kept as `profiles.json.bad`.
 
