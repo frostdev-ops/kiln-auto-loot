@@ -4,10 +4,10 @@
 - **Plants and corpses are collected again with "Keep bag slots free" on.** With the setting at anything above 0,
   bushes, herbs, reeds, ripe crops and the piles creatures leave (bones, bat fur, critter parts) were never collected,
   while things on the ground were. These have no inventory of their own that the mod can look into before taking
-  them, and the setting refused everything it could not count. It only needs to know how many new stacks a take
-  starts, and the game data says what each one gives: anything you already carry a stack of tops that stack up,
-  everything else needs one free slot above the ones you keep. Plants, crops, piles and corpses are now collected
-  until only your kept slots are left, as the setting says.
+  them, and the setting refused everything it could not count. The game data says what each one gives and how much
+  at most (with your world's Loot Amount): a stack you carry is topped up when it has room for all of that, and
+  everything else needs a free slot above the ones you keep, so a nearly full stack never spills into a kept slot.
+  Plants, crops, piles and corpses are now collected until only your kept slots are left, as the setting says.
 - **Kept slots are backpack slots.** Empty slots on your action bar counted as free bag slots, so with a few of them
   empty the mod could fill your whole backpack, and loot it tried to move from a corpse into the action bar was
   refused by the game. Only the backpack counts now.

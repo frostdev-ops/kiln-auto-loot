@@ -114,6 +114,10 @@ internal interface IGame
     /// also when kiln.content could not apply it).</summary>
     int StackSizeWish { get; }
 
+    /// <summary>The world's Loot Amount (game setting resourceDropStackAmountFactor, 0.25-2): the game scales every
+    /// default inventory's counts by it when it hands one over. 2, the largest, when it cannot be read.</summary>
+    double LootAmountFactor { get; }
+
     /// <summary>The server can check line of sight (capability queries.line_of_sight, and no call said otherwise).</summary>
     bool SightAvailable { get; }
 

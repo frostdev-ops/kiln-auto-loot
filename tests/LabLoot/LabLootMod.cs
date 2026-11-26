@@ -163,7 +163,9 @@ public sealed class Probe
             }
             await t.Delay(TimeSpan.FromSeconds(1.5));
             var tpl = Spawn.Inspect(e)?.Template;
-            var rule = tpl is { } g && _data!.Templates.TryGet(g, out var r) ? $"{r.Group} {r.Flags} yield [{string.Join(", ", r.Yield.Select(Name))}]" : "not in the table";
+            var rule = tpl is { } g && _data!.Templates.TryGet(g, out var r)
+                ? $"{r.Group} {r.Flags} yield [{string.Join(", ", r.Yield.Select(Name))}] most [{string.Join(", ", r.YieldMax?.Select(kv => $"{Name(kv.Key)} {kv.Value}") ?? [])}]"
+                : "not in the table";
             var offer = Ecs.TryGet<Ecs.InteractionOfferRuntime>(e, out var o) ? $"offer {o.offerId} disabled {o.isDisabled}" : "no offer";
             var dead = Combat.GetHealth(e) is { } hp ? $"health {hp.Current} dead {hp.Dead}" : "no health";
             Info($"FACTS {kind} {template} {e}: table {rule}; DefaultInventory {World.Has(e, "DefaultInventory")}, " +
@@ -242,6 +244,7 @@ public sealed class Probe
         public int FreeSlots(EntityId p) => inner.FreeSlots(p);
         public BagRead? Bag(EntityId p) => inner.Bag(p);
         public int StackSizeWish => inner.StackSizeWish;
+        public double LootAmountFactor => inner.LootAmountFactor;
         public bool SightAvailable => inner.SightAvailable;
         public SightAnswer LineOfSight(EntityId p, EntityId target, SightSample sample = SightSample.Primary, bool corpse = false) =>
             inner.LineOfSight(p, target, sample, corpse);
@@ -258,6 +261,248 @@ public sealed class Probe
             Moves[from] = Moves.GetValueOrDefault(from) + 1;
             inner.Move(from, slot, to, count, done, moved);
         }
+    }
+
+    /// <summary>Fills the stand-in's Generic inventories (backpack and action bars) to <paramref name="generic"/> empty
+    /// slots with one each of materials outside <paramref name="avoid"/>.</summary>
+    private static async Task FillGeneric(EntityId p, Data data, HashSet<uint> avoid, int generic)
+    {
+        var fillers = data.Items.All.Where(x => x.OriginalMaxStack > 1 && x.Category == "Materials" && !avoid.Contains(x.Id))
+            .Select(x => x.Id).ToList();
+        var k = 0;
+        while ((Items.Read(p)?.FreeSlots() ?? 0) > generic && k < fillers.Count) await Items.Give(p, new ItemId(fillers[k++]), 1);
+    }
+
+    /// <summary>Where the stand-in's empty Generic slots are: per inventory link, "bar" for an action bar.</summary>
+    private static string EmptyAt(EntityId p)
+    {
+        var inv = Items.Read(p);
+        if (inv is null) return "no read";
+        var bars = Ecs.TryGet<Ecs.SlotSelection>(p, out var sel) ? new[] { sel.actionbarEntityIds[0].id, sel.actionbarEntityIds[1].id } : [];
+        return string.Join(", ", inv.Slots.Where(s => s.IsEmpty && s.Category == InventoryCategory.Generic).GroupBy(s => s.Link)
+            .Select(g => $"link {g.Key}{(g.Key >= 0 && g.Key < inv.Inventories.Count && bars.Contains(inv.Inventories[g.Key].Inventory.Value) ? " (bar)" : "")} x{g.Count()}"));
+    }
+
+    private static HashSet<uint> Yields(Data data, IEnumerable<string> templates)
+    {
+        var names = templates.ToHashSet(StringComparer.Ordinal);
+        var yields = new HashSet<uint>();
+        foreach (var r in data.Templates.All) if (names.Contains(r.Name)) yields.UnionWith(r.Yield);
+        return yields;
+    }
+
+    /// <summary>What the game itself does with a loot-all into a bag with too little room (review 0.2.13): every Generic
+    /// slot full, one left, and a carried stack one short of full with no empty slot. Is a harvest or pile lost, kept,
+    /// or partly handed over?</summary>
+    [KilnTest(TimeoutSeconds = 500, Order = 3)]
+    public async Task Full_bag_loot_all(TestContext t)
+    {
+        var data = LoadData();
+        var (anchor, _) = FindAnchor();
+        Assert.True(anchor is not null, "an anchor");
+        var a = anchor!.Value;
+        var cornId = data.Items.All.FirstOrDefault(x => x.Internal == "Food_T1_raw_grain_Corncob")?.Id ?? 0u;
+        var kinds = new[] { "bush", "reed", "crop", "bones pile", "bat fur pile", "skeleton corpse" };
+        var avoid = Yields(data, Targets.Select(x => x.Template));
+        avoid.Add(cornId);
+        var row = 0;
+        foreach (var free in new[] { 0, 1 })
+            foreach (var kind in kinds)
+            {
+                row++;
+                var template = Targets.First(x => x.Kind == kind).Template;
+                var standAt = Ground(a.X + 120, a.Y, a.Z - 60 + 6 * row);
+                var p = await StandIn(t, standAt);
+                await FillGeneric(p, data, avoid, free);
+                var e = await Spawn.Entity(template, Ground(standAt.X + 2, standAt.Y, standAt.Z), 0, new SpawnOptions { Tag = Tag });
+                await t.Delay(TimeSpan.FromSeconds(1.5));
+                var before = InventoryText(e);
+                var (b0, f0) = Bag(p);
+                var empty0 = EmptyAt(p);
+                Gameplay.Inject.Loot(p, e, 0, lootAll: true, bypassInteraction: true);
+                await t.Delay(TimeSpan.FromSeconds(1.5));
+                var (b1, f1) = Bag(p);
+                Info($"FULL generic free {free} ({empty0}): {kind}: before {before}; the stand-in got [{Diff(b0, b1)}], generic free {f0} -> {f1}; " +
+                     $"target exists after {World.Exists(e)}{(World.Exists(e) ? $"; {InventoryText(e)}; offer {(Ecs.TryGet<Ecs.InteractionOfferRuntime>(e, out var o) ? $"{o.offerId} disabled {o.isDisabled}" : "none")}" : "")}");
+                if (World.Exists(e))
+                {
+                    // the same target again once there is room: does it still hold what it gives?
+                    var first = Items.Read(p)!.Slots.First(s => !s.IsEmpty && s.Category == InventoryCategory.Generic);
+                    await Items.Take(p, first.Item, first.Count);
+                    var (b2, _) = Bag(p);
+                    Gameplay.Inject.Loot(p, e, 0, lootAll: true, bypassInteraction: true);
+                    await t.Delay(TimeSpan.FromSeconds(1.5));
+                    var (b3, f3) = Bag(p);
+                    Info($"FULL generic free {free}: {kind}: again with one slot freed: got [{Diff(b2, b3)}], generic free now {f3}; target exists after {World.Exists(e)}");
+                    if (World.Exists(e)) Spawn.Destroy(e);
+                }
+                Spawn.Destroy(p);
+            }
+        // a carried stack one short of full (corncobs: the game's own max stack 20 with the lab's maxStack 0), no empty slot
+        if (cornId != 0)
+        {
+            var max = data.Items.TryGet(cornId, out var cr) ? cr.OriginalMaxStack : 0;
+            var standAt = Ground(a.X + 120, a.Y, a.Z + 40);
+            var p = await StandIn(t, standAt);
+            var g = await Items.Give(p, new ItemId(cornId), Math.Max(1, max - 1));
+            await FillGeneric(p, data, avoid, 0);
+            var e = await Spawn.Entity("T1_Plant_Growth_Corn_2_harvest", Ground(standAt.X + 2, standAt.Y, standAt.Z), 0, new SpawnOptions { Tag = Tag });
+            await t.Delay(TimeSpan.FromSeconds(1.5));
+            var (b0, f0) = Bag(p);
+            Gameplay.Inject.Loot(p, e, 0, lootAll: true, bypassInteraction: true);
+            await t.Delay(TimeSpan.FromSeconds(1.5));
+            var (b1, f1) = Bag(p);
+            Info($"FULL overflow: corncob x{b0.GetValueOrDefault(cornId)} (give {g.Status}, original max stack {max}), generic free {f0}: crop loot-all: " +
+                 $"got [{Diff(b0, b1)}], corncob now x{b1.GetValueOrDefault(cornId)}, generic free {f1}; target exists after {World.Exists(e)}");
+            if (World.Exists(e)) Spawn.Destroy(e);
+            Spawn.Destroy(p);
+        }
+        Spawn.CleanupTracked(Tag);
+    }
+
+    /// <summary>The loop with keepFreeSlots 3 at its boundary (3 backpack slots free, the action bars full) while the
+    /// stand-in carries corncobs one short of a full stack (review 0.2.13): a crop gives more than that stack holds, so
+    /// a harvest judged as "tops up a carried stack" starts a new stack in a kept slot. Then with room in the stack.</summary>
+    [KilnTest(TimeoutSeconds = 300, Order = 4)]
+    public async Task Loop_spill_at_the_kept_slots(TestContext t)
+    {
+        var data = LoadData();
+        var (anchor, _) = FindAnchor();
+        Assert.True(anchor is not null, "an anchor");
+        var a = anchor!.Value;
+        var cornId = data.Items.All.FirstOrDefault(x => x.Internal == "Food_T1_raw_grain_Corncob")?.Id ?? 0;
+        Assert.True(cornId != 0, "corncob");
+        var max = data.Items.TryGet(cornId, out var cr) ? cr.OriginalMaxStack : 0;
+        var avoid = Yields(data, Targets.Select(x => x.Template));
+        avoid.Add(cornId);
+        var row = 0;
+        foreach (var carried in new[] { Math.Max(1, max - 1), Math.Max(1, max / 4) })
+        {
+            row++;
+            var standAt = Ground(a.X - 120, a.Y, a.Z + 40 * row);
+            var p = await StandIn(t, standAt);
+            // the corncobs into the first backpack slot (a Give puts food on the action bar), every slot full, then three
+            // backpack slots emptied: backpack free = generic free = 3, the bars full
+            var bars = Ecs.TryGet<Ecs.SlotSelection>(p, out var sel) ? new[] { sel.actionbarEntityIds[0].id, sel.actionbarEntityIds[1].id } : [];
+            bool InBar(InventoryContents inv, InventorySlot x) =>
+                x.Link >= 0 && x.Link < inv.Inventories.Count && bars.Contains(inv.Inventories[x.Link].Inventory.Value);
+            var read = Items.Read(p)!;
+            var first = read.Slots.First(x => x.IsEmpty && x.Category == InventoryCategory.Generic && !InBar(read, x));
+            var gc = await Items.Give(p, new ItemId(cornId), carried, null, default, first.Slot);
+            await FillGeneric(p, data, avoid, 0);
+            read = Items.Read(p)!;
+            foreach (var x in read.Slots.Where(x => !x.IsEmpty && x.Category == InventoryCategory.Generic && !InBar(read, x) && x.Item.Value != cornId).Take(3).ToList())
+                await Items.TakeSlot(p, x);
+            read = Items.Read(p)!;
+            var cornAt = string.Join(", ", read.Slots.Where(x => x.Item.Value == cornId).Select(x => $"x{x.Count} link {x.Link}{(InBar(read, x) ? " (bar)" : "")}"));
+            Info($"SPILL setup: corncob give {gc.Status}: {cornAt}; empty {EmptyAt(p)}");
+            var (bag0, _) = Bag(p);
+            var free0 = Free(p);
+            var crops = new List<EntityId>();
+            for (var i = 0; i < 3; i++)
+                crops.Add(await Spawn.Entity("T1_Plant_Growth_Corn_2_harvest", Ground(standAt.X + 2 + 1.5 * i, standAt.Y, standAt.Z + 1), 0, new SpawnOptions { Tag = Tag }));
+            await t.Delay(TimeSpan.FromSeconds(1.5));
+            var game = new StandInGame(new KilnGame(Info), p);
+            var crop = data.Templates.All.FirstOrDefault(r => r.Name == "T1_Plant_Growth_Corn_2_harvest");
+            Info($"SPILL crop rule: yield [{string.Join(", ", crop?.Yield.Select(Name) ?? [])}], most " +
+                 $"[{string.Join(", ", crop?.YieldMax?.Select(kv => $"{Name(kv.Key)} {kv.Value}") ?? [])}]; Loot Amount {game.LootAmountFactor}");
+            var clock = new TickClock();
+            var loop = new LootLoop(game, clock, data, (_, _) => { }, l => Info($"SPILL key: {l}"));
+            loop.Configure(new ServerSettings());
+            loop.SetPersonal(p, new PersonalSettings
+            {
+                KeepFreeSlots = 3, OpenDelay = 0, VisibleOnly = false, Radius = 12, EnemyPause = false, Smash = false,
+            });
+            var last = Environment.TickCount64;
+            var until = last + 6000;
+            while (Environment.TickCount64 < until)
+            {
+                var now = Environment.TickCount64;
+                clock.Advance(now - last);
+                last = now;
+                loop.Step();
+                await t.Ticks(1);
+            }
+            await t.Delay(TimeSpan.FromSeconds(1));
+            var (bag1, _) = Bag(p);
+            var c = loop.Counters;
+            Info($"SPILL keep 3, corncob x{carried} of {max}: free slots {free0} -> {Free(p)} after the loop; got [{Diff(bag0, bag1)}]; " +
+                 $"crops loot-alls [{string.Join(", ", crops.Select(e => game.Loots.GetValueOrDefault(e)))}], left [{string.Join(", ", crops.Select(e => World.Exists(e)))}]; " +
+                 $"counters noRoom {c.NoRoom} harvestUnread {c.HarvestUnread}");
+            foreach (var e in crops) if (World.Exists(e)) Spawn.Destroy(e);
+            Spawn.Destroy(p);
+        }
+        Spawn.CleanupTracked(Tag);
+    }
+
+    /// <summary>A stack on the action bar, every other Generic slot full (review 0.2.13: the bag rules give action-bar
+    /// stacks no room to top up since 0.2.13): does the game's loot-all of a pile, the game's pickup of a loose item,
+    /// and Kiln's Items.Move out of a corpse top it up?</summary>
+    [KilnTest(TimeoutSeconds = 300, Order = 5)]
+    public async Task Action_bar_stacks(TestContext t)
+    {
+        var data = LoadData();
+        var (anchor, _) = FindAnchor();
+        Assert.True(anchor is not null, "an anchor");
+        var a = anchor!.Value;
+        var bones = data.Items.All.FirstOrDefault(x => x.Internal == "Material_T1_Bones")?.Id
+                    ?? data.Templates.All.First(r => r.Name == "LootPickup_Material_Skeleton_Hound_Bones").Yield[0];
+        var avoid = Yields(data, Targets.Select(x => x.Template));
+        var row = 0;
+        foreach (var how in new[] { "loot-all of a bones pile", "pickup of loose bones", "Items.Move out of a corpse" })
+        {
+            row++;
+            var standAt = Ground(a.X + 60, a.Y, a.Z + 90 + 8 * row);
+            var p = await StandIn(t, standAt);
+            var bars = Ecs.TryGet<Ecs.SlotSelection>(p, out var sel) ? new[] { sel.actionbarEntityIds[0].id, sel.actionbarEntityIds[1].id } : [];
+            var read = Items.Read(p)!;
+            var barSlot = read.Slots.First(x => x.IsEmpty && x.Link >= 0 && x.Link < read.Inventories.Count && bars.Contains(read.Inventories[x.Link].Inventory.Value));
+            var g = await Items.Give(p, new ItemId(bones), 5, null, default, barSlot.Slot);
+            await FillGeneric(p, data, avoid, 0);
+            var game = new KilnGame(_ => { });
+            var bagRead = game.Bag(p);
+            var (b0, f0) = Bag(p);
+            string result;
+            EntityId e;
+            if (how.StartsWith("loot-all"))
+            {
+                e = await Spawn.Entity("LootPickup_Material_Skeleton_Hound_Bones", Ground(standAt.X + 2, standAt.Y, standAt.Z), 0, new SpawnOptions { Tag = Tag });
+                await t.Delay(TimeSpan.FromSeconds(1.5));
+                Gameplay.Inject.Loot(p, e, 0, lootAll: true, bypassInteraction: true);
+                await t.Delay(TimeSpan.FromSeconds(1.5));
+                result = $"target exists after {World.Exists(e)}";
+            }
+            else if (how.StartsWith("pickup"))
+            {
+                e = await Spawn.Item(bones, 2, Ground(standAt.X + 1, standAt.Y, standAt.Z), 0, new SpawnOptions { Tag = Tag });
+                await t.Delay(TimeSpan.FromSeconds(2));
+                Gameplay.Inject.Loot(p, e, 0, lootAll: true, bypassInteraction: true);
+                await t.Delay(TimeSpan.FromSeconds(1.5));
+                result = $"pickup exists after {World.Exists(e)}";
+            }
+            else
+            {
+                e = await Spawn.Entity("LootContainer_Enemy_Skeleton_Melee", Ground(standAt.X + 2, standAt.Y, standAt.Z), 0, new SpawnOptions { Tag = Tag });
+                await t.Delay(TimeSpan.FromSeconds(1.5));
+                var slot = Items.Read(e)?.Slots.FirstOrDefault(x => !x.IsEmpty && x.Item.Value == bones);
+                if (slot is null) result = $"the corpse has no bones ({InventoryText(e)})";
+                else
+                {
+                    var r = await Items.Move(e, slot.Slot, p);
+                    result = $"move {slot.Count}: {r.Status} done {r.Done} '{r.Message}'";
+                }
+            }
+            var (b1, f1) = Bag(p);
+            read = Items.Read(p)!;
+            var at = string.Join(", ", read.Slots.Where(x => x.Item.Value == bones).Select(x =>
+                $"x{x.Count} link {x.Link}{(x.Link >= 0 && x.Link < read.Inventories.Count && bars.Contains(read.Inventories[x.Link].Inventory.Value) ? " (bar)" : "")}"));
+            Info($"BAR {how}: bones x5 on the bar (give {g.Status}), generic free {f0}, the mod's bag: free {bagRead?.FreeSlots}, bones " +
+                 $"{string.Join(", ", bagRead?.Slots.Where(x => x.Item == bones).Select(x => $"x{x.Count} backpack {x.Backpack}") ?? [])}; " +
+                 $"got [{Diff(b0, b1)}], generic free {f1}; bones now {at}; {result}");
+            if (World.Exists(e)) Spawn.Destroy(e);
+            Spawn.Destroy(p);
+        }
+        Spawn.CleanupTracked(Tag);
     }
 
     [KilnTest(TimeoutSeconds = 400, Order = 1)]

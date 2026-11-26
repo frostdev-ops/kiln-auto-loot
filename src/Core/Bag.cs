@@ -71,6 +71,13 @@ public sealed class Bag
         return (int)Math.Min(sum, int.MaxValue);
     }
 
+    /// <summary>The scan sent a take whose items are not known (a creature pile with no known yield): it may start
+    /// <paramref name="stacks"/> new stacks.</summary>
+    public void TookNewStacks(int stacks)
+    {
+        if (stacks > 0 && FreeSlots >= 0) FreeSlots = Math.Max(0, FreeSlots - stacks);
+    }
+
     /// <summary>The scan sent a take of <paramref name="count"/>: it fills carried stacks first, the rest starts new stacks
     /// (each one a free slot less).</summary>
     public void Took(uint item, int count)

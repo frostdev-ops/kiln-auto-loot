@@ -4,6 +4,8 @@
 // own (DefaultInventory only, lab dev31-autoloot-slots: Items.Read null), so their amounts cannot be read before the
 // loot-all hands them over; the free-slot rule refused every one of them for that. It only needs to know how many new
 // stacks a take can start: one per item it gives that the player does not already carry a stack of with room.
+// Review (0.2.13): "with room" means room for the most it can give (its default inventory's countMax times the world's
+// Loot Amount); a carried stack with less room makes the rest start a new stack in a kept slot, so it counts as one.
 using Kiln;
 using KilnAutoLoot.Core;
 using KilnAutoLoot.Server;
@@ -96,6 +98,93 @@ public sealed class FreeSlotsTests
         Assert.True(Took(rig, a));
         Assert.True(Took(rig, b));
         Assert.False(Took(rig, c));
+    }
+
+    [Fact]
+    public void A_plant_does_not_top_up_a_carried_stack_with_less_room_than_it_can_give()
+    {
+        // plant fibre 49 of 50: room for 1, the bush gives up to 3, so the rest would start a stack in a kept slot
+        var rig = Rig(2, 2, null, new BagSlot(Fibre, 49, true));
+        var bush = rig.Game.Add(LoopRig.Bush, 2, Inv);
+        bush.Slots = null;
+        rig.ScanFor(500);
+        Assert.False(Took(rig, bush));
+        Assert.True(rig.Loop.Counters.NoRoom > 0);
+
+        var exact = Rig(2, 2, null, new BagSlot(Fibre, 47, true));   // room for 3: all it can give
+        var bush2 = exact.Game.Add(LoopRig.Bush, 2, Inv);
+        bush2.Slots = null;
+        exact.ScanFor(500);
+        Assert.True(Took(exact, bush2));
+    }
+
+    [Fact]
+    public void A_plant_with_less_room_in_its_carried_stack_than_it_gives_needs_a_usable_slot()
+    {
+        var rig = Rig(2, 3, null, new BagSlot(Fibre, 49, true));   // one usable slot takes the rest
+        var bush = rig.Game.Add(LoopRig.Bush, 2, Inv);
+        bush.Slots = null;
+        rig.ScanFor(500);
+        Assert.True(Took(rig, bush));
+    }
+
+    [Theory]
+    [InlineData(1.0, true)]    // up to 3: fits the 5 of room
+    [InlineData(2.0, false)]   // up to 6: does not
+    [InlineData(1.5, true)]    // up to 4.5, so 5: fits
+    [InlineData(0.25, true)]   // a Loot Amount below 1 counts as 1
+    public void The_worlds_loot_amount_scales_what_a_plant_can_give(double lootAmount, bool takes)
+    {
+        var rig = Rig(2, 2, null, new BagSlot(Fibre, 45, true));
+        rig.Game.LootAmount = lootAmount;
+        var bush = rig.Game.Add(LoopRig.Bush, 2, Inv);
+        bush.Slots = null;
+        rig.ScanFor(500);
+        Assert.Equal(takes, Took(rig, bush));
+    }
+
+    [Fact]
+    public void A_plant_whose_most_is_not_known_needs_a_usable_slot_for_each_item_even_when_carried()
+    {
+        // algae: plant fibre, how much is not known: a carried stack may take only part of it
+        var rig = Rig(2, 2, null, new BagSlot(Fibre, 10, true));
+        var algae = rig.Game.Add(LoopRig.Algae, 2, Inv);
+        algae.Slots = null;
+        rig.ScanFor(500);
+        Assert.False(Took(rig, algae));
+
+        var room = Rig(2, 3, null, new BagSlot(Fibre, 10, true));
+        var algae2 = room.Game.Add(LoopRig.Algae, 2, Inv);
+        algae2.Slots = null;
+        room.ScanFor(500);
+        Assert.True(Took(room, algae2));
+    }
+
+    [Fact]
+    public void Harvests_in_one_scan_reserve_the_most_each_can_give()
+    {
+        // room for 5 plant fibre, no usable slot: the first bush (up to 3) fits, the second and the crop no longer do
+        var rig = Rig(2, 2, null, new BagSlot(Fibre, 45, true));
+        var a = rig.Game.Add(LoopRig.Bush, 2, Inv);
+        var b = rig.Game.Add(LoopRig.Bush, 3, Inv);
+        var c = rig.Game.Add(LoopRig.Crop, 4, Inv);
+        a.Slots = b.Slots = c.Slots = null;
+        rig.ScanAfter(100);
+        Assert.True(Took(rig, a));
+        Assert.False(Took(rig, b));
+        Assert.False(Took(rig, c));
+    }
+
+    [Fact]
+    public void Piles_whose_yield_is_not_known_share_the_one_usable_slot()
+    {
+        var rig = Rig(2, 3);
+        var a = rig.Game.Add(LoopRig.Parts, 2, LoopRig.OfferInv);
+        var b = rig.Game.Add(LoopRig.Parts, 3, LoopRig.OfferInv);
+        a.Slots = [];
+        b.Slots = [];
+        rig.ScanAfter(100);
+        Assert.Equal(1, new[] { a, b }.Count(x => Took(rig, x)));
     }
 
     [Fact]

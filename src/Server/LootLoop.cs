@@ -991,8 +991,7 @@ internal sealed class LootLoop
             // plants and crops: the loot-all is a harvest, taken whole; the item filter judged its yield before, the bag
             // judges its live contents now
             if (!HarvestFits(p, gp, e, rule, out var contents)) return;
-            if (SendLoot(p, gp, e, key, offer) && contents is not null)
-                foreach (var (item, count) in contents) p.Bag?.Took(item, count);
+            if (SendLoot(p, gp, e, key, offer) && contents is not null) Reserve(p, contents);
             return;
         }
         // a loot-all takes everything, so it goes out only after a read showed nothing has to stay; an inventory that
@@ -1211,7 +1210,8 @@ internal sealed class LootLoop
     /// The crystal's yield was judged by LootRules.Decide. A pile's is judged here, as it comes whole: in skip mode one
     /// whose yield holds a skipped item stays; a picking filter (only list, gather focus) needs a yield item it takes
     /// (Decide lets a corpse without a known yield through for its slots, which cannot be seen here). With a bag rule on
-    /// the contents have to fit (HarvestFits; with keepFreeSlots alone, the yield decides how many new stacks it starts). A pile left whole says so once in kiln.log (PileLine).
+    /// the contents have to fit (HarvestFits; with keepFreeSlots alone, the most its yield can give). A pile left whole
+    /// says so once in kiln.log (PileLine).
     /// <paramref name="readEmpty"/>: its inventory was read and empty (else it cannot be read).</summary>
     private void TakeUnread(PlayerLoot p, GamePlayer gp, EntityId e, ulong key, TemplateRule rule, Offer offer, bool readEmpty)
     {
@@ -1242,12 +1242,20 @@ internal sealed class LootLoop
         }
         if (HarvestFits(p, gp, e, rule, out var contents))
         {
-            if (SendLoot(p, gp, e, key, offer) && contents is not null)
-                foreach (var (item, count) in contents) p.Bag?.Took(item, count);
+            if (SendLoot(p, gp, e, key, offer) && contents is not null) Reserve(p, contents);
         }
         else PileLine(p, key, rule, readEmpty, BagRules.SlotsOnly(rule.Yield, p.Settings, p.Limits)
-            ? "what it gives needs more new stacks than there are bag slots free above the ones kept free"
+            ? "the most it can give fits neither the stacks you carry nor the bag slots free above the ones kept free"
             : "a bag rule is on, and it needs the amounts");
+    }
+
+    /// <summary>Reserves a whole take that went (HarvestFits' contents) on the scan's bag; item 0 = one new stack of
+    /// something not known.</summary>
+    private static void Reserve(PlayerLoot p, List<(uint Item, int Count)> contents)
+    {
+        foreach (var (item, count) in contents)
+            if (item == 0) p.Bag?.TookNewStacks(count);
+            else p.Bag?.Took(item, count);
     }
 
     /// <summary>The kiln.log line of a target that keeps something (once per target): what stays and why, and what is
@@ -1491,9 +1499,9 @@ internal sealed class LootLoop
     /// keepFreeSlots, or a carry limit naming one of its items or their group) its own live inventory is read for the
     /// exact items and amounts, and all of them have to fit. One that cannot be read or reads empty (most plants, every
     /// crop, most creature piles: no inventory of their own, the loot-all hands their DefaultInventory over) is judged
-    /// by its yield while keepFreeSlots is the only rule that applies (one new stack per item not carried with room,
-    /// BagRules.FitsUnknownAmounts), else left (counted: fillCarriedStacks and carry limits need the amounts). Without
-    /// a bag rule nothing is read. <paramref name="contents"/>: what to reserve when it goes.</summary>
+    /// by the most its yield can give (countMax times the world's Loot Amount, BagRules.FitsUnknownAmounts) while
+    /// keepFreeSlots is the only rule that applies, else left (counted: fillCarriedStacks and carry limits need the
+    /// amounts). Without a bag rule nothing is read. <paramref name="contents"/>: what to reserve when it goes.</summary>
     private bool HarvestFits(PlayerLoot p, GamePlayer gp, EntityId e, TemplateRule rule, out List<(uint Item, int Count)>? contents)
     {
         contents = null;
@@ -1507,10 +1515,11 @@ internal sealed class LootLoop
         if (slots is null || slots.Count == 0)
         {
             // most plants, every crop and most creature piles have no inventory of their own (a DefaultInventory the
-            // loot-all hands over): keepFreeSlots alone needs only which items come, not how many (0.2.13)
+            // loot-all hands over): keepFreeSlots alone is kept by the most they can give (0.2.13)
             if (BagRules.SlotsOnly(rule.Yield, s, p.Limits))
             {
-                var refused = CountBag(BagRules.FitsUnknownAmounts(rule.Yield, s, BagOf(p, gp), out var reserve));
+                var refused = CountBag(BagRules.FitsUnknownAmounts(rule.Yield, rule.YieldMax, _game.LootAmountFactor, s,
+                    BagOf(p, gp), p.Limits, out var reserve));
                 if (!refused) contents = reserve;
                 return !refused;
             }

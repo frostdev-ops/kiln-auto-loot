@@ -119,6 +119,36 @@ internal sealed class KilnGame(Action<string> logOnce) : IGame
 
     public int StackSizeWish => WorldData.AppliedStackSize;
 
+    private long _lootRevision = long.MinValue;
+    private double _lootFactor = 2;
+
+    /// <summary>Kiln.Settings' resourceDropStackAmountFactor, read again when kiln.settings saw a change (its revision);
+    /// 2 (the game's largest) while it cannot be read (no kiln.settings, not ready yet, an odd value).</summary>
+    public double LootAmountFactor
+    {
+        get
+        {
+            try
+            {
+                if (!Kiln.Settings.Available || !Kiln.Settings.Ready) return 2;
+                long revision = Kiln.Settings.Revision;
+                if (revision != _lootRevision)
+                {
+                    _lootRevision = revision;
+                    var v = Kiln.Settings.Get("resourceDropStackAmountFactor");
+                    _lootFactor = v is IConvertible c && c.ToDouble(System.Globalization.CultureInfo.InvariantCulture) is var f &&
+                                  double.IsFinite(f) && f > 0 ? f : 2;
+                }
+                return _lootFactor;
+            }
+            catch (Exception e) when (e is KilnUnavailableException or NotSupportedException or InvalidOperationException
+                                          or KeyNotFoundException or ArgumentException or FormatException or InvalidCastException)
+            {
+                return 2;
+            }
+        }
+    }
+
     public bool SightAvailable => _sight;
 
     internal static readonly VoxelSightOptions CorpseSightOptions = new() { ToOffset = new(0, SightTrace.BodyHeight, 0) };

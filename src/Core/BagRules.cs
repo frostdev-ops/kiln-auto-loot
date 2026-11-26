@@ -6,8 +6,11 @@
 //   - carry limits: no more of an item than its limit (a group limit counts the whole group);
 //   - a bag that could not be read while a rule is on: nothing is taken (the rules cannot be kept);
 //   - a whole take whose amounts cannot be read first (plants, crops, creature piles: the loot-all hands over a default
-//     inventory) is judged by its items alone while keepFreeSlots is the only rule for it (one new stack per item not
-//     carried with room); fillCarriedStacks and carry limits count items, so such a take stays under them.
+//     inventory) is judged, while keepFreeSlots is the only rule for it, by the most it can give: per item its default
+//     inventory's countMax times the world's Loot Amount (an item whose most is not known as a whole new stack). A
+//     carried stack tops up only by what it has room for; the rest needs a free slot above the kept ones (lab: the game
+//     hands such a take over whole or not at all, so a carried stack with less room would make the rest start a stack
+//     in a kept slot). fillCarriedStacks and carry limits count items, so such a take stays under them.
 // A take of several items (a container, a harvest) is planned on a copy of the bag, each part reserved at once, so the
 // later parts see what the earlier ones use: free slots, shared group limits.
 namespace KilnAutoLoot.Core;
@@ -92,21 +95,42 @@ public static class BagRules
         return true;
     }
 
-    /// <summary>A whole take whose amounts are not known before it comes (a plant, crop or creature pile the game hands
-    /// over with its loot-all: no inventory of its own to read), judged by keepFreeSlots alone (<see cref="SlotsOnly"/>):
-    /// each item it gives that the player carries a stack of with room merges into that stack and counts as fitting;
-    /// each other one starts one new stack, and those have to fit into the free slots above the kept ones. A take
-    /// whose items are not known counts as one new stack. <paramref name="reserve"/>: what to reserve on the scan's bag
-    /// when it goes (one of each item).</summary>
-    public static BagRefusal FitsUnknownAmounts(IReadOnlyList<uint> items, PersonalSettings s, Bag? bag,
-        out List<(uint Item, int Count)> reserve)
+    /// <summary>The most of <paramref name="item"/> a take of unknown amounts can give: its default inventory's countMax
+    /// (<paramref name="most"/>, added up over its stacks) times the world's Loot Amount (below 1 counts as 1), rounded
+    /// up. 0 = not known.</summary>
+    public static int MostOf(uint item, IReadOnlyDictionary<uint, int>? most, double lootAmount)
     {
-        reserve = items.Distinct().Select(i => (i, 1)).ToList();
+        if (most is null || !most.TryGetValue(item, out var m) || m <= 0) return 0;
+        var factor = double.IsFinite(lootAmount) && lootAmount > 1 ? lootAmount : 1;
+        return (int)Math.Min(int.MaxValue, Math.Ceiling(m * factor));
+    }
+
+    /// <summary>A whole take whose amounts are not known before it comes (a plant, crop or creature pile the game hands
+    /// over with its loot-all: no inventory of its own to read), judged by keepFreeSlots alone (<see cref="SlotsOnly"/>)
+    /// as if it gave the most it can (<see cref="MostOf"/>; an item whose most is not known as a whole stack): that has to
+    /// fit into the stacks the player carries and the free slots above the kept ones, planned like <see cref="Fits"/>.
+    /// A take whose items are not known counts as one new stack. <paramref name="reserve"/>: what to reserve on the scan's
+    /// bag when it goes (the amounts it was judged by; item 0 = one new stack of something not known).</summary>
+    public static BagRefusal FitsUnknownAmounts(IReadOnlyList<uint> items, IReadOnlyDictionary<uint, int>? most, double lootAmount,
+        PersonalSettings s, Bag? bag, CarryLimits limits, out List<(uint Item, int Count)> reserve)
+    {
+        reserve = [];
         if (bag is null) return BagRefusal.NoRoom;
-        var newStacks = 0;
-        foreach (var (item, _) in reserve) if (bag.Room(item) <= 0) newStacks++;
-        if (reserve.Count == 0) newStacks = 1;
-        return newStacks <= UsableSlots(s, bag) ? BagRefusal.None : BagRefusal.NoRoom;
+        if (items.Count == 0)
+        {
+            if (UsableSlots(s, bag) < 1) return BagRefusal.NoRoom;
+            reserve.Add((0, 1));
+            return BagRefusal.None;
+        }
+        var take = new List<(uint Item, int Count)>();
+        foreach (var item in items.Distinct())
+        {
+            var m = MostOf(item, most, lootAmount);
+            take.Add((item, m > 0 ? m : Math.Max(1, bag.MaxStack(item))));
+        }
+        var why = Fits(take, s, bag, limits);
+        if (why == BagRefusal.None) reserve = take;
+        return why;
     }
 
     /// <summary>A ground pickup is taken whole or not at all: its whole amount has to fit.</summary>

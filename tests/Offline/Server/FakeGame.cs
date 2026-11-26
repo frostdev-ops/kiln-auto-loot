@@ -160,6 +160,9 @@ internal sealed class FakeGame : IGame
 
     public int StackSizeWish => StackWish;
 
+    public double LootAmount = 1;
+    public double LootAmountFactor => LootAmount;
+
     public bool SightAvailable => SightOn;
 
     public bool HasInventory(EntityId entity) =>
@@ -207,19 +210,19 @@ internal sealed class LoopRig
 {
     public static readonly Guid Corpse = new("11111111-0000-0000-0000-000000000001");
     public static readonly Guid Chest = new("11111111-0000-0000-0000-000000000002");
-    public static readonly Guid Bush = new("11111111-0000-0000-0000-000000000003");
+    public static readonly Guid Bush = new("11111111-0000-0000-0000-000000000003");   // plant, yield plant fibre (at most 3)
     public static readonly Guid Twig = new("11111111-0000-0000-0000-000000000004");   // ground pickup, item 1
     public static readonly Guid Enemy = new("11111111-0000-0000-0000-000000000005");
     public static readonly Guid Mushroom = new("11111111-0000-0000-0000-000000000006"); // ground pickup with inventory
     public static readonly Guid Boss = new("11111111-0000-0000-0000-000000000007");
     public static readonly Guid Wolf = new("11111111-0000-0000-0000-000000000008");    // enemy, animal
     public static readonly Guid FogNest = new("11111111-0000-0000-0000-000000000009"); // ground, container path, item 2
-    public static readonly Guid Bones = new("11111111-0000-0000-0000-00000000000a");   // corpse drop pile, yield apple + flint
+    public static readonly Guid Bones = new("11111111-0000-0000-0000-00000000000a");   // corpse drop pile, yield apple + flint (at most 2 each)
     public static readonly Guid Parts = new("11111111-0000-0000-0000-00000000000b");   // corpse drop pile, yield unknown
     public static readonly Guid Generic = new("11111111-0000-0000-0000-00000000000c"); // generic drop, its item set at the spawn
     public static readonly Guid Book = new("11111111-0000-0000-0000-00000000000d");    // world book players also build, item 1
     public static readonly Guid Frogs = new("11111111-0000-0000-0000-00000000000e");   // critter (bait swarm), yield item 40
-    public static readonly Guid Crop = new("11111111-0000-0000-0000-00000000000f");    // ripe crop in a farm bed, yield plant fibre
+    public static readonly Guid Crop = new("11111111-0000-0000-0000-00000000000f");    // ripe crop in a farm bed, yield plant fibre (at most 3)
     public static readonly Guid Algae = new("11111111-0000-0000-0000-000000000010");   // a world plant planted algae grows into
     public static readonly Guid Goat = new("11111111-0000-0000-0000-000000000011");    // grown farm animal (livestock)
     public static readonly Guid Fish = new("11111111-0000-0000-0000-000000000012");    // fish swimming free, a pickup of item 50
@@ -231,19 +234,19 @@ internal sealed class LoopRig
         "# guid\tgroup\tflags\tname\tyield\n" +
         "11111111-0000-0000-0000-000000000001\tcorpse\t\tLootContainer_Enemy_Test\t\n" +
         "11111111-0000-0000-0000-000000000002\tchest\t\tLootChest_Random_Test\t\n" +
-        "11111111-0000-0000-0000-000000000003\tplant\t\tScatter_Loot_PlantFibre_Test\t3\n" +
+        "11111111-0000-0000-0000-000000000003\tplant\t\tScatter_Loot_PlantFibre_Test\t3:3\n" +
         "11111111-0000-0000-0000-000000000004\tground\t\tLootPickup_Twigs_Test\t1\n" +
         "11111111-0000-0000-0000-000000000005\tenemy\t\tEnemy_Test\t\n" +
         "11111111-0000-0000-0000-000000000006\tground\t\tScatter_Loot_Mushroom_Test\t6\n" +
         "11111111-0000-0000-0000-000000000007\tboss\t\tLootPickup_Enemy_Boss_Test\t7\n" +
         "11111111-0000-0000-0000-000000000008\tenemy\tanimal\tEnemy_Wolf_Test\t\n" +
         "11111111-0000-0000-0000-000000000009\tground\t\tFognest_Ressource_Destructible_Test\t2\n" +
-        "11111111-0000-0000-0000-00000000000a\tcorpse\tdrop\tLootPickup_Material_Skeleton_Hound_Bones_Test\t6,7\n" +
+        "11111111-0000-0000-0000-00000000000a\tcorpse\tdrop\tLootPickup_Material_Skeleton_Hound_Bones_Test\t6:2,7:2\n" +
         "11111111-0000-0000-0000-00000000000b\tcorpse\tdrop\tLootPickup_Material_Critter_Parts_Test\t\n" +
         "11111111-0000-0000-0000-00000000000c\tground\tgeneric\tBase_LootPickup_Generic_Gravity_Test\t\n" +
         "11111111-0000-0000-0000-00000000000d\tground\tdecor\tProp_Furniture_Book_Pile_Test_Lootpickup\t1\n" +
         "11111111-0000-0000-0000-00000000000e\tcritter\tswarm\tLootpickup_Scatter_VFX_Bait_Frogs_Test\t40\n" +
-        "11111111-0000-0000-0000-00000000000f\tfarm\t\tT1_Plant_Growth_Test_2_harvest\t3\n" +
+        "11111111-0000-0000-0000-00000000000f\tfarm\t\tT1_Plant_Growth_Test_2_harvest\t3:3\n" +
         "11111111-0000-0000-0000-000000000010\tplant\tgrown\tScatter_Loot_Wetland_Algae_01_d_AlgaeBuds_Test\t3\n" +
         "11111111-0000-0000-0000-000000000011\tlivestock\t\tPLACEMENT_HELPER_T1_Animal_Farm_Goat_Test\t\n" +
         "11111111-0000-0000-0000-000000000012\tfish\tanimal\tAnimal_wildlife_Fish_T1_common_01_Test\t50\n" +

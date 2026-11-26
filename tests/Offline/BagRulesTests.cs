@@ -22,6 +22,55 @@ public sealed class BagRulesTests
         return s;
     }
 
+    [Theory]
+    [InlineData(3, 1.0, 3)]
+    [InlineData(3, 2.0, 6)]
+    [InlineData(3, 1.5, 5)]     // 4.5, rounded up
+    [InlineData(3, 0.25, 3)]    // a Loot Amount below 1 counts as 1
+    [InlineData(3, double.NaN, 3)]
+    public void The_most_a_harvest_gives_is_its_count_max_times_the_loot_amount(int countMax, double lootAmount, int most)
+    {
+        Assert.Equal(most, BagRules.MostOf(Twigs, new Dictionary<uint, int> { [Twigs] = countMax }, lootAmount));
+        Assert.Equal(0, BagRules.MostOf(Stone, new Dictionary<uint, int> { [Twigs] = countMax }, lootAmount));   // not known
+        Assert.Equal(0, BagRules.MostOf(Twigs, null, lootAmount));
+    }
+
+    [Fact]
+    public void A_take_of_unknown_amounts_fits_by_the_most_it_can_give()
+    {
+        var keep2 = S(x => x.KeepFreeSlots = 2);
+        var most = new Dictionary<uint, int> { [Twigs] = 4 };
+        // twigs 46 of 50: room for exactly 4, no slot above the kept ones
+        Assert.Equal(BagRefusal.None, BagRules.FitsUnknownAmounts([Twigs], most, 1, keep2, BagOf(2, new BagSlot(Twigs, 46, true)),
+            CarryLimits.None, out var reserve));
+        Assert.Equal([(Twigs, 4)], reserve);
+        Assert.Equal(BagRefusal.NoRoom, BagRules.FitsUnknownAmounts([Twigs], most, 1, keep2, BagOf(2, new BagSlot(Twigs, 47, true)),
+            CarryLimits.None, out reserve));
+        Assert.Empty(reserve);
+        // an item whose most is not known: a whole stack, so a slot above the kept ones even though some is carried
+        Assert.Equal(BagRefusal.NoRoom, BagRules.FitsUnknownAmounts([Apple], most, 1, keep2, BagOf(2, new BagSlot(Apple, 1, true)),
+            CarryLimits.None, out _));
+        Assert.Equal(BagRefusal.None, BagRules.FitsUnknownAmounts([Apple], most, 1, keep2, BagOf(3, new BagSlot(Apple, 1, true)),
+            CarryLimits.None, out reserve));
+        Assert.Equal([(Apple, 20)], reserve);
+        // nothing known of what it gives: one new stack, reserved as item 0
+        Assert.Equal(BagRefusal.NoRoom, BagRules.FitsUnknownAmounts([], null, 1, keep2, BagOf(2), CarryLimits.None, out _));
+        Assert.Equal(BagRefusal.None, BagRules.FitsUnknownAmounts([], null, 1, keep2, BagOf(3), CarryLimits.None, out reserve));
+        Assert.Equal([(0u, 1)], reserve);
+        Assert.Equal(BagRefusal.NoRoom, BagRules.FitsUnknownAmounts([Twigs], most, 1, keep2, null, CarryLimits.None, out _));
+    }
+
+    [Fact]
+    public void A_new_stack_of_something_not_known_takes_a_free_slot()
+    {
+        var bag = BagOf(3);
+        bag.TookNewStacks(1);
+        Assert.Equal(2, bag.FreeSlots);
+        var unknown = BagOf(-1);
+        unknown.TookNewStacks(1);
+        Assert.Equal(-1, unknown.FreeSlots);
+    }
+
     [Fact]
     public void Room_is_what_carried_backpack_stacks_still_hold()
     {
