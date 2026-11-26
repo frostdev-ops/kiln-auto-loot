@@ -1,4 +1,4 @@
-<Project Sdk="Kiln.Sdk/0.2.0-dev.28">
+<Project Sdk="Kiln.Sdk/0.2.0-dev.30.6">
   <!-- Lab probe of Kiln Auto Loot's smashing and world data (stack size, backpack recipes), player-free, on a lab dedicated
        server. Not part of the mod: it compiles the mod's own smash and world-data files and ships its own copy of the
        smash program (deploy it without the mod: both would register program 86bdce19).
@@ -11,7 +11,7 @@
     <AssemblyName>KilnAutoLootLabSmash</AssemblyName>
     <RootNamespace>KilnAutoLoot.LabSmash</RootNamespace>
     <KilnSide>server</KilnSide>
-    <KilnServices>Players;World;Spawn;Gameplay;Combat;Abilities;Content;Assets;Queries;Items;Testing</KilnServices>
+    <KilnServices>Players;World;Spawn;Gameplay;Combat;Abilities;Content;Assets;Queries;Items;Build;Testing</KilnServices>
     <KilnGameIds>None</KilnGameIds>
     <Nullable>enable</Nullable>
     <KilnIncludeModFolders>false</KilnIncludeModFolders>
@@ -27,6 +27,10 @@
     <Compile Include="../../src/Server/SmashRules.cs" Link="Mod/SmashRules.cs" />
     <Compile Include="../../src/Server/SmashWorld.cs" Link="Mod/SmashWorld.cs" />
     <Compile Include="../../src/Server/SmashHit.cs" Link="Mod/SmashHit.cs" />
+    <Compile Include="../../src/Server/Smash.cs" Link="Mod/Smash.cs" />
+    <Compile Include="../../src/Server/ProbeTrace.cs" Link="Mod/ProbeTrace.cs" />
+    <Compile Include="../../src/Server/IGame.cs" Link="Mod/IGame.cs" />
+    <Compile Include="../../src/Server/SightAnswer.cs" Link="Mod/SightAnswer.cs" />
     <Compile Include="../../src/Server/WorldData.cs" Link="Mod/WorldData.cs" />
     <Compile Include="../../src/Server/WorldDataRules.cs" Link="Mod/WorldDataRules.cs" />
     <None Include="../../assets/assets.json" Link="assets/assets.json" CopyToOutputDirectory="PreserveNewest" />

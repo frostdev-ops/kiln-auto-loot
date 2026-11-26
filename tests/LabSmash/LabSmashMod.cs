@@ -226,7 +226,7 @@ public sealed class Probe
         await t.Ticks(10);
         var facts = KilnAutoLoot.Server.GameData.GameDataReader.Read(out var report);
         var table = SmashTable.FromKinds(KilnAutoLoot.Core.GameRules.Classify(facts).Smash);
-        t.Log.Info($"game data read in {report.TemplateMs + report.ItemMs + report.NamesMs:0} ms: {table.Count} smash targets");
+        t.Log.Info($"game data read in {report.TemplateMs + report.ItemMs:0} ms: {table.Count} smash targets");
         var world = new KilnSmashWorld();
         var sw = Stopwatch.StartNew();
         var cands = world.Candidates();
