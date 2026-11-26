@@ -4,7 +4,10 @@
 //   - keepFreeSlots N > 0: an item goes into carried stacks, plus as many new stacks as there are free backpack slots
 //     above the N kept (none once N or fewer are free);
 //   - carry limits: no more of an item than its limit (a group limit counts the whole group);
-//   - a bag that could not be read while a rule is on: nothing is taken (the rules cannot be kept).
+//   - a bag that could not be read while a rule is on: nothing is taken (the rules cannot be kept);
+//   - a whole take whose amounts cannot be read first (plants, crops, creature piles: the loot-all hands over a default
+//     inventory) is judged by its items alone while keepFreeSlots is the only rule for it (one new stack per item not
+//     carried with room); fillCarriedStacks and carry limits count items, so such a take stays under them.
 // A take of several items (a container, a harvest) is planned on a copy of the bag, each part reserved at once, so the
 // later parts see what the earlier ones use: free slots, shared group limits.
 namespace KilnAutoLoot.Core;
@@ -75,6 +78,35 @@ public static class BagRules
             plan.Took(item, need);
         }
         return BagRefusal.None;
+    }
+
+    /// <summary>The bag rules can judge a whole take of these items without its amounts: keepFreeSlots alone counts
+    /// slots, so it only needs to know which items come (the template's yield), never how many. fillCarriedStacks and a
+    /// carry limit naming one of them (or any limit, when the items are not known) count items, so they need the
+    /// amounts.</summary>
+    public static bool SlotsOnly(IReadOnlyList<uint> items, PersonalSettings s, CarryLimits limits)
+    {
+        if (s.FillCarriedStacks || s.KeepFreeSlots <= 0) return false;
+        if (items.Count == 0) return limits.IsEmpty;
+        foreach (var i in items) if (limits.Names(i)) return false;
+        return true;
+    }
+
+    /// <summary>A whole take whose amounts are not known before it comes (a plant, crop or creature pile the game hands
+    /// over with its loot-all: no inventory of its own to read), judged by keepFreeSlots alone (<see cref="SlotsOnly"/>):
+    /// each item it gives that the player carries a stack of with room merges into that stack and counts as fitting;
+    /// each other one starts one new stack, and those have to fit into the free slots above the kept ones. A take
+    /// whose items are not known counts as one new stack. <paramref name="reserve"/>: what to reserve on the scan's bag
+    /// when it goes (one of each item).</summary>
+    public static BagRefusal FitsUnknownAmounts(IReadOnlyList<uint> items, PersonalSettings s, Bag? bag,
+        out List<(uint Item, int Count)> reserve)
+    {
+        reserve = items.Distinct().Select(i => (i, 1)).ToList();
+        if (bag is null) return BagRefusal.NoRoom;
+        var newStacks = 0;
+        foreach (var (item, _) in reserve) if (bag.Room(item) <= 0) newStacks++;
+        if (reserve.Count == 0) newStacks = 1;
+        return newStacks <= UsableSlots(s, bag) ? BagRefusal.None : BagRefusal.NoRoom;
     }
 
     /// <summary>A ground pickup is taken whole or not at all: its whole amount has to fit.</summary>

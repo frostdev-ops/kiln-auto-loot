@@ -1211,7 +1211,7 @@ internal sealed class LootLoop
     /// The crystal's yield was judged by LootRules.Decide. A pile's is judged here, as it comes whole: in skip mode one
     /// whose yield holds a skipped item stays; a picking filter (only list, gather focus) needs a yield item it takes
     /// (Decide lets a corpse without a known yield through for its slots, which cannot be seen here). With a bag rule on
-    /// the live contents have to fit (HarvestFits). A pile left whole says so once in kiln.log (PileLine).
+    /// the contents have to fit (HarvestFits; with keepFreeSlots alone, the yield decides how many new stacks it starts). A pile left whole says so once in kiln.log (PileLine).
     /// <paramref name="readEmpty"/>: its inventory was read and empty (else it cannot be read).</summary>
     private void TakeUnread(PlayerLoot p, GamePlayer gp, EntityId e, ulong key, TemplateRule rule, Offer offer, bool readEmpty)
     {
@@ -1240,8 +1240,14 @@ internal sealed class LootLoop
                 return;
             }
         }
-        if (HarvestFits(p, gp, e, rule, out _)) SendLoot(p, gp, e, key, offer);
-        else PileLine(p, key, rule, readEmpty, "a bag rule is on, and it needs the amounts");
+        if (HarvestFits(p, gp, e, rule, out var contents))
+        {
+            if (SendLoot(p, gp, e, key, offer) && contents is not null)
+                foreach (var (item, count) in contents) p.Bag?.Took(item, count);
+        }
+        else PileLine(p, key, rule, readEmpty, BagRules.SlotsOnly(rule.Yield, p.Settings, p.Limits)
+            ? "what it gives needs more new stacks than there are bag slots free above the ones kept free"
+            : "a bag rule is on, and it needs the amounts");
     }
 
     /// <summary>The kiln.log line of a target that keeps something (once per target): what stays and why, and what is
@@ -1483,8 +1489,11 @@ internal sealed class LootLoop
 
     /// <summary>A harvest (plant, crop) is taken whole. While a bag rule applies to it (fillCarriedStacks,
     /// keepFreeSlots, or a carry limit naming one of its items or their group) its own live inventory is read for the
-    /// exact items and amounts, and all of them have to fit; one that cannot be read, reads empty or does not fit is
-    /// left (counted). Without a bag rule nothing is read. <paramref name="contents"/>: what to reserve when it goes.</summary>
+    /// exact items and amounts, and all of them have to fit. One that cannot be read or reads empty (most plants, every
+    /// crop, most creature piles: no inventory of their own, the loot-all hands their DefaultInventory over) is judged
+    /// by its yield while keepFreeSlots is the only rule that applies (one new stack per item not carried with room,
+    /// BagRules.FitsUnknownAmounts), else left (counted: fillCarriedStacks and carry limits need the amounts). Without
+    /// a bag rule nothing is read. <paramref name="contents"/>: what to reserve when it goes.</summary>
     private bool HarvestFits(PlayerLoot p, GamePlayer gp, EntityId e, TemplateRule rule, out List<(uint Item, int Count)>? contents)
     {
         contents = null;
@@ -1497,7 +1506,15 @@ internal sealed class LootLoop
         slots ??= _game.Slots(e);
         if (slots is null || slots.Count == 0)
         {
-            Counters.HarvestUnread++;   // the amounts are not known: a bag rule cannot be kept
+            // most plants, every crop and most creature piles have no inventory of their own (a DefaultInventory the
+            // loot-all hands over): keepFreeSlots alone needs only which items come, not how many (0.2.13)
+            if (BagRules.SlotsOnly(rule.Yield, s, p.Limits))
+            {
+                var refused = CountBag(BagRules.FitsUnknownAmounts(rule.Yield, s, BagOf(p, gp), out var reserve));
+                if (!refused) contents = reserve;
+                return !refused;
+            }
+            Counters.HarvestUnread++;   // the amounts are not known: fillCarriedStacks or a carry limit cannot be kept
             return false;
         }
         contents = slots.Select(x => (x.Item, x.Count)).ToList();
