@@ -132,7 +132,7 @@ public sealed class SmashPaceTests
                 _nextPass = _now + 1000;
                 _smash.Run(Player, Origin, s, limits);
             }
-            else if (_smash.Pending(Player)) _smash.Resume(Player, s, limits);
+            else if (_smash.Pending(Player)) _smash.Resume(Player, Origin, s, limits);
             eachStep?.Invoke();
         }
     }
@@ -343,7 +343,7 @@ public sealed class SmashPaceTests
                     next[player] = _now + 1000;
                     _smash.Run(player, at(), s, limits);
                 }
-                else if (_smash.Pending(player)) _smash.Resume(player, s, limits);
+                else if (_smash.Pending(player)) _smash.Resume(player, at(), s, limits);
             }
             eachStep?.Invoke();
         }
@@ -429,5 +429,28 @@ public sealed class SmashPaceTests
         Assert.True(mostMicros <= global::KilnAutoLoot.Server.Smash.RunBudgetMicros + 2 * 2 + 20, $"{mostMicros} us in one step, both players together");
         Assert.True(p2Done is not null && p2Done <= 2000, $"player 2's barrels done at {p2Done} ms");
         Assert.DoesNotContain(_world.Hits, h => field.Contains(h.Target) || hidden2.Contains(h.Target));
+    }
+
+    [Fact]
+    public void A_pass_that_goes_on_after_the_player_moved_judges_reach_from_where_the_player_is_now()
+    {
+        _world.RaysPerStep = 16;   // the others took the rest: the pass needs several steps for the urns
+        var at = Origin;
+        var hidden = Enumerable.Range(0, 60).Select(i => _world.Add(TSmash, 0.5 + i * 0.07, sight: Sight.Hidden)).ToList();
+        var barrels = Enumerable.Range(0, 4).Select(i => _world.Add(TSmash, 8 + i * 0.5)).ToList();
+        _world.NewStep();
+        _smash.BeginStep(1);
+        _nextPass = _now + 1000;
+        _smash.Run(Player, at, S(), new ServerLimits());
+        Assert.True(_smash.Pending(Player));
+        at = new WorldPosition(-30, 0, 0);   // glided away: the barrels are 38 m off now, out of the 15 m radius
+        for (var i = 0; i < 30 && _smash.Pending(Player); i++)
+        {
+            _now += StepMs;
+            _world.NewStep();
+            _smash.BeginStep(1);
+            _smash.Resume(Player, at, S(), new ServerLimits());
+        }
+        Assert.Empty(_world.Hits);
     }
 }

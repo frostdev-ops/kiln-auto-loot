@@ -125,7 +125,7 @@ public sealed class Pace
             }
             else if (smash.Pending(stand))
             {
-                smash.Resume(stand, s, new ServerLimits());
+                smash.Resume(stand, at, s, new ServerLimits());
                 resumes++;
             }
             await t.Ticks(1);

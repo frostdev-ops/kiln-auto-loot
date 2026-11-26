@@ -55,9 +55,8 @@ internal sealed class Smash
     internal readonly record struct RunWork(int InReach, int Looked, int New, long InspectMicros, long SlowestInspect, bool Stopped);
 
     /// <summary>One player's pass: the targets in reach when it started (nearest first), how far it got, what it hit.</summary>
-    private sealed class Pass(WorldPosition position, IReadOnlyList<EntityId> inReach, long startedMs)
+    private sealed class Pass(IReadOnlyList<EntityId> inReach, long startedMs)
     {
-        public readonly WorldPosition Position = position;
         public readonly IReadOnlyList<EntityId> InReach = inReach;
         public readonly long StartedMs = startedMs;
         public int Next;
@@ -161,8 +160,8 @@ internal sealed class Smash
             _candidatesAt = now;
         }
         PruneTries(now);
-        var pass = new Pass(position, _world.Within(_candidates, position, sw.Radius), now);   // nearest first
-        Slice(player, pass, s, sw, table, now);
+        var pass = new Pass(_world.Within(_candidates, position, sw.Radius), now);   // nearest first
+        Slice(player, position, pass, s, sw, table, now);
         if (!pass.Done) _passes[player.Value] = pass;
     }
 
@@ -181,8 +180,9 @@ internal sealed class Smash
     public bool Pending(EntityId player) => _passes.ContainsKey(player.Value);
 
     /// <summary>The next server step of the player's unfinished pass, tick thread; the switches, the limits and the save
-    /// zone are checked again, and a pass a second old gives way to the next one.</summary>
-    public void Resume(EntityId player, PersonalSettings s, ServerLimits limits)
+    /// zone are checked again, the radius and the height window from <paramref name="position"/> (where the player is
+    /// now), and a pass a second old gives way to the next one.</summary>
+    public void Resume(EntityId player, WorldPosition position, PersonalSettings s, ServerLimits limits)
     {
         if (!_passes.TryGetValue(player.Value, out var pass)) return;
         var now = _nowMs();
@@ -193,16 +193,15 @@ internal sealed class Smash
             LastRun = default;
             return;
         }
-        Slice(player, pass, s, sw, Table, now);
+        Slice(player, position, pass, s, sw, Table, now);
         if (pass.Done) _passes.Remove(player.Value);
     }
 
     /// <summary>One server step of a pass: from where it stopped, nearest first, until it has its 4, the list ends, the
     /// step's RunBudgetMicros are spent (all players together) or the step's rays are (smashing's share or the game's
     /// budget: then it stops at that target, to ask again).</summary>
-    private void Slice(EntityId player, Pass pass, PersonalSettings s, SmashSwitches sw, SmashTable table, long now)
+    private void Slice(EntityId player, WorldPosition position, Pass pass, PersonalSettings s, SmashSwitches sw, SmashTable table, long now)
     {
-        var position = pass.Position;
         bool? near = null;
         bool NearBuildZone() => near ??= _world.NearBuildZone(player);
         var sightDecides = s.VisibleOnly && _world.SightAvailable;

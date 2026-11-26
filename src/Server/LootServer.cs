@@ -485,7 +485,7 @@ internal sealed class LootServer(Data data)
             _smash.Hit = _config.Value.CounterLog ? (t, kind, sw) => SmashLine(entity, t, kind, sw) : null;
             var started = LootLoop.StopwatchMicros();
             if (due) _smash.Run(entity, at, state.Settings, _config.Value.Limits);
-            else _smash.Resume(entity, state.Settings, _config.Value.Limits);
+            else _smash.Resume(entity, at, state.Settings, _config.Value.Limits);
             var spent = LootLoop.StopwatchMicros() - started;
             if (spent > LootLoop.SlowStepMicros && _loop.SlowLineDue(now))
             {
