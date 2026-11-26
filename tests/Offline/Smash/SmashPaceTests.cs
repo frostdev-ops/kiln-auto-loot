@@ -119,8 +119,10 @@ public sealed class SmashPaceTests
     }
 
     /// <summary>LootServer.SmashStep for one player over <paramref name="seconds"/> of 16 ms server steps.</summary>
-    private void ServerSteps(double seconds, PersonalSettings s, ServerLimits? limits = null, Action? eachStep = null)
+    private void ServerSteps(double seconds, PersonalSettings s, ServerLimits? limits = null, Action? eachStep = null,
+        WorldPosition? at = null)
     {
+        var where = at ?? Origin;
         limits ??= new ServerLimits();
         var end = _now + (long)(seconds * 1000);
         for (; _now < end; _now += _stepMs)
@@ -130,9 +132,9 @@ public sealed class SmashPaceTests
             if (_now >= _nextPass)
             {
                 _nextPass = _now + 1000;
-                _smash.Run(Player, Origin, s, limits);
+                _smash.Run(Player, where, s, limits);
             }
-            else if (_smash.Pending(Player)) _smash.Resume(Player, Origin, s, limits);
+            else if (_smash.Pending(Player)) _smash.Resume(Player, where, s, limits);
             eachStep?.Invoke();
         }
     }
@@ -482,5 +484,19 @@ public sealed class SmashPaceTests
             Assert.True(_world.Hits.Count(h => h.Ms >= ms && h.Ms < ms + 1000) <= SmashRules.MaxTargetsPerStep,
                 $"{_world.Hits.Count(h => h.Ms >= ms && h.Ms < ms + 1000)} hits in the second from {ms - 1_000_000} ms");
         Assert.DoesNotContain(_world.Hits, h => hidden.Contains(h.Target));
+    }
+
+    [Fact]
+    public void A_player_standing_still_is_not_asked_again_about_props_hidden_from_there_until_they_move()
+    {
+        _stepMs = DedicatedStepMs;
+        _world.RaysPerStep = 64;
+        var hidden = Enumerable.Range(0, 30).Select(i => _world.Add(TSmash, 1 + i * 0.3, sight: Sight.Hidden)).ToList();
+        ServerSteps(0.5, S());
+        Assert.All(hidden, e => Assert.Equal(2, _world.SightCalls.GetValueOrDefault(e)));   // asked once: body, above
+        ServerSteps(3.5, S());                                                             // 4 s in, not moved
+        Assert.All(hidden, e => Assert.Equal(2, _world.SightCalls.GetValueOrDefault(e)));
+        ServerSteps(0.5, S(), at: new WorldPosition(2, 0, 0));                            // two steps to the side
+        Assert.All(hidden, e => Assert.Equal(4, _world.SightCalls.GetValueOrDefault(e)));
     }
 }

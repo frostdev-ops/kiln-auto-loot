@@ -45,6 +45,11 @@ internal sealed class Smash
     public const long MaxRayMicrosPerStep = 125;
     public const long KnownForgetMs = 2_500;     // a template kept for a target no Run saw this long is read again
     public const long SightCacheMs = 1_500;      // a line-of-sight answer per player and target is kept this long
+    // ...and a Hidden one up to HiddenKeepMs while the player stays within SightStillMetres of where it was asked: a
+    // player standing in a ruin room is not asked about the cellar below every 1.5 s, so the pass gets on to the props
+    // in view with smashing's share of the rays (review of 0.2.12). Keeping "hidden" longer only ever waits.
+    public const long HiddenKeepMs = 5_000;
+    public const double SightStillMetres = 1.0;
     public const long SightRetryMs = 5_000;      // a target's check did not answer: the height window judges it this long
     // Where a check looks, from the player's eye: the prop itself (0.6 m above its origin, the middle of a barrel or a
     // crate), then, only when that is blocked, the point 1.5 m above it (all that was looked at before 0.2.12). Both are
@@ -78,8 +83,8 @@ internal sealed class Smash
     private readonly Func<long> _micros;
     // per target: its template and serial from its first Spawn.Inspect, and when a Run last saw it
     private readonly Dictionary<uint, (Guid Template, ulong Serial, long Stamp, long SeenMs)> _known = new();
-    // per player and target: what line of sight said, until when
-    private readonly Dictionary<(uint Player, uint Target), (long Until, ulong Serial, long Stamp, Sight Answer)> _sight = new();
+    // per player and target: what line of sight said, until when, and when and from where it was asked
+    private readonly Dictionary<(uint Player, uint Target), (long Until, ulong Serial, long Stamp, Sight Answer, long AskedMs, WorldPosition From)> _sight = new();
     private long _lastKnownPrune;
 
     private readonly ISmashWorld _world;
@@ -260,7 +265,7 @@ internal sealed class Smash
             if (!SmashRules.Wants(kind, sw, NearBuildZone) || !MayHit(target, now)) continue;
             if (sightDecides)
             {
-                var seen = Look(player, target, now);
+                var seen = Look(player, target, position, now);
                 if (seen == Sight.Later)
                 {
                     stopped = true;   // this step's rays are spent (ours or the game's): ask this one again in the next step
@@ -312,15 +317,19 @@ internal sealed class Smash
     }
 
     /// <summary>Line of sight from the player to the target, at the prop itself and, when that is blocked or does not
-    /// answer, at the point above it: Visible (either is clear) or Hidden (one is blocked and the other is not clear),
-    /// kept <see cref="SightCacheMs"/>; Unknown (neither answered: the height window judges this target; before the
-    /// review a body check that did not answer went to the height window without asking the point above, which
-    /// 0.2.11 would have found blocked), kept <see cref="SightRetryMs"/>; Later: this server step's rays are spent (smashing's share, MaxRaysPerStep and
-    /// MaxRayMicrosPerStep, or the game's budget), nothing is kept (both are asked again in the next step).</summary>
-    private Sight Look(EntityId player, in SmashTarget t, long now)
+    /// answer, at the point above it. Visible: either is clear, kept <see cref="SightCacheMs"/>. Hidden: one is blocked
+    /// and the other is not clear, kept <see cref="SightCacheMs"/>, and up to <see cref="HiddenKeepMs"/> while the
+    /// player stays within <see cref="SightStillMetres"/> of where it was asked. Unknown: neither answered, the height
+    /// window judges this target, kept <see cref="SightRetryMs"/> (after <see cref="SightCacheMs"/> only while the
+    /// player stays put); before the review a body check that did not answer went to the height window without asking
+    /// the point above, which 0.2.11 would have found blocked. Later: this server step's rays are spent (smashing's
+    /// share, <see cref="MaxRaysPerStep"/> and <see cref="MaxRayMicrosPerStep"/>, or the game's budget), nothing is
+    /// kept (both are asked again in the next step).</summary>
+    private Sight Look(EntityId player, in SmashTarget t, WorldPosition position, long now)
     {
         var key = (player.Value, t.Entity.Value);
-        if (_sight.TryGetValue(key, out var c) && c.Until > now && c.Serial == t.Serial && c.Stamp == t.Stamp) return c.Answer;
+        if (_sight.TryGetValue(key, out var c) && c.Until > now && c.Serial == t.Serial && c.Stamp == t.Stamp &&
+            (now - c.AskedMs < SightCacheMs || c.From.DistanceTo(position) <= SightStillMetres)) return c.Answer;
         // a look takes up to two rays: with fewer left of smashing's share in this step it waits for the next
         if (_stepRays + 2 > MaxRaysPerStep || _stepRayMicros >= MaxRayMicrosPerStep) return Sight.Later;
         var answer = Ray(player, t.Entity, BodySightHeight);
@@ -333,7 +342,8 @@ internal sealed class Smash
                 _ => answer,                    // the second did not answer: the body's Hidden stands, or neither answered
             };
         if (answer == Sight.Later) return answer;   // the pass asks again in the next step
-        _sight[key] = (now + (answer == Sight.Unknown ? SightRetryMs : SightCacheMs), t.Serial, t.Stamp, answer);
+        var keep = answer switch { Sight.Unknown => SightRetryMs, Sight.Hidden => HiddenKeepMs, _ => SightCacheMs };
+        _sight[key] = (now + keep, t.Serial, t.Stamp, answer, now, position);
         return answer;
     }
 
