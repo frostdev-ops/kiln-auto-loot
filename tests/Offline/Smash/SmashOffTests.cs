@@ -53,7 +53,7 @@ public sealed class SmashOffTests
         public bool NearBuildZone(EntityId player) => false;
         public void Hit(EntityId player, in SmashTarget target, SmashKind kind) => Hits.Add(kind);
         public bool SightAvailable => false;
-        public Sight LineOfSight(EntityId player, EntityId target) => Sight.Unknown;
+        public Sight LineOfSight(EntityId player, EntityId target, double toHeight) => Sight.Unknown;
     }
 
     private long _now = 1_000_000;

@@ -19,7 +19,9 @@
 //   - a target is hit again only after RetryMs (it needs a step or two to break), and after MaxTries hits that did
 //     not break it, it is left alone for GiveUpMs (otherwise one target that never breaks would hold a slot forever);
 //   - with "Only what I can see" on and line of sight there, only a target the player can see is hit (0.2.8), each
-//     answer kept SightCacheMs; elsewhere the height window decides (as for looting, LootLoop.SightDecides). A check that
+//     answer kept SightCacheMs. A check looks at the prop itself (BodySightHeight), then at the point above it
+//     (AboveSightHeight, the only one before 0.2.12: under a low ceiling it lay in the ceiling for a barrel on a stack
+//     or a shelf, which was never smashed though in plain view; lab Pace_built_room); elsewhere the height window decides (as for looting, LootLoop.SightDecides). A check that
 //     does not answer (a tile not loaded yet) leaves that one target to the height window for SightRetryMs, then it is
 //     asked again; before 0.2.12 one such answer turned line of sight off for every target for 5 s, and props behind
 //     walls and under floors were smashed meanwhile (lab: Pace_built_room, Pace_cellar_below).
@@ -36,6 +38,10 @@ internal sealed class Smash
     public const long KnownForgetMs = 2_500;     // a template kept for a target no Run saw this long is read again
     public const long SightCacheMs = 1_500;      // a line-of-sight answer per player and target is kept this long
     public const long SightRetryMs = 5_000;      // a target's check did not answer: the height window judges it this long
+    // Where a check looks, from the player's eye: the prop itself (0.6 m above its origin, the middle of a barrel or a
+    // crate), then, only when that is blocked, the point 1.5 m above it (all that was looked at before 0.2.12). Both are
+    // in the target's own origin column, never moved sideways past a wall (as SightTrace's corpse heights).
+    public const double BodySightHeight = 0.6, AboveSightHeight = 1.5;
 
     /// <summary>What the last Run or Resume did in its server step (the "slow smash" line). <paramref name="Stopped"/>: the
     /// pass goes on in the next step (its time in this step is spent, or the game's ray budget).</summary>
@@ -262,14 +268,23 @@ internal sealed class Smash
 
     public void PlayerLeft(EntityId player) => _passes.Remove(player.Value);   // the tries belong to the targets
 
-    /// <summary>Line of sight from the player to the target: Visible or Hidden, kept <see cref="SightCacheMs"/>; Unknown
-    /// (the check did not answer: the height window judges this target), kept <see cref="SightRetryMs"/>; Later: the
-    /// game's ray budget of this server step is spent, nothing was asked or kept.</summary>
+    /// <summary>Line of sight from the player to the target, at the prop itself and, when that is blocked, at the point
+    /// above it: Visible (either is clear) or Hidden (both are blocked, or the second did not answer), kept
+    /// <see cref="SightCacheMs"/>; Unknown (the first check did not answer: the height window judges this target), kept
+    /// <see cref="SightRetryMs"/>; Later: the game's ray budget of this server step is spent, nothing is kept (both are
+    /// asked again in the next step).</summary>
     private Sight Look(EntityId player, in SmashTarget t, long now)
     {
         var key = (player.Value, t.Entity.Value);
         if (_sight.TryGetValue(key, out var c) && c.Until > now && c.Serial == t.Serial && c.Stamp == t.Stamp) return c.Answer;
-        var answer = _world.LineOfSight(player, t.Entity);
+        var answer = _world.LineOfSight(player, t.Entity, BodySightHeight);
+        if (answer == Sight.Hidden)
+            answer = _world.LineOfSight(player, t.Entity, AboveSightHeight) switch
+            {
+                Sight.Visible => Sight.Visible,
+                Sight.Later => Sight.Later,
+                _ => Sight.Hidden,   // blocked twice, or the second did not answer: one known blockage stands
+            };
         if (answer == Sight.Later) return answer;   // the pass asks again in the next step
         _sight[key] = (now + (answer == Sight.Unknown ? SightRetryMs : SightCacheMs), t.Serial, t.Stamp, answer);
         return answer;

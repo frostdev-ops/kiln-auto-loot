@@ -74,13 +74,17 @@ public sealed class SmashPaceTests
 
         public bool SightAvailable => true;
 
-        public Sight LineOfSight(EntityId player, EntityId target)
+        /// <summary>A target's answer at one height above its origin (a ceiling over a stack, a lintel over a niche);
+        /// otherwise SightOf for every height.</summary>
+        public readonly Dictionary<(EntityId, double), Sight> SightAt = new();
+
+        public Sight LineOfSight(EntityId player, EntityId target, double toHeight)
         {
             if (RaysPerStep is { } max && _raysThisStep >= max) return Sight.Later;   // BudgetExceeded: no ray cast
             _raysThisStep++;
             Micros += RayCostMicros;
             SightCalls[target] = SightCalls.GetValueOrDefault(target) + 1;
-            return SightOf.GetValueOrDefault(target, Sight.Visible);
+            return SightAt.TryGetValue((target, toHeight), out var at) ? at : SightOf.GetValueOrDefault(target, Sight.Visible);
         }
     }
 
@@ -173,7 +177,7 @@ public sealed class SmashPaceTests
     }
 
     [Fact]
-    public void A_pass_asks_each_prop_at_most_once_and_keeps_to_the_run_budget_in_every_step()
+    public void A_pass_looks_at_each_prop_once_and_keeps_to_the_run_budget_in_every_step()
     {
         _world.RaysPerStep = 64;
         _world.RayCostMicros = 100;
@@ -186,9 +190,10 @@ public sealed class SmashPaceTests
             worst = Math.Max(worst, _world.Micros - before);
             before = _world.Micros;
         });
-        Assert.All(hidden, e => Assert.True(_world.SightCalls.GetValueOrDefault(e) <= 1, $"{e} asked {_world.SightCalls.GetValueOrDefault(e)} times"));
-        Assert.All(hidden, e => Assert.Equal(1, _world.SightCalls.GetValueOrDefault(e)));   // and the pass got to all of them
-        Assert.True(worst <= global::KilnAutoLoot.Server.Smash.RunBudgetMicros + 100, $"{worst} us in one step");
+        // one look each, and the pass got to all of them: a hidden prop is two rays (its body, then the point above)
+        Assert.All(hidden, e => Assert.Equal(2, _world.SightCalls.GetValueOrDefault(e)));
+        // at most one look (two rays) beyond the budget in any step
+        Assert.True(worst <= global::KilnAutoLoot.Server.Smash.RunBudgetMicros + 2 * 100 + 20, $"{worst} us in one step");
         Assert.Empty(_world.Hits);
     }
 
@@ -261,5 +266,35 @@ public sealed class SmashPaceTests
         ServerSteps(global::KilnAutoLoot.Server.Smash.SightRetryMs / 1000.0 + 1, S(s => s.HeightBelow = 4));
         Assert.Contains(_world.Hits, h => h.Target == below);
         Assert.Equal(2, _world.SightCalls[below]);                              // once, then once after SightRetryMs
+    }
+    // ---- where line of sight looks (lab Pace_built_room: under a ceiling the game's rays put about 2 m up, the barrels
+    //      on the stacks and on the shelf were "hidden" though in plain view: the point 1.5 m above each one's origin,
+    //      which was all a check looked at, lay in the ceiling)
+
+    private const double Body = 0.6, Above = 1.5;   // the prop itself, and the point the check used alone before 0.2.12
+
+    [Fact]
+    public void Barrels_on_a_stack_and_a_shelf_under_a_low_ceiling_are_seen_at_their_own_height()
+    {
+        _world.RaysPerStep = 64;
+        var floor = _world.Add(TSmash, 3);
+        var stacked = _world.Add(TSmash, 4, y: 1.05);
+        var top = _world.Add(TSmash, 4, y: 2.1);
+        var shelf = _world.Add(TSmash, 5, y: 1.0);
+        foreach (var e in new[] { stacked, top, shelf }) _world.SightAt[(e, Above)] = Sight.Hidden;   // in the ceiling
+        ServerSteps(1.5, S());
+        Assert.All(new[] { floor, stacked, top, shelf }, e => Assert.Contains(_world.Hits, h => h.Target == e));
+    }
+
+    [Fact]
+    public void A_half_buried_urn_is_still_seen_by_the_point_above_it_and_a_barrel_behind_a_wall_by_neither()
+    {
+        _world.RaysPerStep = 64;
+        var buried = _world.Add(TSmash, 3, y: -0.4);
+        _world.SightAt[(buried, Body)] = Sight.Hidden;    // its body is in the rubble, the point above it is clear
+        var walled = _world.Add(TSmash, 4, sight: Sight.Hidden);
+        ServerSteps(3, S());
+        Assert.Contains(_world.Hits, h => h.Target == buried);
+        Assert.DoesNotContain(_world.Hits, h => h.Target == walled);
     }
 }

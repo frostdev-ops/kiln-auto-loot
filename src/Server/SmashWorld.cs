@@ -25,8 +25,9 @@ internal interface ISmashWorld
     void Hit(EntityId player, in SmashTarget target, SmashKind kind);
     /// <summary>The server can check line of sight (capability queries.line_of_sight).</summary>
     bool SightAvailable { get; }
-    /// <summary>Queries.VoxelLineOfSight from the player to the target.</summary>
-    Sight LineOfSight(EntityId player, EntityId target);
+    /// <summary>Queries.VoxelLineOfSight from the player's eye to the point <paramref name="toHeight"/> metres above the
+    /// target's origin.</summary>
+    Sight LineOfSight(EntityId player, EntityId target, double toHeight);
 }
 
 internal sealed class KilnSmashWorld : ISmashWorld
@@ -72,9 +73,13 @@ internal sealed class KilnSmashWorld : ISmashWorld
     public bool SightAvailable => Capabilities.Is("queries.line_of_sight");
 
 #pragma warning disable KILN121 // checked in SightAvailable, which Smash asks first
-    public Sight LineOfSight(EntityId player, EntityId target)
+    private static readonly Dictionary<double, VoxelSightOptions> SightTo = new();
+
+    public Sight LineOfSight(EntityId player, EntityId target, double toHeight)
     {
-        var r = Queries.VoxelLineOfSight(player, target);
+        if (!SightTo.TryGetValue(toHeight, out var options))
+            SightTo[toHeight] = options = new VoxelSightOptions { ToOffset = new WorldPosition(0, toHeight, 0) };
+        var r = Queries.VoxelLineOfSight(player, target, options);
         if (r is { Ok: true }) return r.Visible ? Sight.Visible : Sight.Hidden;
         return r?.Reason == "BudgetExceeded" ? Sight.Later : Sight.Unknown;
     }

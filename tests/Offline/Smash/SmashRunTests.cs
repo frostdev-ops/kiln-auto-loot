@@ -53,7 +53,7 @@ public sealed class SmashRunTests
         public int SightCalls;
         public long SightCostMicros;
         public bool SightAvailable => SightOn;
-        public Sight LineOfSight(EntityId player, EntityId target)
+        public Sight LineOfSight(EntityId player, EntityId target, double toHeight)
         {
             SightCalls++;
             Micros += SightCostMicros;
@@ -184,7 +184,8 @@ public sealed class SmashRunTests
         for (var i = 0; i < 300; i++) _world.SightOf[_world.Add(TSmash, 1 + i * 0.04)] = Sight.Hidden;
         var before = _world.Micros;
         Run(S());
-        Assert.True(_world.Micros - before <= global::KilnAutoLoot.Server.Smash.RunBudgetMicros + cost, $"{_world.Micros - before} us");
+        // at most one target's look beyond the budget: a hidden one takes two rays (its body, then the point above)
+        Assert.True(_world.Micros - before <= global::KilnAutoLoot.Server.Smash.RunBudgetMicros + 2 * cost, $"{_world.Micros - before} us");
         var calls = _world.SightCalls;
         _now += 500;
         Run(S());                 // half a second later: the answers are kept, the run goes on past them

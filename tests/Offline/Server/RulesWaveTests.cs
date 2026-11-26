@@ -345,7 +345,7 @@ public sealed class RulesWaveTests
         public bool NearBuildZone(EntityId player) => false;
         public void Hit(EntityId player, in SmashTarget target, SmashKind kind) => Hits.Add(target.Entity);
         public bool SightAvailable => false;   // the height window is the fallback where line of sight cannot decide
-        public Sight LineOfSight(EntityId player, EntityId target) => Sight.Unknown;
+        public Sight LineOfSight(EntityId player, EntityId target, double toHeight) => Sight.Unknown;
     }
 
     [Fact]
