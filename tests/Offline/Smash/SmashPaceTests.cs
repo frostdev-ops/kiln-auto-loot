@@ -501,4 +501,20 @@ public sealed class SmashPaceTests
         ServerSteps(0.5, S(), at: new WorldPosition(2, 0, 0));                            // two steps to the side
         Assert.All(hidden, e => Assert.Equal(4, _world.SightCalls.GetValueOrDefault(e)));
     }
+
+    [Fact]
+    public void A_prop_hidden_on_one_answer_only_is_asked_again_soon_not_kept_as_long_as_one_blocked_twice()
+    {
+        _world.RaysPerStep = 64;
+        // a barrel on a stack (lab Pace_built_room, final run: broke only after 8 s): its body's ray does not answer
+        // yet, the point above it is in the ceiling
+        var stacked = _world.Add(TSmash, 4, y: 1.05);
+        _world.SightAt[(stacked, Body)] = Sight.Unknown;
+        _world.SightAt[(stacked, Above)] = Sight.Hidden;
+        ServerSteps(0.5, S());
+        Assert.Empty(_world.Hits);
+        _world.SightAt[(stacked, Body)] = Sight.Visible;   // its tile is in the ray cache now
+        ServerSteps(global::KilnAutoLoot.Server.Smash.SightCacheMs / 1000.0 + 1, S());
+        Assert.Contains(_world.Hits, h => h.Target == stacked);
+    }
 }
